@@ -18,6 +18,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:-.02em;text-decoration:none}
 .logo-mark{width:36px;height:36px;border-radius:11px;background:var(--brand);display:grid;place-items:center}
 .logo span em{font-style:normal;color:var(--brand)}
+.logo-img{display:block;height:52px;width:auto}
+footer .logo-img{height:44px}
 .nav-links{display:flex;gap:28px;font-size:15px;color:var(--muted)}
 .nav-links a{text-decoration:none}.nav-links a:hover{color:var(--ink)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;font:inherit;font-weight:700;border-radius:14px;text-decoration:none;transition:transform .15s,background .15s,box-shadow .15s}
