@@ -1,4 +1,8 @@
 {% from "_macros.html" import badge_new, cmp_button %}{%- set searched = [] -%}{%- for st in statuses or [] -%}{%- set _ = searched.append(SHOPS[st.shop].name) -%}{%- endfor -%}
+{% if summary or (intent and intent.source == 'ai') or (intent and (intent.max_price or intent.min_price)) %}
+<div class="ai-box">{% if summary %}<p class="ai-sum"><span aria-hidden="true">✨</span> {{ summary }}</p>{% endif %}
+<p class="ai-meta">{% if intent.source == 'ai' %}Rozuměli jsme: hledáme {% for t in intent.queries %}<b>{{ t }}</b>{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Hledáme <b>{{ intent.queries|join(', ') }}</b>{% endif %}{% if intent.min_price %} · od {{ intent.min_price|czk }}{% endif %}{% if intent.max_price %} · do {{ intent.max_price|czk }}{% endif %}{% if ai_used %} · <span class="ai-tag">vybráno s AI</span>{% endif %}</p></div>
+{% endif %}
 {% if offers %}
 <h2>Nejlevnější nabídky v obchodech</h2>
 <p class="sub">Řazeno jen podle ceny. Kliknutím na <b>Hlídat</b> začneme sledovat historii ceny.</p>

@@ -188,13 +188,64 @@ def search_feed_offers(db: Session, q: str, limit: int = 30):
 def offers_for_query(db: Session, q: str, live: bool = True):
     """Sloučí nabídky z feedů v DB a živého hledání; seřazeno jen podle ceny.
     Vrací (list[(hit, tracked_product|None)], shop_statuses)."""
+    r = smart_offers(db, q, live=live, use_ai=False)
+    return r["offers"], r["statuses"]
+
+
+def _intent_filter(hits, intent):
+    from .shops.search import _fold, _matches
+    out = []
+    for h in hits:
+        if intent.max_price and h.price > intent.max_price:
+            continue
+        if intent.min_price and h.price < intent.min_price:
+            continue
+        if intent.must_words and not any(_matches(h.name, w) for w in intent.must_words):
+            continue
+        if intent.exclude_words and any(_fold(w) in _fold(h.name) for w in intent.exclude_words):
+            continue
+        out.append(h)
+    return out
+
+
+_term_pool = None
+
+
+def smart_offers(db: Session, q: str, live: bool = True, use_ai: bool = True) -> dict:
+    """Hledání s volitelnou AI (Gemini free tier). Bez AI / při chybě = klasické hledání + pravidla na ceny.
+    Vrací {offers, statuses, intent, summary, ai_used}."""
+    from concurrent.futures import ThreadPoolExecutor
+    from . import ai
     from .shops.search import live_search
-    hits = search_feed_offers(db, q)
+    global _term_pool
+    intent = ai.understand(q) if use_ai else None
+    ai_used = intent is not None
+    if intent is None:
+        intent = ai.rule_intent(q)
+    terms = list(dict.fromkeys(intent.queries)) or [q]
+    hits = []
+    for t in terms:
+        hits += search_feed_offers(db, t)
     statuses = []
     if live:
-        res = live_search(q)
-        hits += res.hits
-        statuses = res.shops
+        if _term_pool is None:
+            _term_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="terms")
+        results = list(_term_pool.map(live_search, terms))
+        by_shop = {}
+        for res in results:
+            hits += res.hits
+            for st in res.shops:  # status obchodu: „ok“ vyhrává
+                if st.shop not in by_shop or (st.status == "ok" and by_shop[st.shop].status != "ok"):
+                    by_shop[st.shop] = st
+        statuses = list(by_shop.values())
+    if not hits and intent.source == "ai" and intent.must_words:  # AI výrazy příliš úzké → zkusíme typ produktu
+        extra = [w for w in intent.must_words if w not in terms][:2]
+        for t in extra:
+            hits += search_feed_offers(db, t)
+        if live and extra:
+            for res in _term_pool.map(live_search, extra):
+                hits += res.hits
+    hits = _intent_filter(hits, intent)
     urls = [(get_shop(h.shop).canonical_url(h.url) if get_shop(h.shop) else normalize_url(h.url)) for h in hits]
     tracked = {o.url: o.product for o in db.scalars(select(Offer).where(Offer.url.in_(urls))).all()} if urls else {}
     out, seen = [], set()
@@ -203,4 +254,12 @@ def offers_for_query(db: Session, q: str, live: bool = True):
             continue
         seen.add(u)
         out.append((h, tracked.get(u)))
-    return out, statuses
+    summary = ""
+    if use_ai and ai.should_use_ai(q) and len(out) >= 2:
+        names = lambda code: (get_shop(code).name if get_shop(code) else code)  # noqa: E731
+        rk = ai.rank(q, [h for h, _ in out], shop_name=names)
+        if rk is not None:
+            ai_used = True
+            out = [out[i] for i in rk.keep]  # seřazení podle ceny zůstává
+            summary = rk.summary
+    return {"offers": out, "statuses": statuses, "intent": intent, "summary": summary, "ai_used": ai_used}

@@ -15,5 +15,9 @@ def _no_live_network(monkeypatch):
     for s in SHOPS.values():
         monkeypatch.setattr(s, "searcher", None)
     search.clear_cache()
+    from lovceny import ai
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)  # testy nikdy nevolají skutečné Gemini
+    ai.client.clear()
+    ai.client.calls_today = 0
     yield
     search.clear_cache()

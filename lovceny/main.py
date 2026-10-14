@@ -14,7 +14,7 @@ from sqlalchemy import select, func, or_
 from .db import SessionLocal, init_db
 from .models import Product, Offer, PricePoint, Watch
 from .shops import SHOPS, get_shop
-from .service import add_by_url, create_watch, search_db, offers_for_query
+from .service import add_by_url, create_watch, search_db, offers_for_query, smart_offers
 from .verdict import compute
 from .util import czk
 
@@ -81,8 +81,8 @@ LIVE_THRESHOLD = 4
 
 
 def _live_ctx(db, q: str) -> dict:
-    offers, statuses = offers_for_query(db, q)
-    return {"offers": offers, "statuses": statuses, "live_done": True}
+    r = smart_offers(db, q)
+    return {**r, "live_done": True}
 
 
 @app.get("/hledat/zive", response_class=HTMLResponse)

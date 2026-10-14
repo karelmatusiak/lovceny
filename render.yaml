@@ -18,3 +18,8 @@ services:
         sync: false
       - key: DATART_AFFILIATE_ID
         sync: false
+      # AI hledání – Google Gemini, jen FREE tier (klíč z AI Studia bez billingu). Bez klíče běží hledání bez AI.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_DAILY_CAP
+        value: "900"
