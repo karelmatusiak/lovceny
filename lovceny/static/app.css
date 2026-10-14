@@ -32,3 +32,31 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}
 .live-link{font-size:13px;color:#666}
 .live-note{font-size:13px;color:#777;margin-top:18px}
 @media (max-width:640px){.live-row{grid-template-columns:52px 1fr;}.live-price,.live-act{grid-column:2;text-align:left;align-items:flex-start}}
+/* verdikt: text + ikona + barva (ne jen barva) */
+.verdict{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%}
+.verdict-badge{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:15px;line-height:1.2;
+  border-radius:12px;padding:7px 12px;border:2px solid currentColor;background:#fff}
+.verdict-ico{font-size:17px;line-height:1}
+.verdict-reason{font-size:13px;color:var(--muted,#5B6B63);padding-left:4px;line-height:1.3}
+.v-buy .verdict-badge{color:#0E6B3D;background:#E6F6EC}
+.v-wait .verdict-badge{color:#8A5300;background:#FFF4DE}
+.v-fake .verdict-badge{color:#B3261E;background:#FDECEA}
+.v-none .verdict-badge{color:#3F4B45;background:#EEF1EF;border-style:dashed}
+.v-new .verdict-badge{color:#3F4B45;background:#F4F6F5;border-style:dashed}
+.verdict-lg .verdict-badge{font-size:19px;padding:10px 16px}.verdict-lg .verdict-ico{font-size:22px}
+.verdict-lg .verdict-reason{font-size:15px}
+.pc-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between}
+.pc-price{font-size:18px;white-space:nowrap}
+.live-main .verdict{margin-top:8px}
+@media (max-width:640px){.verdict-badge{font-size:14px}.verdict-lg .verdict-badge{font-size:17px}.pc-row{flex-direction:column}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* mobil: grid položky nesmí přetékat (canvas grafu, dlouhé názvy) */
+.product>*{min-width:0}
+.p-name{overflow-wrap:anywhere}
+.p-chart canvas{max-width:100%}
+@media (max-width:560px){
+  .offer{grid-template-columns:1fr auto;gap:6px 12px}
+  .offer a{grid-column:1/-1}
+  .stats{grid-template-columns:1fr 1fr 1fr;gap:6px}.stats .stat{padding:10px}.stats strong{font-size:14px}
+}
+.verdicts .verdict-badge{font-size:14px}

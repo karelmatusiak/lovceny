@@ -22,6 +22,23 @@ class Verdict:
     median90: float | None = None
     max90: float | None = None
     suggested_target: float | None = None
+    reason: str = ""  # krátký jednořádkový důvod pod odznakem
+
+    ICONS = {"buy": "✅", "wait": "⏳", "fake": "⚠️", "none": "📊", "new": "🆕"}
+    HEADLINES = {"buy": "Kupuj – cena u minima", "wait": "Počkej – bývalo levněji", "fake": "Falešná sleva"}
+
+    @property
+    def icon(self) -> str:
+        return self.ICONS.get(self.code, "📊")
+
+    @property
+    def headline(self) -> str:
+        return self.HEADLINES.get(self.code, self.label)
+
+
+def _pct_over(cur: float, base: float) -> str:
+    d = (cur / base - 1) * 100 if base else 0
+    return "na 90denním minimu" if d < 0.5 else f"o {d:.0f} % nad 90denním minimem"
 
 
 def _aware(d: datetime) -> datetime:
@@ -44,12 +61,13 @@ def compute(points, current: float | None, claimed_original: float | None = None
             now: datetime | None = None) -> Verdict:
     now = now or datetime.now(timezone.utc)
     if current is None:
-        return Verdict("none", "Zatím bez ceny", "Cenu zatím nemáme. Jakmile ji načteme, ukážeme verdikt.")
+        return Verdict("none", "Zatím bez ceny", "Cenu zatím nemáme. Jakmile ji načteme, ukážeme verdikt.",
+                       reason="cenu teprve načítáme")
     series = daily_best(points, now - timedelta(days=90))
     vals = list(series.values())
     if len(vals) < 7:
         return Verdict("none", "Málo dat", f"Cenu sledujeme teprve {len(vals)} dní. Verdikt dáme po týdnu.",
-                       current=current)
+                       current=current, reason=f"sledujeme {len(vals)} z 7 potřebných dní")
     mn, md, mx = min(vals), median(vals), max(vals)
     v = Verdict("wait", "Počkej", "", current, mn, md, mx, suggested_target=round(min(mn, current) / 10) * 10)
 
@@ -60,6 +78,7 @@ def compute(points, current: float | None, claimed_original: float | None = None
         v.code, v.label = "fake", "Falešná sleva"
         v.text = (f"Obchod uvádí „původní“ cenu {czk(claimed_original)}, ale za posledních 30 dní stál "
                   f"nejméně {czk(min(before))}. Skutečná sleva je {max(0, 1 - current / min(before)) * 100:.0f} %.")
+        v.reason = f"„původní“ cena je přifouknutá, skutečná sleva {max(0, 1 - current / min(before)) * 100:.0f} %"
         return v
     # 2) skokové zdražení těsně před „slevou“
     recent = [p for d, p in days if d >= now.date() - timedelta(days=21)]
@@ -71,14 +90,17 @@ def compute(points, current: float | None, claimed_original: float | None = None
             v.code, v.label = "fake", "Falešná sleva"
             v.text = (f"Cena před 3 týdny vyskočila na {czk(peak)} (o {(peak / base - 1) * 100:.0f} %) "
                       f"a „sleva“ ji jen vrátila na obvyklých {czk(base)}. Sleva je jen zdánlivá.")
+            v.reason = f"před slevou zdražili o {(peak / base - 1) * 100:.0f} %"
             return v
     if current <= mn * 1.03:
         v.code, v.label = "buy", "Kupuj"
         v.text = f"Cena je u minima za 90 dní ({czk(mn)}). Lépe to teď nebude."
+        v.reason = _pct_over(current, mn)
         return v
+    v.reason = _pct_over(current, mn)
     diff = (current / md - 1) * 100
     if diff > 0:
         v.text = f"Cena je o {diff:.0f} % nad obvyklou úrovní ({czk(md)}). Minimum za 90 dní bylo {czk(mn)}."
     else:
-        v.text = f"Cena je slušná, ale za 90 dní byla až {czk(mn)}. Nastav si hlídacího psa."
+        v.text = f"Cena je slušná, ale za 90 dní byla až {czk(mn)}. Nastav si hlídání ceny."
     return v

@@ -56,7 +56,7 @@ class PricePoint(Base):
 
 
 class Watch(Base):
-    """Hlídací pes."""
+    """Hlídání ceny (e-mail + cílová cena)."""
     __tablename__ = "watches"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)

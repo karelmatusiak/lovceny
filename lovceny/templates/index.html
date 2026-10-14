@@ -12,7 +12,11 @@
   <div class="shops">Hlídáme:
     {% for s in SHOPS.values() if s.status == 'ok' %}<span class="shop">{{ s.name }}</span>{% endfor %}
   </div>
-  <div class="verdicts"><span class="badge b-buy"><span class="dot"></span>Kupuj</span><span class="badge b-wait"><span class="dot"></span>Počkej</span><span class="badge b-fake"><span class="dot"></span>Falešná sleva</span></div>
+  <div class="verdicts" aria-label="Možné verdikty">
+    <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
+    <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
+    <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Falešná sleva</span></div>
+  </div>
 </div></header>
 
 {% if cards %}
@@ -27,7 +31,7 @@
   <div class="steps" style="text-align:left">
     <div class="step"><div class="num">1</div><h3>Vlož</h3><p>Zkopíruj odkaz na produkt z e-shopu nebo napiš jeho název.</p></div>
     <div class="step"><div class="num">2</div><h3>Porovnej</h3><p>Uvidíš ceny v obchodech, historii a jasný verdikt.</p></div>
-    <div class="step"><div class="num">3</div><h3>Hlídej</h3><p>Nastav cílovou cenu a hlídací pes ti napíše, až na ni cena klesne.</p></div>
+    <div class="step"><div class="num">3</div><h3>Hlídej</h3><p>Nastav cílovou cenu a my ti napíšeme, až na ni cena klesne.</p></div>
   </div>
 </div></section>
 

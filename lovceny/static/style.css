@@ -108,9 +108,9 @@ svg.chart{width:100%;height:auto;display:block}
 .promise ul{list-style:none;display:grid;gap:14px}
 .promise li{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px 18px;display:flex;gap:12px;align-items:flex-start;font-size:15.5px}
 .promise li svg{flex:none;margin-top:2px}
-/* watchdog */
-.dog{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
-.dog-form{padding:36px}
+/* hlídání ceny */
+.watch{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.watch-form{padding:36px}
 .field{display:grid;gap:6px;margin-bottom:16px}
 .field label{font-size:14px;font-weight:700}
 .field input{height:52px;border:1.5px solid var(--line);border-radius:14px;padding:0 16px;font:inherit;font-size:16px;outline:0;transition:border-color .15s,box-shadow .15s;width:100%}
@@ -119,7 +119,7 @@ svg.chart{width:100%;height:auto;display:block}
 .suffix{position:relative}.suffix span{position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700}
 .check{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted);margin:4px 0 20px}
 .check input{width:18px;height:18px;accent-color:var(--brand)}
-.dog-form .btn-primary{width:100%;height:56px}
+.watch-form .btn-primary{width:100%;height:56px}
 .small{font-size:13px;color:var(--muted);margin-top:12px;text-align:center}
 .ok{display:none;margin-top:14px;background:var(--green-50);color:#0E6B3E;border-radius:14px;padding:12px 16px;font-size:15px;font-weight:600}
 .mail{margin-top:28px;border:1px solid var(--line);border-radius:20px;padding:18px 20px;background:#fff;box-shadow:var(--shadow);max-width:440px}
@@ -127,9 +127,9 @@ svg.chart{width:100%;height:auto;display:block}
 .mail .av{width:30px;height:30px;border-radius:9px;background:var(--brand);display:grid;place-items:center}
 .mail h4{font-size:16px;margin:10px 0 4px}
 .mail p{font-size:14px;color:var(--muted)}
-.dog-list{list-style:none;display:grid;gap:12px;margin-top:22px}
-.dog-list li{display:flex;gap:12px;align-items:center;font-size:16px}
-.dog-list .tick{width:26px;height:26px;border-radius:8px;background:var(--brand-50);display:grid;place-items:center;flex:none}
+.watch-list{list-style:none;display:grid;gap:12px;margin-top:22px}
+.watch-list li{display:flex;gap:12px;align-items:center;font-size:16px}
+.watch-list .tick{width:26px;height:26px;border-radius:8px;background:var(--brand-50);display:grid;place-items:center;flex:none}
 /* footer */
 footer{border-top:1px solid var(--line);margin-top:40px;padding:48px 0 36px;font-size:14px;color:var(--muted)}
 .foot{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:32px}
@@ -139,7 +139,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding:48px 0 36px;font
 .legal{margin-top:36px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px}
 /* responsive */
 @media (max-width:900px){
-  .product,.promise,.dog{grid-template-columns:1fr}
+  .product,.promise,.watch{grid-template-columns:1fr}
   .p-info{border-right:0;border-bottom:1px solid var(--line)}
   .steps{grid-template-columns:1fr}
   .foot{grid-template-columns:1fr 1fr}
@@ -150,7 +150,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding:48px 0 36px;font
   .search{flex-direction:column;padding:10px}
   .search label{padding-left:8px}
   .btn-primary{width:100%}
-  .p-info,.p-chart,.dog-form{padding:24px}
+  .p-info,.p-chart,.watch-form{padding:24px}
   .stats{grid-template-columns:1fr 1fr}
   .row2{grid-template-columns:1fr}
   .hero{padding-top:44px}

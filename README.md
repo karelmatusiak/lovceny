@@ -1,7 +1,7 @@
 # Lovceny (lovceny.cz) – MVP
 
 Poctivý hlídač cen elektroniky a domácích spotřebičů (mobily, TV a audio, foto, gaming, chytrá domácnost, velké i malé spotřebiče – pračky, lednice, myčky, vysavače, kávovary): vložíš odkaz z e-shopu, dostaneš historii ceny a verdikt
-**Kupuj / Počkej / Falešná sleva**, a můžeš si nastavit **hlídacího psa**.
+**Kupuj / Počkej / Falešná sleva**, a můžeš si nastavit **hlídání ceny** 🔔.
 
 Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite), Chart.js.
 
@@ -9,7 +9,7 @@ Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokál
 - **Hledání** (`/hledat?q=`): odkaz z podporovaného obchodu → založí sledovaný produkt; text → hledá ve sledovaných produktech (název/EAN).
 - **Stránka produktu**: ceny podle obchodů (řazeno jen podle ceny), graf 30/90/365 dní s minimem a mediánem, verdikt.
 - **Verdikt** (`lovceny/verdict.py`): Kupuj = do 3 % nad 90denním minimem; Falešná sleva = „původní“ cena > 105 % minima za 30 dní před akcí, nebo skok o ≥ 12 % během posledních 3 týdnů, který „sleva“ jen vrátila; jinak Počkej. Pod 7 dny dat → „Málo dat“.
-- **Hlídací pes**: e-mail + cílová cena v tabulce `watches`, double opt-in (`/pes/potvrdit/<token>`), odhlášení jedním klikem. E-maily jsou **jen v logu** (`lovceny/notify.py`, `EMAIL_BACKEND=log`).
+- **Hlídání ceny**: e-mail + cílová cena v tabulce `watches`, double opt-in (`/hlidani/potvrdit/<token>`; staré `/pes/…` přesměrovávají), odhlášení jedním klikem. E-maily jsou **jen v logu** (`lovceny/notify.py`, `EMAIL_BACKEND=log`).
 - **Stahovač** `fetch_prices.py`: čte JSON-LD `schema.org/Product` (fallback meta tagy), respektuje robots.txt, min. 6 s mezi požadavky na doménu, identifikuje se jako `LovcenyBot`. Ochranu proti botům **neobchází**: při 403/429/JS challenge označí nabídku `blocked`.
 - **Demo data**: `seed.py` přidá skutečné produkty z Planea a vygenerovanou historii s `price_points.is_demo = true` (v UI označeno). Smazání: `python seed.py --purge-demo`.
 
@@ -84,7 +84,7 @@ Pozn.: GitHub Actions běží z IP datacenter; obchody, které fungují odsud, m
 ## Struktura
 ```
 lovceny/main.py        FastAPI routy        lovceny/verdict.py   pravidla verdiktu
-lovceny/models.py      tabulky              lovceny/service.py   přidání URL, zápis cen, feed, hlídací psi
+lovceny/models.py      tabulky              lovceny/service.py   přidání URL, zápis cen, feed, hlídání cen
 lovceny/shops/         registry (obchody), scrape (JSON-LD, robots, rate limit), feed (Heureka XML/CSV)
 lovceny/notify.py      e-mail rozhraní (log stub)
 lovceny/templates/, static/   UI podle mockupu

@@ -70,7 +70,7 @@ def main(argv=None):
         log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
 
     sent = check_watches(db)
-    log.info("Hlídací psi: odesláno %d upozornění", sent)
+    log.info("Hlídání cen: odesláno %d upozornění", sent)
     log.info("SOUHRN: %s", dict(report))
     db.close()
     return 1 if report and all(k.endswith(("error", "blocked")) for k in report) else 0

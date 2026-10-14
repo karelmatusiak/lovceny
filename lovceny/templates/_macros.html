@@ -1,5 +1,14 @@
-{% macro badge(v) -%}
-<span class="badge {{ {'buy':'b-buy','wait':'b-wait','fake':'b-fake'}.get(v.code,'b-none') }}"><span class="dot"></span>{{ v.label }}</span>
+{% macro badge(v, big=false) -%}
+<div class="verdict v-{{ v.code }}{% if big %} verdict-lg{% endif %}">
+  <span class="verdict-badge"><span class="sr-only">Verdikt: </span><span class="verdict-ico" aria-hidden="true">{{ v.icon }}</span><span class="verdict-label">{{ v.headline }}</span></span>
+  {% if v.reason %}<span class="verdict-reason">{{ v.reason }}</span>{% endif %}
+</div>
+{%- endmacro %}
+{% macro badge_new() -%}
+<div class="verdict v-new">
+  <span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">🆕</span><span class="verdict-label">Zatím bez historie</span></span>
+  <span class="verdict-reason">Klikni na Hlídat a začneme ukládat historii ceny</span>
+</div>
 {%- endmacro %}
 {% macro pcard(p, best, v) -%}
 <a class="card pcard" href="/produkt/{{ p.id }}-{{ p.slug }}">
@@ -7,6 +16,6 @@
     <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
     <div><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{{ p.category or '' }}</div></div>
   </div>
-  <div class="pc-row">{{ badge(v) }}<b>{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>
+  <div class="pc-row">{{ badge(v) }}<b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>
 </a>
 {%- endmacro %}

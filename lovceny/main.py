@@ -133,30 +133,30 @@ def watch(pid: int, email: str = Form(...), target_price: float = Form(...),
     if not p:
         raise HTTPException(404)
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) or target_price <= 0:
-        return RedirectResponse(f"/produkt/{p.id}-{p.slug}?msg=Zkontroluj e-mail a cílovou cenu.#pes", 303)
+        return RedirectResponse(f"/produkt/{p.id}-{p.slug}?msg=Zkontroluj e-mail a cílovou cenu.#hlidani", 303)
     create_watch(db, p, email, target_price, only_in_stock)
-    return RedirectResponse(f"/produkt/{p.id}-{p.slug}?ok=1#pes", 303)
+    return RedirectResponse(f"/produkt/{p.id}-{p.slug}?ok=1#hlidani", 303)
 
 
-@app.get("/pes/potvrdit/{token}", response_class=HTMLResponse)
+@app.get("/hlidani/potvrdit/{token}", response_class=HTMLResponse)
 def confirm(request: Request, token: str, db=Depends(get_db)):
     w = db.scalar(select(Watch).where(Watch.token == token))
     if not w:
         raise HTTPException(404)
     w.confirmed = True
     db.commit()
-    return tpl.TemplateResponse(request, "message.html", {"title": "Hlídací pes potvrzen 🐶",
+    return tpl.TemplateResponse(request, "message.html", {"title": "Hlídání ceny potvrzeno 🔔",
                                 "text": f"Dáme vědět, až {w.product.name} klesne na {czk(w.target_price)}."})
 
 
-@app.get("/pes/zrusit/{token}", response_class=HTMLResponse)
+@app.get("/hlidani/zrusit/{token}", response_class=HTMLResponse)
 def unsubscribe(request: Request, token: str, db=Depends(get_db)):
     w = db.scalar(select(Watch).where(Watch.token == token))
     if not w:
         raise HTTPException(404)
     w.active = False
     db.commit()
-    return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "text": "Hlídací pes je vypnutý."})
+    return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "text": "Hlídání ceny je vypnuté."})
 
 
 @app.get("/obchody", response_class=HTMLResponse)
@@ -169,3 +169,11 @@ def health(db=Depends(get_db)):
     from .db import engine
     return {"ok": True, "db": engine.url.get_backend_name(), "db_host": (engine.url.host or "")[:12],
             "products": db.scalar(select(func.count(Product.id)))}
+
+
+# Staré odkazy z e-mailů (/pes/…) – trvalé přesměrování na /hlidani/…
+@app.get("/pes/{action}/{token}")
+def legacy_watch_links(action: str, token: str):
+    if action not in ("potvrdit", "zrusit"):
+        raise HTTPException(404)
+    return RedirectResponse(f"/hlidani/{action}/{token}", 301)

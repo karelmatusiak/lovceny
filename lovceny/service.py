@@ -138,9 +138,9 @@ def create_watch(db: Session, product: Product, email: str, target: float, only_
               token=secrets.token_urlsafe(24))
     db.add(w)
     db.commit()
-    get_sender().send(w.email, f"Potvrď hlídacího psa: {product.name}",
-                      f"Potvrzení: /pes/potvrdit/{w.token}\nCílová cena: {czk(target)}\n"
-                      f"Odhlášení jedním klikem: /pes/zrusit/{w.token}")
+    get_sender().send(w.email, f"Potvrď hlídání ceny: {product.name}",
+                      f"Potvrzení: /hlidani/potvrdit/{w.token}\nCílová cena: {czk(target)}\n"
+                      f"Odhlášení jedním klikem: /hlidani/zrusit/{w.token}")
     return w
 
 
@@ -156,7 +156,7 @@ def check_watches(db: Session) -> int:
         if hit and float(hit.price) <= float(w.target_price):
             shop = get_shop(hit.shop)
             get_sender().send(w.email, f"Cena klesla na {czk(hit.price)} v obchodě {shop.name if shop else hit.shop}",
-                              f"{w.product.name}\n{hit.url}\nOdhlásit: /pes/zrusit/{w.token}")
+                              f"{w.product.name}\n{hit.url}\nOdhlásit: /hlidani/zrusit/{w.token}")
             w.notified_at = datetime.now(timezone.utc)
             sent += 1
     db.commit()
