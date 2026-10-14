@@ -1,0 +1,12 @@
+{% macro badge(v) -%}
+<span class="badge {{ {'buy':'b-buy','wait':'b-wait','fake':'b-fake'}.get(v.code,'b-none') }}"><span class="dot"></span>{{ v.label }}</span>
+{%- endmacro %}
+{% macro pcard(p, best, v) -%}
+<a class="card pcard" href="/produkt/{{ p.id }}-{{ p.slug }}">
+  <div class="p-head">
+    <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+    <div><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{{ p.category or '' }}</div></div>
+  </div>
+  <div class="pc-row">{{ badge(v) }}<b>{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>
+</a>
+{%- endmacro %}

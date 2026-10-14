@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% from "_macros.html" import pcard %}
+{% block body %}<section style="padding-top:24px"><div class="wrap">
+  <form class="search" action="/hledat" method="get" style="margin:0 0 32px"><label><input name="q" value="{{ q }}" aria-label="Hledat"></label><button class="btn btn-primary">Prověřit cenu</button></form>
+  {% if error %}<div class="notice warn">{{ error }} Podporujeme: {% for s in SHOPS.values() %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+  {% if results %}<h2>Výsledky pro „{{ q }}“</h2><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>
+  {% elif not error %}<h2>Nic jsme nenašli</h2><p class="sub">Zatím sledujeme jen produkty, které někdo přidal. Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
+</div></section>{% endblock %}

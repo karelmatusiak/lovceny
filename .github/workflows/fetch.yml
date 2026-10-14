@@ -1,0 +1,23 @@
+name: Stažení cen
+on:
+  schedule:
+    - cron: "17 5,11,17 * * *"   # 3× denně (UTC)
+  workflow_dispatch: {}
+concurrency: { group: fetch-prices, cancel-in-progress: false }
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+      - name: Stáhnout ceny
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
+          DATART_FEED_URL: ${{ secrets.DATART_FEED_URL }}
+          EMAIL_BACKEND: log
+        run: python fetch_prices.py

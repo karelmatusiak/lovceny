@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block body %}<section style="padding-top:24px"><div class="wrap">
+<div class="eyebrow">Transparentnost</div><h2>Hlídané obchody</h2>
+<p class="sub">Neobcházíme ochranu proti botům. Obchody, které automatické čtení blokují, napojujeme přes oficiální feed nebo affiliate export.</p>
+<div class="card" style="margin-top:28px;padding:8px 28px"><table class="tbl">
+<tr><th>Obchod</th><th>Zdroj cen</th><th>Stav</th><th>Poznámka</th></tr>
+{% for s in SHOPS.values() %}<tr><td><b>{{ s.name }}</b></td><td>{{ 'feed' if s.source=='feed' else 'stránka produktu' }}</td>
+<td>{% if s.status=='blocked' %}<span class="st st-bad">blokuje</span>{% elif s.source=='feed' and not s.feed_url %}<span class="st st-wait">čeká na feed</span>{% else %}<span class="st st-ok">funguje</span>{% endif %}</td><td class="muted">{{ s.note }}</td></tr>{% endfor %}
+</table></div></div></section>{% endblock %}

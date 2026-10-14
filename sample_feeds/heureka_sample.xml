@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UKÁZKOVÝ feed v Heureka formátu. Ceny jsou smyšlené, slouží jen pro test importu. -->
+<SHOP>
+  <SHOPITEM>
+    <ITEM_ID>RI045b3</ITEM_ID>
+    <PRODUCTNAME>Apple iPhone 15 128GB černá</PRODUCTNAME>
+    <URL>https://www.alza.cz/iphone-15-128gb-cerna-demo.htm</URL>
+    <IMGURL>https://example.com/iphone15.jpg</IMGURL>
+    <PRICE_VAT>18990</PRICE_VAT>
+    <EAN>0195949035838</EAN>
+    <CATEGORYTEXT>Elektronika | Mobilní telefony</CATEGORYTEXT>
+    <DELIVERY_DATE>0</DELIVERY_DATE>
+  </SHOPITEM>
+  <SHOPITEM>
+    <ITEM_ID>JBL6T</ITEM_ID>
+    <PRODUCTNAME>JBL Flip 6 Teal</PRODUCTNAME>
+    <URL>https://www.alza.cz/jbl-flip-6-teal-demo.htm</URL>
+    <PRICE_VAT>2490,00</PRICE_VAT>
+    <EAN>6925281993145</EAN>
+    <DELIVERY_DATE>3</DELIVERY_DATE>
+  </SHOPITEM>
+  <SHOPITEM>
+    <ITEM_ID>BROKEN</ITEM_ID>
+    <PRODUCTNAME>Položka bez ceny (má se přeskočit)</PRODUCTNAME>
+    <URL>https://www.alza.cz/broken-demo.htm</URL>
+  </SHOPITEM>
+</SHOP>

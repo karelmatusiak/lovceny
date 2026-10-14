@@ -1,0 +1,93 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}{{ p.name }} – Lovceny{% endblock %}
+{% block body %}
+<section style="padding-top:12px"><div class="wrap">
+  {% if msg %}<div class="notice warn">{{ msg }}</div>{% endif %}
+  {% if has_demo %}<div class="notice demo"><b>DEMO data:</b> část historie v grafu je vygenerovaná ukázka (v DB <code>is_demo = true</code>), aby bylo co zobrazit. Skutečné ceny přibývají s každým během stahovače.</div>{% endif %}
+  <div class="card product" style="margin-top:12px">
+    <div class="p-info">
+      <div class="p-head">
+        <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="">{% else %}📦{% endif %}</div>
+        <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{{ p.category or '' }}{% if p.ean %} · EAN {{ p.ean }}{% endif %}</div></div>
+      </div>
+      <div>{{ badge(v) }}</div>
+      <div class="price-row">
+        <span class="price">{% if best %}{{ best.price|czk }}{% else %}–{% endif %}</span>
+        {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
+      </div>
+      <div class="explain v-{{ v.code }}">{{ v.text }}</div>
+      <div class="stats">
+        <div class="stat"><small>Minimum 90 dní</small><strong>{{ v.min90|czk }}</strong></div>
+        <div class="stat"><small>Medián 90 dní</small><strong>{{ v.median90|czk }}</strong></div>
+        <div class="stat"><small>Maximum 90 dní</small><strong>{{ v.max90|czk }}</strong></div>
+      </div>
+    </div>
+    <div class="p-chart">
+      <div class="chart-top"><h3>Historie ceny</h3>
+        <div class="seg" id="seg"><button data-d="30">30 dní</button><button data-d="90" class="on">90 dní</button><button data-d="365">365 dní</button></div></div>
+      {% if chart_json and '"data"' in chart_json %}<div style="position:relative;height:300px"><canvas id="chart"></canvas></div>
+      {% else %}<p class="muted" style="padding:40px 0">Historie zatím není k dispozici.</p>{% endif %}
+      <div class="offers">
+        {% for o in offers %}{% set s = get_shop(o.shop) %}
+        <div class="offer">
+          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}
+            <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:var(--amber)">Není skladem</span>{% endif %}
+            {% elif o.status=='pending' %}<span style="color:var(--amber)">Cena bude doplněna{% if s.source=='feed' %} z feedu obchodu{% endif %}</span>
+            {% elif o.status=='blocked' %}<span style="color:var(--red)">Obchod blokuje automatické čtení</span>
+            {% else %}<span style="color:var(--red)">Chyba načtení</span>{% endif %}</div></div>
+          <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
+          <a href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu →</a>
+        </div>{% endfor %}
+      </div>
+      <p class="fair">Seřazeno výhradně podle ceny. Některé odkazy mohou být affiliate, na pořadí ani verdikt to nemá vliv.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="pes" style="padding-top:0"><div class="wrap"><div class="dog">
+  <div><div class="eyebrow">Hlídací pes</div><h2>Dáme vědět, až cena klesne</h2>
+    <p class="sub">Zadej cílovou cenu a e-mail. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, napíšeme ti. Potvrzení přes e-mail, odhlášení jedním klikem.</p></div>
+  <form class="card dog-form" method="post" action="/produkt/{{ p.id }}/hlidat">
+    <div class="row2">
+      <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (best.price if best else ''))|int if (v.suggested_target or best) else '' }}"><span>Kč</span></div></div>
+      <div class="field"><label for="em">E-mail</label><input id="em" name="email" type="email" required placeholder="ty@example.cz"></div>
+    </div>
+    <label class="check"><input type="checkbox" name="only_in_stock" value="true"> Jen když je skladem</label>
+    <button class="btn btn-primary" type="submit">🐶 Hlídat cenu</button>
+    {% if ok %}<div class="ok" style="display:block">Hotovo! Poslali jsme ti potvrzovací e-mail (v MVP jen do logu).</div>{% endif %}
+    <p class="small">Žádný spam. E-mail použijeme jen pro tohoto hlídacího psa.</p>
+  </form>
+</div></div></section>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const C = {{ chart_json|safe }};
+const el = document.getElementById('chart');
+if (el && window.Chart) {
+  let chart;
+  function draw(days){
+    const cut = new Date(Date.now() - days*864e5).toISOString().slice(0,10);
+    const labels = [...new Set(C.datasets.flatMap(d => d.data.map(p => p.x)))].filter(x => x >= cut).sort();
+    const ds = C.datasets.map(d => {
+      const m = Object.fromEntries(d.data.map(p => [p.x, p.y]));
+      const demo = Object.fromEntries(d.data.map(p => [p.x, p.demo]));
+      return {label: d.label, data: labels.map(l => m[l] ?? null), borderColor: d.color, backgroundColor: d.color,
+        spanGaps: true, tension: .25, pointRadius: labels.map(l => demo[l] === false ? 3 : 0), borderWidth: 2.5,
+        segment: {borderDash: ctx => demo[labels[ctx.p1DataIndex]] ? [5,4] : undefined}};
+    });
+    if (C.min) ds.push({label: 'Minimum 90 dní', data: labels.map(() => C.min), borderColor: '#169B5B', borderDash: [2,3], pointRadius: 0, borderWidth: 1.5});
+    if (C.median) ds.push({label: 'Medián 90 dní', data: labels.map(() => C.median), borderColor: '#93A29A', borderDash: [6,4], pointRadius: 0, borderWidth: 1.5});
+    if (chart) chart.destroy();
+    chart = new Chart(el, {type: 'line', data: {labels, datasets: ds}, options: {maintainAspectRatio: false, animation: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {position: 'bottom', labels: {boxWidth: 14, boxHeight: 3}},
+        tooltip: {callbacks: {label: c => c.raw == null ? null : `${c.dataset.label}: ${Math.round(c.raw).toLocaleString('cs-CZ')} Kč`}}},
+      scales: {y: {ticks: {callback: v => v.toLocaleString('cs-CZ') + ' Kč'}}, x: {ticks: {maxTicksLimit: 8}}}}});
+  }
+  document.querySelectorAll('#seg button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#seg button').forEach(x => x.classList.remove('on')); b.classList.add('on'); draw(+b.dataset.d); });
+  draw(90);
+}
+</script>
+{% endblock %}
