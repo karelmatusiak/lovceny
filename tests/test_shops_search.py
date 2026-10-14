@@ -73,3 +73,74 @@ def test_accessories_dropped_across_shops(monkeypatch):
     monkeypatch.setattr(SHOPS["softcom"], "searcher", lambda q: [SearchHit("softcom", "Pouzdro Apple iPhone XR", 29, "a")])
     monkeypatch.setattr(SHOPS["mironet"], "searcher", lambda q: [SearchHit("mironet", "Apple iPhone 15", 16990, "b")])
     assert [h.url for h in live_search("iphone").hits] == ["b"]
+
+
+from lovceny.shops.search import parse_4home, parse_vestavne, parse_eta, parse_eta_detail, _matches, is_accessory
+
+
+@pytest.mark.parametrize("fn,fix,shop,word", [(parse_4home, "4home_kavovar", "4home", "kavovar"),
+                                              (parse_vestavne, "vestavne_mycka", "vestavne", "mycka"),
+                                              (parse_eta, "eta_vysavac", "eta", "vysavac")])
+def test_appliance_shop_parsers(fn, fix, shop, word):
+    hits = fn((FIX / f"{fix}.html").read_text("utf8"))
+    assert len(hits) >= 3
+    for h in hits:
+        assert h.shop == shop and h.price > 100 and h.image and shop_for_url(h.url).slug == shop
+        assert _matches(h.name + " " + search._slug_words(h.url), word)
+        assert SHOPS[shop].canonical_url(h.url).endswith("/")
+
+
+def test_eta_detail_price():
+    r = parse_eta_detail((FIX / "eta_detail.html").read_text("utf8"))
+    assert r.price == 6999 and "ETA Sonar" in r.name and r.image.startswith("https://www.eta.cz/")
+
+
+@pytest.mark.parametrize("name,q,ok", [
+    ("Hisense WFQP7012EVM pračka úzká", "pračka", True),
+    ("Samsung RB34 kombinovaná chladnička", "lednice", True),
+    ("Ukonic Mini-lednička", "lednice", True),
+    ("ARMOR Fotopapír FOTOPOHLEDNICE 10x15", "lednice", False),
+    ('LG 55" televizor OLED', "televize", True),
+    ("Dyson V12 Origin tyčový vysavač", "vysavač dyson", True),
+    ("Electrolux vysavač EL51", "vysavač dyson", False),
+    ("Tyčový vysávač ETA", "vysavač", True),
+])
+def test_czech_matching(name, q, ok):
+    assert _matches(name, q) is ok
+
+
+@pytest.mark.parametrize("name,q", [("Nedis Odkapávací miska pod lednici", "lednice"),
+                                    ("Stojan na televize Fiber Novelty", "televize"),
+                                    ("AVACOM baterie pro Dyson V8", "vysavač dyson"),
+                                    ("DeLonghi EcoDecalk Odvápňovač", "kávovar"),
+                                    ("Dobíjecí stanice FIXED pro ovladače DualSense", "playstation")])
+def test_appliance_accessories(name, q):
+    assert is_accessory(name, q)
+
+
+@pytest.mark.parametrize("name,q", [("Hario Mizudashi Kávovar na cold brew", "kávovar"),
+                                    ("Dyson Cinetic Big Ball bezsáčkový vysavač", "vysavač dyson"),
+                                    ("Philco Pračka s předním plněním", "pračka"),
+                                    ("Sony PlayStation 5 Slim", "playstation")])
+def test_appliances_not_hidden(name, q):
+    assert not is_accessory(name, q)
+
+
+@pytest.mark.parametrize("name,q", [("Televizní stolek Basic", "televize"), ("FINISH Sůl 1.5 kg", "myčka"),
+                                    ("Bino Dětská kuchyňka s pračkou", "pračka")])
+def test_more_appliance_accessories(name, q):
+    assert is_accessory(name, q)
+
+
+def test_slug_matching_only_where_enabled(monkeypatch):
+    hit = SearchHit("mironet", "FINISH Sůl 1.5 kg", 74, "https://www.mironet.cz/finish-sul-do-mycky+dp1/")
+    vs = SearchHit("vestavne", "mora IM 6435", 9990, "https://www.vestavne-spotrebice.cz/x-vestavne-mycky-integrovane/")
+    monkeypatch.setattr(SHOPS["mironet"], "searcher", lambda q: [hit])
+    monkeypatch.setattr(SHOPS["vestavne"], "searcher", lambda q: [vs])
+    assert [h.shop for h in live_search("myčka").hits] == ["vestavne"]
+
+
+@pytest.mark.parametrize("name,q", [("Skříň nad pračku Kamil White", "pračka"), ("Televizní stěna Duru", "televize"),
+                                    ("Bigjigs Rail Vlaková myčka", "myčka")])
+def test_furniture_and_toys_hidden(name, q):
+    assert is_accessory(name, q)

@@ -1,6 +1,6 @@
 # Lovceny (lovceny.cz) – MVP
 
-Poctivý hlídač cen elektroniky: vložíš odkaz z e-shopu, dostaneš historii ceny a verdikt
+Poctivý hlídač cen elektroniky a domácích spotřebičů (mobily, TV a audio, foto, gaming, chytrá domácnost, velké i malé spotřebiče – pračky, lednice, myčky, vysavače, kávovary): vložíš odkaz z e-shopu, dostaneš historii ceny a verdikt
 **Kupuj / Počkej / Falešná sleva**, a můžeš si nastavit **hlídacího psa**.
 
 Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite), Chart.js.
@@ -35,7 +35,7 @@ Alza a Datart jsou nastavené jako `source="feed"`. Vložený odkaz z Alzy/Datar
 ### Živé hledání v obchodech (`lovceny/shops/search.py`)
 Když text v DB najde méně než 4 produkty, stránka `/hledat` hned zobrazí načítání a přes `/hledat/zive?q=` (bez JS `?zive=1`)
 prohledá obchody s `searcher` v registry – souběžně, timeout 8 s/obchod, cache 10 min v paměti, ≥ 2 s mezi dotazy na doménu.
-Příslušenství (obaly, fólie, řemínky…) skrýváme, pokud ho dotaz nehledá. Výsledky (+ feedové nabídky Alzy/Datartu z DB) jsou řazené jen podle ceny; tlačítko **Hlídat** (`POST /sledovat`) volá `add_by_url`.
+Shoda názvu je bez diakritiky, s ořezem koncovek a synonymy (lednice = chladnička, televize = televizor). Příslušenství (obaly, fólie, řemínky, stojany na TV, sůl do myčky, „miska pod lednici“…) skrýváme, pokud ho dotaz nehledá. Výsledky (+ feedové nabídky Alzy/Datartu z DB) jsou řazené jen podle ceny; tlačítko **Hlídat** (`POST /sledovat`) volá `add_by_url`.
 robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy ignoruje).
 | Obchod | Živé hledání (test 14. 10. 2026) |
 |---|---|
@@ -43,6 +43,11 @@ robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy
 | Softcom | ✅ `/eshop/default.asp?cls=stoitems&fulltext=` – detail čteme z HTML (bez JSON-LD) |
 | Svět počítačů | ✅ `/hledani/?q=` – detail JSON-LD |
 | AB-COM | ✅ `/hledani?q=` – detail přes meta tagy; URL musí končit „/“ (`trailing_slash`) |
+| 4Home | ✅ `/hledat/?q=` – kuchyň a domácí spotřebiče, detail JSON-LD |
+| Vestavné spotřebiče | ✅ `/search/?search_value=` – vestavné spotřebiče; kategorie je jen v URL (`match_slug`) |
+| ETA | ✅ `/shop/vyhledavani/?q=` – značkový e-shop ETA/Gorenje/Hyundai, detail z HTML |
+| Sencor, Whirlpool | ❌ vyhledávání zakazuje robots.txt |
+| Dyson.cz, Philips.cz | ❌ ochrana proti botům |
 | iStyle, Mobil Pohotovost, ProMobily, FotoŠkoda, iSpace, Megapixel, Expert, Elektrospot, Počítárna, GigaComputer, LevnaPC | ❌ vyhledávání zakazuje robots.txt |
 | Comfor | ❌ výsledky jen přes JS (Luigi's Box) |
 | Kuma | ❌ HTTP 429 |

@@ -218,14 +218,119 @@ def search_abcom(query: str, get=None) -> list[SearchHit]:
     return parse_abcom(page, final)
 
 
+def parse_4home(page: str, base: str = "https://www.4home.cz/") -> list[SearchHit]:
+    import json
+    hits = []
+    for b in _blocks(page, r'<article class="products-list-item'):
+        m = re.search(r"data-clickvaluesdatalayer='([^']+)'", b)
+        if not m:
+            continue
+        try:
+            it = json.loads(_html.unescape(m.group(1)))["ecommerce"]["items"][0]
+        except (ValueError, KeyError, IndexError):
+            continue
+        pr = it.get("price") or {}
+        price, orig = pr.get("czk_with_vat"), pr.get("czk_with_vat_original")
+        if not price or not it.get("item_id"):
+            continue
+        img = re.search(r'<img[^>]+(?:data-srcset|src)="(https://cdn\.4home\.cz/[^" ]+)', b)
+        hits.append(SearchHit("4home", it.get("item_name", ""), float(price), urljoin(base, it["item_id"]),
+                              img.group(1) if img else None, float(orig) if orig and orig > price else None))
+    return hits
+
+
+def search_4home(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.4home.cz/hledat/?q=" + quote_plus(query))
+    return parse_4home(page, final)
+
+
+def parse_vestavne(page: str, base: str = "https://www.vestavne-spotrebice.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="polozka_vypis_produkt">'):
+        a = re.search(r'<h2 class="h2_nazev_produktu_vypis"><a href="([^"]+)">(.*?)</a></h2>', b, re.S)
+        cat = re.search(r'<h3 class="h3_kategorie_produktu_vypis">(.*?)</h3>', b, re.S)
+        pr = re.search(r'class="cena_akt_vypis_produkt">(.*?)</span>', b, re.S)
+        if not (a and pr and (price := _price(pr.group(1)))):
+            continue
+        orig_m = re.search(r'class="cena_pred_vypis_produkt">(.*?)</span>', b, re.S)
+        o = _price(orig_m.group(1)) if orig_m else None
+        name = _text(a.group(2)) + (f" ({_text(cat.group(1))})" if cat else "")
+        hits.append(SearchHit("vestavne", name, price, urljoin(base, a.group(1)), _img(b, base), o if o and o > price else None))
+    return hits
+
+
+def search_vestavne(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.vestavne-spotrebice.cz/search/?search_value=" + quote_plus(query))
+    return parse_vestavne(page, final)
+
+
+def parse_eta(page: str, base: str = "https://www.eta.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'(?=<a tabindex="-1" href="[^"]+" class="product-tile__img-link")'):
+        a = re.search(r'<h2 class="product-tile__title">\s*<a href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        pr = re.search(r'price-box__price--action[^>]*>(.*?)</div>', b, re.S)
+        if not (a and pr and (price := _price(pr.group(1)))):
+            continue
+        orig_m = re.search(r'price-box__price--old"[^>]*>(?:<span class="sr-only">[^<]*</span>)?([^<]*Kč)', b)
+        o = _price(orig_m.group(1)) if orig_m else None
+        hits.append(SearchHit("eta", _text(a.group(2)), price, urljoin(base, a.group(1)), _img(b, base), o if o and o > price else None))
+    return hits
+
+
+def parse_eta_detail(page: str):
+    from .scrape import ScrapeResult
+    name = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S)
+    pr = re.search(r'price-box__price--action price-box__price--large[^>]*>(.*?)</div>', page, re.S)
+    price = _price(_text(pr.group(1)).replace(",-", "") + " Kč") if pr else None
+    if price is None:
+        return None
+    img = re.search(r'<meta property="og:image" content="([^"]+)"', page)
+    return ScrapeResult(price, None, None, _text(name.group(1)) if name else None,
+                        urljoin("https://www.eta.cz/", img.group(1)) if img else None, None, None)
+
+
+def search_eta(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.eta.cz/shop/vyhledavani/?q=" + quote_plus(query))
+    return parse_eta(page, final)
+
+
 # ---------- orchestrace ----------
 _cache: dict[str, tuple[float, LiveResult]] = {}
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="search")
 
 
+def _fold(s: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFKD", s.lower()).encode("ascii", "ignore").decode()
+
+
+def _stem(t: str) -> str:
+    """Hrubé ořezání koncovek: pračka/pračky/praček → prack, lednice/lednička → ledni."""
+    t = _fold(t)
+    return t if len(t) <= 4 else t[:max(4, len(t) - 2)]
+
+
+# kmeny se stejným významem (po _stem): obchody říkají lednici „chladnička“, televizi „televizor/TV“…
+SYNONYMS = [{"ledni", "chladni", "chladnick", "lednick", "kombinovana chladni"}, {"televi", "tv", "televiz"},
+            {"vysava", "vysavac"}, {"mycka", "mycky", "mycc"}, {"susic", "susick"},
+            {"notebo", "laptop"}, {"sluchat", "sluchatk"}]
+
+
+def _alts(stem: str) -> set[str]:
+    for g in SYNONYMS:
+        if any(stem.startswith(x) or x.startswith(stem) for x in g):
+            return g | {stem}
+    return {stem}
+
+
+def _slug_words(url: str) -> str:
+    """Slova z URL (vestavne-spotrebice.cz má kategorii jen v adrese: …-sety_trouba_deska_mycka/)."""
+    return re.sub(r"[-_/+,.]+", " ", urlparse(url).path)
+
+
 def _matches(name: str, query: str) -> bool:
-    n = name.lower()
-    return all(t in n for t in query.lower().split())
+    n = _fold(name)
+    return all(any(re.search(r"(?<![a-z0-9])" + re.escape(a), n) for a in _alts(_stem(t))) for t in query.split())
 
 
 ACCESSORY_WORDS = ("pouzdro", "obal", "kryt", "fólie", "folie", "sklo", "ochrann", "screenshield", "řemín", "remin",
@@ -233,16 +338,35 @@ ACCESSORY_WORDS = ("pouzdro", "obal", "kryt", "fólie", "folie", "sklo", "ochran
                    "redukce", "stylus", "ochrana", "panzerglass", "bumper", "silikonov", "quickfit", "tvrzen", "magsafe", "popruh", "náramek pro", "nálepk", "flip", "case")
 
 
-def is_accessory(name: str) -> bool:
+ACCESSORY_WORDS_EXTRA = ("stojan", "odvapn", "pohlcovac", "miska", "nahradni", "sacky", "filtr ", "filtry",
+                         "nabijeci stanice", "dobijeci stanice", "sada prislusenstvi", "prislusenstvi", "baterie pro",
+                         "hadice", "drzak", "odvapnovac", "cistic", "cistici", "batoh", "backpack", "live cards",
+                         "darkova karta", "charging", "taska", "brasna", "stolek", "sul ", "sul do", "tablety", "kapsle",
+                         "lestidlo", "detska kuchynka", "hracka", "mezikus", "spojovaci", "vodni filtr", "antena",
+                         "shine & protect", "odstranovac", "cistic", "vune", "osvezovac", "skrin", "televizni stena",
+                         "regal", "komoda", "bigjigs", "tidlo", "detsk", "pro deti")
+
+
+def is_accessory(name: str, query: str = "") -> bool:
     n = name.lower()
-    return any(w in n for w in ACCESSORY_WORDS)
+    if any(w in n for w in ACCESSORY_WORDS):
+        return True
+    f = _fold(name)
+    if any(w in f for w in ACCESSORY_WORDS_EXTRA):
+        return True
+    # „miska pod lednici“, „stojan na televize“, „baterie pro Dyson“: hledaný výraz až za předložkou
+    for t in query.split():
+        st = _stem(t)
+        if re.search(r"\b(?:pro|do|pod|na|ke?|k)\s+(?:\S+\s+){0,2}" + re.escape(st), f):
+            return True
+    return False
 
 
 def drop_accessories(hits: list[SearchHit], query: str) -> list[SearchHit]:
     """Když dotaz nehledá příslušenství, schováme obaly/fólie/řemínky – jinak by „nejlevnější“ byly kryty."""
     if is_accessory(query):
         return hits
-    main = [h for h in hits if not is_accessory(h.name)]
+    main = [h for h in hits if not is_accessory(h.name, query)]
     return main or hits
 
 
@@ -263,7 +387,7 @@ def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_sh
             results.append(ShopResult(s.slug, "timeout", note="neodpověděl včas"))
             continue
         try:
-            hs = drop_accessories([h for h in f.result() if _matches(h.name, query)] or f.result(), query)
+            hs = drop_accessories([h for h in f.result() if _matches(h.name + (" " + _slug_words(h.url) if getattr(s, "extra", {}).get("match_slug") else ""), query)], query)
             hs = sorted(hs, key=lambda h: h.price)[:limit_per_shop]
             results.append(ShopResult(s.slug, "ok" if hs else "empty", hs))
             hits += hs

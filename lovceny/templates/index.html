@@ -1,12 +1,12 @@
 {% extends "base.html" %}{% from "_macros.html" import pcard %}
 {% block body %}
 <header class="hero" id="hledat"><div class="wrap">
-  <span class="pill"><i>MVP</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
+  <span class="pill"><i>MVP</i> Poctivý hlídač cen elektroniky a spotřebičů, bez placených pozic</span>
   <h1>Koupit hned, <span class="hl">nebo počkat?</span></h1>
-  <p class="lead">Vlož odkaz z e-shopu nebo název sledovaného produktu. Lovceny projde historii ceny a řekne ti to na rovinu. Pozná i slevu, která je jen naoko.</p>
+  <p class="lead">Vlož odkaz z e-shopu nebo název produktu: mobil, televize, pračka, lednice, kávovar… Lovceny projde historii ceny a řekne ti to na rovinu. Pozná i slevu, která je jen naoko.</p>
   <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
     <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input name="q" type="text" required placeholder="Např. AirPods nebo https://www.planeo.cz/…" aria-label="Název produktu nebo odkaz z e-shopu"></label>
+      <input name="q" type="text" required placeholder="Např. pračka, AirPods nebo https://www.planeo.cz/…" aria-label="Název produktu nebo odkaz z e-shopu"></label>
     <button class="btn btn-primary" type="submit">Prověřit cenu</button>
   </form>
   <div class="shops">Hlídáme:
