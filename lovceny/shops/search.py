@@ -426,25 +426,6 @@ def search_mobilyostrava(query: str, get=None) -> list[SearchHit]:
 
 
 
-def parse_istores(page: str, base: str = "https://www.istores.cz/") -> list[SearchHit]:
-    hits, seen = [], set()
-    for b in _blocks(page, r'<div class="image-container"'):
-        a = re.search(r'<a href="(/produkt/[^"]+)" data-cy="product-card-title-link"[^>]*>(?:<!--\[-->)*(.*?)(?:<!--\]-->)*</a>', b, re.S)
-        pr = re.search(r'data-cy="product-card-price"[^>]*>(.*?)</div>', b, re.S)
-        if not (a and pr and (price := _price(pr.group(1)))) or a.group(1) in seen:
-            continue
-        seen.add(a.group(1))
-        img = re.search(r'<img src="([^"]+)"', b)
-        hits.append(SearchHit("istores", _text(a.group(2)), price, urljoin(base, a.group(1)),
-                              _html.unescape(img.group(1)) if img else None))
-    return hits
-
-
-def search_istores(query: str, get=None) -> list[SearchHit]:
-    page, final = (get or http_get)("https://www.istores.cz/vyhledavani?q=" + quote_plus(query))
-    return parse_istores(page, final)
-
-
 def parse_mobilprovas(page: str, base: str = "https://www.mobilprovas.cz/") -> list[SearchHit]:
     hits = []
     for b in _blocks(page, r'<div class="produkt lft'):

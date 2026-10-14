@@ -76,7 +76,7 @@ def test_robots_rules_v4():
 
 
 def test_blocked_shops_not_searched():
-    for slug in ("czc", "conrad", "eberry", "bscom", "tsbohemia", "smarty"):
+    for slug in ("istores", "czc", "conrad", "eberry", "bscom", "tsbohemia", "smarty"):
         assert SHOPS[slug].status == "blocked" and not SHOPS[slug].searcher and not SHOPS[slug].can_scrape
 
 
@@ -86,12 +86,8 @@ def test_image_hosts_include_new_shops():
         assert d in hosts
 
 
-def test_istores_mobilprovas_mobilyostrava():
-    from lovceny.shops.search import parse_istores, parse_mobilprovas, parse_mobilyostrava
-    h = parse_istores(_r("istores_iphone.html"))
-    assert len(h) >= 10 and len({x.url for x in h}) == len(h)
-    assert any(x.name == "iPhone 18 Pro 256GB Černá" and x.price == 34990 for x in h)
-    assert all(shop_for_url(x.url).slug == "istores" for x in h)
+def test_mobilprovas_mobilyostrava():
+    from lovceny.shops.search import parse_mobilprovas, parse_mobilyostrava
     m = parse_mobilprovas(_r("mobilprovas_iphone.html"))
     assert len(m) >= 10 and all(x.price > 0 and shop_for_url(x.url).slug == "mobilprovas" for x in m)
     o = parse_mobilyostrava(_r("mobilyostrava_iphone.html"))
