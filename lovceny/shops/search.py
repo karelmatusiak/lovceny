@@ -294,9 +294,233 @@ def search_eta(query: str, get=None) -> list[SearchHit]:
     return parse_eta(page, final)
 
 
+def parse_onlineshop(page: str, base: str = "https://www.onlineshop.cz/") -> list[SearchHit]:
+    """Cena „běžná“ / výchozí, ne cena po zadání slevového kódu (tu dostane jen ten, kdo kód zadá)."""
+    hits = []
+    for b in _blocks(page, r'class="f-n-product n-product"'):
+        a = re.search(r'<h3 class="n-product-title"><a\s+href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        if not a:
+            continue
+        items = re.findall(r'class="pr-pc-item ([a-z -]+)" data-value="([\d.]+)"', b)
+        price = orig = None
+        for cls, val in items:
+            c = cls.split()
+            if "discount-code" in c or "ex-vat" in c or "bazar" in c:
+                continue
+            if price is None:
+                price = float(val)
+            elif "bezna" in c and float(val) > price:
+                orig = float(val)
+        if price is None:
+            continue
+        img = re.search(r'<img[^>]+src="(https://static\.onlineshop\.cz/data/eshop_online/product/[^"]+)"', b)
+        hits.append(SearchHit("onlineshop", _text(a.group(2)), price, urljoin(base, _html.unescape(a.group(1))),
+                              _html.unescape(img.group(1)) if img else None, orig))
+    return hits
+
+
+def search_onlineshop(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.onlineshop.cz/vyhledavani/?q=" + quote_plus(query))
+    return parse_onlineshop(page, final)
+
+
+def parse_delonghi(page: str, base: str = "https://www.delonghi.com/") -> list[SearchHit]:
+    """Oficiální e-shop De'Longhi CZ. Karta produktu nemá stabilní třídy (CSS-in-JS), proto
+    skupiny podle URL produktu a ceny podle textu „aktuální cena“ / „původní cena“."""
+    links = [(m.start(), _html.unescape(m.group(1))) for m in re.finditer(r'href="(/cs-cz/p/[^"]+\.html[^"]*)"', page)]
+    groups, cur = [], None
+    for pos, url in links:
+        if cur is None or url != cur[1]:
+            cur = [pos, url]
+            groups.append(cur)
+    hits, seen = [], set()
+    for i, (pos, url) in enumerate(groups):
+        end = groups[i + 1][0] if i + 1 < len(groups) else pos + 40000
+        seg = page[pos:end]
+        name = next((t for t in re.findall(r'href="/cs-cz/p/[^"]+">([^<]+)</a>', seg) if t.strip()), None)
+        pr = re.search(r'aktuální cena ([^<]+)', seg)
+        if not (name and pr) or url in seen or (price := _price(pr.group(1))) is None:
+            continue
+        seen.add(url)
+        o = re.search(r'původní cena ([^<]+)', seg)
+        orig = _price(o.group(1)) if o else None
+        model = re.search(r'/([A-Z0-9][A-Z0-9.\-]+)\.html', url)
+        nm = f"De'Longhi {_text(name)}" + (f" {model.group(1)}" if model and model.group(1) not in name else "")
+        img = re.search(r'<img[^>]+src="(https://dam\.delonghi\.com/[^"]+)"', seg)
+        hits.append(SearchHit("delonghi", nm, price, urljoin(base, url), img.group(1) if img else None,
+                              orig if orig and orig > price else None))
+    return hits
+
+
+def search_delonghi(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.delonghi.com/cs-cz/search?q=" + quote_plus(query))
+    return parse_delonghi(page, final)
+
+
+
+def parse_mobilfone_detail(page: str):
+    """Mobilfone (PrestaShop 1.x) nemá JSON-LD → cena z #our_price_display, název z h1/title."""
+    from .scrape import ScrapeResult
+    pr = re.search(r'id="our_price_display"[^>]*>(.*?)</span>', page, re.S)
+    price = _price(pr.group(1)) if pr else None
+    if price is None:
+        return None
+    h1 = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S)
+    title = re.search(r"<title>(.*?)(?: - Mobilfone|</title>)", page, re.S)
+    nm = (_text(h1.group(1)) if h1 else "") or (_text(title.group(1)) if title else None)
+    img = re.search(r'<img[^>]+id="bigpic"[^>]+src="([^"]+)"', page) or re.search(r'<meta property="og:image" content="([^"]+)"', page)
+    return ScrapeResult(price, None, None, nm, img.group(1) if img else None, None, None)
+
+
+
+def parse_quikset(page: str, base: str = "https://www.quikset.cz/") -> list[SearchHit]:
+    hits = []
+    ms = list(re.finditer(r'<h2 class="product-title"[^>]*>\s*<a href="([^"]+)"[^>]*>(.*?)</a>', page, re.S))
+    for i, m in enumerate(ms):
+        seg = page[m.end():ms[i + 1].start() if i + 1 < len(ms) else m.end() + 8000]
+        pr = re.search(r'class="price__base"[^>]*>(.*?)</div>', seg, re.S)
+        if not (pr and (price := _price(pr.group(1)))):
+            continue
+        o = re.search(r'class="price__(?:old|orig|before)[^"]*"[^>]*>(.*?)</', seg, re.S)
+        orig = _price(o.group(1)) if o else None
+        imgs = re.findall(r"<img[^>]+src='(https://www\.quikset\.cz/upload/[^']+)'", page[max(0, m.start() - 4000):m.start()])
+        img = imgs[-1].replace("_p.", "_v.") if imgs else None
+        hits.append(SearchHit("quikset", _text(m.group(2)), price, urljoin(base, m.group(1)), img,
+                              orig if orig and orig > price else None))
+    return hits
+
+
+def parse_quikset_detail(page: str):
+    from .scrape import ScrapeResult
+    pr = re.search(r'class="price__base"[^>]*>(.*?)</', page, re.S)
+    price = _price(pr.group(1)) if pr else None
+    if price is None:
+        return None
+    name = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S)
+    img = re.search(r'<meta property="og:image" content="([^"]+)"', page)
+    return ScrapeResult(price, None, None, _text(name.group(1)) if name else None, img.group(1) if img else None, None, None)
+
+
+def search_quikset(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.quikset.cz/hledani?q=" + quote_plus(query))
+    return parse_quikset(page, final)
+
+
+
+def parse_mobilyostrava(page: str, base: str = "https://www.mobilyostrava.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="item-wrap">'):
+        a = re.search(r'<h3>\s*<a href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        pr = re.search(r'<p class="price">(.*?)</p>', b, re.S)
+        if not (a and pr and (price := _price(pr.group(1)))):
+            continue
+        img = re.search(r'<img src="([^"]+)"', b)
+        hits.append(SearchHit("mobilyostrava", _text(a.group(2)), price, urljoin(base, a.group(1)),
+                              urljoin(base, img.group(1)) if img else None))
+    return hits
+
+
+def search_mobilyostrava(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.mobilyostrava.cz/cz/hledat/?search_nazev=" + quote_plus(query))
+    return parse_mobilyostrava(page, "https://www.mobilyostrava.cz/")
+
+
+
+def parse_istores(page: str, base: str = "https://www.istores.cz/") -> list[SearchHit]:
+    hits, seen = [], set()
+    for b in _blocks(page, r'<div class="image-container"'):
+        a = re.search(r'<a href="(/produkt/[^"]+)" data-cy="product-card-title-link"[^>]*>(?:<!--\[-->)*(.*?)(?:<!--\]-->)*</a>', b, re.S)
+        pr = re.search(r'data-cy="product-card-price"[^>]*>(.*?)</div>', b, re.S)
+        if not (a and pr and (price := _price(pr.group(1)))) or a.group(1) in seen:
+            continue
+        seen.add(a.group(1))
+        img = re.search(r'<img src="([^"]+)"', b)
+        hits.append(SearchHit("istores", _text(a.group(2)), price, urljoin(base, a.group(1)),
+                              _html.unescape(img.group(1)) if img else None))
+    return hits
+
+
+def search_istores(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.istores.cz/vyhledavani?q=" + quote_plus(query))
+    return parse_istores(page, final)
+
+
+def parse_mobilprovas(page: str, base: str = "https://www.mobilprovas.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="produkt lft'):
+        a = re.search(r'<h2\s*><a href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        pr = re.search(r'<strong style="font-size: 1\.5em;"\s*>(.*?)</', b, re.S)
+        if not (a and pr and (price := _price(pr.group(1)))):
+            continue
+        img = re.search(r'<img src="(katalog/thumbnails/[^"]+)"', b)
+        hits.append(SearchHit("mobilprovas", _text(a.group(2)), price, urljoin(base, a.group(1)),
+                              urljoin(base, img.group(1)) if img and "no_photo" not in img.group(1) else None))
+    return hits
+
+
+def search_mobilprovas(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.mobilprovas.cz/search/?find=" + quote_plus(query))
+    return parse_mobilprovas(page, "https://www.mobilprovas.cz/")
+
+
+
+def parse_ellexgk(page: str, base: str = "https://www.ellexgk.cz/") -> list[SearchHit]:
+    """Ellex GK (Sony Center, platforma Upgates)."""
+    hits = []
+    ms = list(re.finditer(r'<h4 class="[^"]*p-i-header[^"]*"><a href="([^"]+)"[^>]*>(.*?)</a>', page, re.S))
+    for i, m in enumerate(ms):
+        seg = page[m.end():ms[i + 1].start() if i + 1 < len(ms) else m.end() + 6000]
+        pr = re.search(r'class="p-i-price[^"]*">\s*(?:<del[^>]*>(.*?)</del>\s*)?<strong[^>]*>(.*?)</strong>', seg, re.S)
+        if not (pr and (price := _price(pr.group(2)))):
+            continue
+        o = _price(pr.group(1)) if pr.group(1) else None
+        first = page.find(f'href="{m.group(1)}"', max(0, m.start() - 6000))
+        imgs = re.findall(r'<img src="(https://[^"]+cdn-upgates\.com/[^"]+)"', page[first:m.start()]) if first >= 0 else []
+        hits.append(SearchHit("ellexgk", _text(m.group(2)), price, urljoin(base, m.group(1)), imgs[0] if imgs else None,
+                              o if o and o > price else None))
+    return hits
+
+
+def search_ellexgk(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.ellexgk.cz/search?phrase=" + quote_plus(query))
+    return parse_ellexgk(page, final)
+
+
+
+def parse_woocommerce(page: str, shop: str, base: str) -> list[SearchHit]:
+    """Standardní výpis WooCommerce: cena v <ins> (akce) nebo přímo, původní v <del>. 0 Kč = cena na dotaz → vynecháme."""
+    hits = []
+    for m in re.finditer(r'<a href="([^"]+)" class="woocommerce-LoopProduct-link[^"]*">(.*?)</a>', page, re.S):
+        b = m.group(2)
+        n = re.search(r'woocommerce-loop-product__title">(.*?)</h2>', b, re.S)
+        pb = re.search(r'<span class="price">(.*)', b, re.S)
+        if not (n and pb):
+            continue
+        pt = pb.group(1)
+        ins = re.search(r'<ins[^>]*>(.*?)</ins>', pt, re.S)
+        dl = re.search(r'<del[^>]*>(.*?)</del>', pt, re.S)
+        price = _price(_text(ins.group(1) if ins else pt))
+        if not price:
+            continue
+        o = _price(_text(dl.group(1))) if dl else None
+        img = re.search(r'<img[^>]+src="([^"]+)"', b)
+        hits.append(SearchHit(shop, _text(n.group(1)), price, urljoin(base, m.group(1)), img.group(1) if img else None,
+                              o if o and o > price else None))
+    return hits
+
+
+def parse_itex24(page: str, base: str = "https://www.itex24.cz/") -> list[SearchHit]:
+    return parse_woocommerce(page, "itex24", base)
+
+
+def search_itex24(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.itex24.cz/?s=" + quote_plus(query) + "&post_type=product")
+    return parse_itex24(page, final)
+
+
 # ---------- orchestrace ----------
 _cache: dict[str, tuple[float, LiveResult]] = {}
-_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="search")
+_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="search")
 
 
 def _fold(s: str) -> str:
@@ -338,7 +562,7 @@ ACCESSORY_WORDS = ("pouzdro", "obal", "kryt", "fólie", "folie", "sklo", "ochran
                    "redukce", "stylus", "ochrana", "panzerglass", "bumper", "silikonov", "quickfit", "tvrzen", "magsafe", "popruh", "náramek pro", "nálepk", "flip", "case")
 
 
-ACCESSORY_WORDS_EXTRA = ("stojan", "odvapn", "pohlcovac", "miska", "nahradni", "sacky", "filtr ", "filtry",
+ACCESSORY_WORDS_EXTRA = ("stojan", "sklicko", "lcd displej", "displej +", "nahradni dil", "dotykova plocha", "dotykove sklo", "odvapn", "pohlcovac", "miska", "nahradni", "sacky", "filtr ", "filtry",
                          "nabijeci stanice", "dobijeci stanice", "sada prislusenstvi", "prislusenstvi", "baterie pro",
                          "hadice", "drzak", "odvapnovac", "cistic", "cistici", "batoh", "backpack", "live cards",
                          "darkova karta", "charging", "taska", "brasna", "stolek", "sul ", "sul do", "tablety", "kapsle",
