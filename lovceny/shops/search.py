@@ -103,11 +103,18 @@ def http_get(url: str, timeout: float = TIMEOUT_S) -> tuple[str, str]:
 
 # ---------- parsery ----------
 def _price(s: str) -> float | None:
-    s = _html.unescape(s).replace("\xa0", "").replace(" ", "")
-    m = re.search(r"(\d[\d.]*)(?:,(\d{1,2}))?Kč", s)
+    """„14 509 Kč“, „1 290.00 Kč“, „1.290,50 Kč“, „16 784,- Kč“ → float."""
+    s = re.sub(r"<[^>]+>", "", _html.unescape(s)).replace("\xa0", "").replace("\u202f", "").replace(" ", "")
+    m = re.search(r"(\d[\d.,]*)(?:,-)?Kč", s)
     if not m:
         return None
-    return float(m.group(1).replace(".", "") + ("." + m.group(2) if m.group(2) else ""))
+    num = m.group(1).rstrip(".,")
+    dec = re.search(r"[.,](\d{1,2})$", num)
+    whole = num[:dec.start()] if dec else num
+    try:
+        return float(re.sub(r"[.,]", "", whole) + ("." + dec.group(1) if dec else ""))
+    except ValueError:
+        return None
 
 
 def _text(s: str) -> str:
@@ -136,9 +143,79 @@ def parse_mironet(page: str, base: str = "https://www.mironet.cz/") -> list[Sear
     return hits
 
 
-def search_mironet(query: str, get=http_get) -> list[SearchHit]:
-    page, final = get("https://www.mironet.cz/ProductList/showSearch?EXPF=" + quote_plus(query))
+def search_mironet(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.mironet.cz/ProductList/showSearch?EXPF=" + quote_plus(query))
     return parse_mironet(page, final)
+
+
+def _blocks(page: str, start_re: str) -> list[str]:
+    return re.split(start_re, page)[1:]
+
+
+def _img(b: str, base: str) -> str | None:
+    m = re.search(r'<img[^>]+(?:data-original|data-src)="([^"]+)"', b) or re.search(r'<img[^>]+src="(https?:[^"]+|//[^"]+|/[^"]+)"', b)
+    return urljoin(base, _html.unescape(m.group(1))) if m else None
+
+
+def parse_softcom(page: str, base: str = "https://www.softcom.cz/eshop/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="code"><span>'):
+        a = re.search(r'<h2><a href="([^"]+_d\d+\.html)"[^>]*>(.*?)</a>', b, re.S)
+        pr = re.search(r'<div class="wvat"><span>(.*?)</span>', b, re.S)
+        if a and pr and (price := _price(pr.group(1))):
+            hits.append(SearchHit("softcom", _text(a.group(2)), price, urljoin(base, _html.unescape(a.group(1))), _img(b, base)))
+    return hits
+
+
+def parse_softcom_detail(page: str):
+    """Detail Softcomu nemá JSON-LD ani meta cenu → čteme h1 a „Cena s DPH“."""
+    from .scrape import ScrapeResult
+    name = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S)
+    pr = re.search(r'class="prc wvat">.*?<td class="price">(.*?)</td>', page, re.S)
+    price = _price(pr.group(1)) if pr else None
+    if price is None:
+        return None
+    img = re.search(r'<meta property="og:image" content="([^"]+)"', page)
+    return ScrapeResult(price, None, None, _text(name.group(1)) if name else None, img.group(1) if img else None, None, None)
+
+
+def search_softcom(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.softcom.cz/eshop/default.asp?cls=stoitems&fulltext=" + quote_plus(query))
+    return parse_softcom(page, final)
+
+
+def parse_svetpocitacu(page: str, base: str = "https://www.svetpocitacu.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="product">'):
+        a = re.search(r'<a href="([^"]+)"[^>]*class="product__name"[^>]*>(.*?)</a>', b, re.S)
+        pr = re.search(r'class="product__price-with-vat"[^>]*>(.*?)</div>', b, re.S)
+        if a and pr and (price := _price(pr.group(1))):
+            orig = re.search(r'class="product__price-(?:old|before|original)[^"]*"[^>]*>(.*?)</', b, re.S)
+            o = _price(orig.group(1)) if orig else None
+            hits.append(SearchHit("svetpocitacu", _text(a.group(2)), price, urljoin(base, a.group(1)), _img(b, base),
+                                  o if o and o > price else None))
+    return hits
+
+
+def search_svetpocitacu(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.svetpocitacu.cz/hledani/?q=" + quote_plus(query))
+    return parse_svetpocitacu(page, final)
+
+
+def parse_abcom(page: str, base: str = "https://www.ab-com.cz/") -> list[SearchHit]:
+    hits = []
+    for b in _blocks(page, r'<div class="list-products__item js-list-products-item">'):
+        a = re.search(r'<a href="([^"]+)" class="list-products__item__link"', b)
+        n = re.search(r'class="list-products__item__title[^"]*"[^>]*>(.*?)</h2>', b, re.S)
+        pr = re.search(r'list-products__item__add__prices__item--main"[^>]*>\s*<span>(.*?)</span>', b, re.S)
+        if a and n and pr and (price := _price(pr.group(1))):
+            hits.append(SearchHit("abcom", _text(n.group(1)), price, urljoin(base, a.group(1)), _img(b, base)))
+    return hits
+
+
+def search_abcom(query: str, get=None) -> list[SearchHit]:
+    page, final = (get or http_get)("https://www.ab-com.cz/hledani?q=" + quote_plus(query))
+    return parse_abcom(page, final)
 
 
 # ---------- orchestrace ----------
@@ -149,6 +226,24 @@ _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="search")
 def _matches(name: str, query: str) -> bool:
     n = name.lower()
     return all(t in n for t in query.lower().split())
+
+
+ACCESSORY_WORDS = ("pouzdro", "obal", "kryt", "fólie", "folie", "sklo", "ochrann", "screenshield", "řemín", "remin",
+                   "držák", "drzak", "kabel", "nabíječ", "nabijec", "adaptér", "adapter", "lens protection",
+                   "redukce", "stylus", "ochrana", "panzerglass", "bumper", "silikonov", "quickfit", "tvrzen", "magsafe", "popruh", "náramek pro", "nálepk", "flip", "case")
+
+
+def is_accessory(name: str) -> bool:
+    n = name.lower()
+    return any(w in n for w in ACCESSORY_WORDS)
+
+
+def drop_accessories(hits: list[SearchHit], query: str) -> list[SearchHit]:
+    """Když dotaz nehledá příslušenství, schováme obaly/fólie/řemínky – jinak by „nejlevnější“ byly kryty."""
+    if is_accessory(query):
+        return hits
+    main = [h for h in hits if not is_accessory(h.name)]
+    return main or hits
 
 
 def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_shop: int = 12) -> LiveResult:
@@ -168,7 +263,7 @@ def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_sh
             results.append(ShopResult(s.slug, "timeout", note="neodpověděl včas"))
             continue
         try:
-            hs = [h for h in f.result() if _matches(h.name, query)] or f.result()
+            hs = drop_accessories([h for h in f.result() if _matches(h.name, query)] or f.result(), query)
             hs = sorted(hs, key=lambda h: h.price)[:limit_per_shop]
             results.append(ShopResult(s.slug, "ok" if hs else "empty", hs))
             hits += hs
@@ -177,7 +272,7 @@ def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_sh
         except Exception as e:  # síť, změna HTML…
             log.warning("search %s failed: %s", s.slug, e)
             results.append(ShopResult(s.slug, "error", note=type(e).__name__))
-    res = LiveResult(sorted(hits, key=lambda h: h.price), results)
+    res = LiveResult(sorted(drop_accessories(hits, query), key=lambda h: h.price), results)
     if shops is None:
         _cache[key] = (now, res)
     return res

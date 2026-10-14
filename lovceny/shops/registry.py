@@ -28,6 +28,18 @@ class Shop:
     extra: dict = field(default_factory=dict)
     # živé vyhledávání: funkce(query) -> list[SearchHit]; None = obchod živě nehledáme
     searcher: Callable | None = None
+    # vlastní čtení ceny z detailu produktu (html -> ScrapeResult | None); None = JSON-LD/meta
+    page_parser: Callable | None = None
+    # obchod vrací 404 na URL bez koncového „/“ (normalize_url ho jinak odřízne)
+    trailing_slash: bool = False
+
+    def canonical_url(self, url: str) -> str:
+        from ..util import normalize_url
+        u = normalize_url(url)
+        p = urlparse(u)
+        if self.trailing_slash and p.path not in ("", "/") and not p.query and "." not in p.path.rsplit("/", 1)[-1]:
+            u += "/"
+        return u
     search_note: str = ""
 
     @property
@@ -64,6 +76,18 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
          searcher=lambda q: _search.search_mironet(q),
          search_note="Živé vyhledávání /ProductList/showSearch povoleno robots.txt."),
+    Shop("softcom", "Softcom", ["softcom.cz"], source="scrape", status="ok", color="#E30613",
+         note="Detail bez JSON-LD – cenu čteme z HTML (Cena s DPH), robots.txt povoluje.",
+         searcher=lambda q: _search.search_softcom(q), page_parser=lambda h: _search.parse_softcom_detail(h),
+         search_note="Živé vyhledávání /eshop/default.asp?cls=stoitems&fulltext= povoleno robots.txt."),
+    Shop("svetpocitacu", "Svět počítačů", ["svetpocitacu.cz"], source="scrape", status="ok", color="#1B7F3B",
+         note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
+         searcher=lambda q: _search.search_svetpocitacu(q),
+         search_note="Živé vyhledávání /hledani/?q= povoleno robots.txt."),
+    Shop("abcom", "AB-COM", ["ab-com.cz"], source="scrape", status="ok", color="#075C89",
+         note="Cena z meta tagů produktu, robots.txt povoluje.",
+         searcher=lambda q: _search.search_abcom(q), trailing_slash=True,
+         search_note="Živé vyhledávání /hledani?q= povoleno robots.txt."),
     Shop("czc", "CZC", ["czc.cz"], source="scrape", status="blocked", color="#7A4BD1",
          note="czc.cz přesměrovává na obchod na Allegru; allegro.cz vrací DataDome (403)."),
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",

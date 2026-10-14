@@ -50,7 +50,8 @@ def update_offer(db: Session, offer: Offer) -> str:
         offer.last_error = shop.note if shop else "neznámý obchod"
         return "blocked"
     try:
-        res = parse_product(client().get(offer.url))
+        html = client().get(offer.url)
+        res = (shop.page_parser or parse_product)(html)
     except Blocked as e:
         offer.status, offer.last_error = "blocked", str(e)
         offer.last_checked = datetime.now(timezone.utc)
@@ -78,6 +79,7 @@ def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product |
     shop = shop_for_url(url)
     if shop is None:
         return None, "Tento obchod zatím nesledujeme."
+    url = shop.canonical_url(url)
     existing = db.scalar(select(Offer).where(Offer.url == url))
     if existing:
         return existing.product, ""
@@ -193,7 +195,7 @@ def offers_for_query(db: Session, q: str, live: bool = True):
         res = live_search(q)
         hits += res.hits
         statuses = res.shops
-    urls = [normalize_url(h.url) for h in hits]
+    urls = [(get_shop(h.shop).canonical_url(h.url) if get_shop(h.shop) else normalize_url(h.url)) for h in hits]
     tracked = {o.url: o.product for o in db.scalars(select(Offer).where(Offer.url.in_(urls))).all()} if urls else {}
     out, seen = [], set()
     for h, u in sorted(zip(hits, urls), key=lambda x: x[0].price):

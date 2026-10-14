@@ -72,8 +72,10 @@ def test_live_search_cache(monkeypatch):
 
 
 def test_planeo_search_is_not_attempted():
-    assert SHOPS["planeo"].searcher is None
-    assert all(SHOPS[s].searcher is None for s in ["alza", "datart", "czc", "mall", "smarty", "tsbohemia",
+    from conftest import ORIGINAL_SEARCHERS as fresh
+    assert fresh["mironet"] and fresh["softcom"] and fresh["abcom"] and fresh["svetpocitacu"]
+    assert fresh["planeo"] is None
+    assert all(fresh[s] is None for s in ["alza", "datart", "czc", "mall", "smarty", "tsbohemia",
                                                     "electroworld", "kasa"])
 
 

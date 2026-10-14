@@ -35,15 +35,24 @@ Alza a Datart jsou nastavené jako `source="feed"`. Vložený odkaz z Alzy/Datar
 ### Živé hledání v obchodech (`lovceny/shops/search.py`)
 Když text v DB najde méně než 4 produkty, stránka `/hledat` hned zobrazí načítání a přes `/hledat/zive?q=` (bez JS `?zive=1`)
 prohledá obchody s `searcher` v registry – souběžně, timeout 8 s/obchod, cache 10 min v paměti, ≥ 2 s mezi dotazy na doménu.
-Výsledky (+ feedové nabídky Alzy/Datartu z DB) jsou řazené jen podle ceny; tlačítko **Hlídat** (`POST /sledovat`) volá `add_by_url`.
+Příslušenství (obaly, fólie, řemínky…) skrýváme, pokud ho dotaz nehledá. Výsledky (+ feedové nabídky Alzy/Datartu z DB) jsou řazené jen podle ceny; tlačítko **Hlídat** (`POST /sledovat`) volá `add_by_url`.
 robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy ignoruje).
 | Obchod | Živé hledání (test 14. 10. 2026) |
 |---|---|
 | Mironet | ✅ `/ProductList/showSearch?EXPF=` – robots povoluje, HTML výpis (název, cena, URL, obrázek) |
+| Softcom | ✅ `/eshop/default.asp?cls=stoitems&fulltext=` – detail čteme z HTML (bez JSON-LD) |
+| Svět počítačů | ✅ `/hledani/?q=` – detail JSON-LD |
+| AB-COM | ✅ `/hledani?q=` – detail přes meta tagy; URL musí končit „/“ (`trailing_slash`) |
+| iStyle, Mobil Pohotovost, ProMobily, FotoŠkoda, iSpace, Megapixel, Expert, Elektrospot, Počítárna, GigaComputer, LevnaPC | ❌ vyhledávání zakazuje robots.txt |
+| Comfor | ❌ výsledky jen přes JS (Luigi's Box) |
+| Kuma | ❌ HTTP 429 |
+| iWant, BScom, K24, Electronic-star, Allegro (CZC, Mall) | ❌ ochrana proti botům |
 | Planeo | ❌ `/vyhledavani*` zakázáno v robots.txt (sledování produktů funguje dál) |
 | Xzone | ❌ `?term=` zakázáno v robots.txt |
 | Suntech | ❌ `Disallow: /` |
 | Euronics | ❌ F5 JS challenge |
+
+Obchody k oslovení kvůli feedu/affiliate: `../obchody-k-osloveni.md`.
 | Alza, Datart | hledáme v importovaném feedu v DB |
 
 ## Lokální spuštění
