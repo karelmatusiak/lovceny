@@ -48,7 +48,7 @@ CATEGORIES: list[Category] = [
              "Bezzrcadlovky, zrcadlovky, akční kamery a gimbaly – Canon, Sony, Nikon, Fujifilm, GoPro, DJI.",
              ("fotoapar", "bezzrcadl", "zrcadlov", "eos", "alpha 7", "gopro", "osmo", "akcni kamer", "nikon z", "fujifilm"), "📷"),
     Category("televize", "Televize", "televizí",
-             "Televize od 32 do 85 palců – OLED, QLED i levné LED. Porovnáváme ceny napříč obchody a hlídáme falešné slevy před Black Friday.",
+             "Televize od 32 do 85 palců – OLED, QLED i levné LED. Porovnáváme ceny napříč obchody a u slev ukazujeme nejnižší cenu za 30 dní – hodí se před Black Friday.",
              ("televiz", "televizor", "oled", "qled", "smart tv", " tv "), "📺"),
     Category("chytra-domacnost", "Chytrá domácnost", "chytré domácnosti",
              "Chytré žárovky, zásuvky, kamery, zvonky a reproduktory – Philips Hue, Tapo, Google Nest, Echo, Shelly.",

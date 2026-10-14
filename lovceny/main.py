@@ -42,6 +42,18 @@ tpl.env.globals["img_attrs"] = images.srcset
 tpl.env.filters["fromjson"] = json.loads
 
 
+def affiliate_on() -> bool:
+    """Affiliate upozornění se ukáže, až když jsou odkazy opravdu provizní:
+    LOVCENY_AFFILIATE=1, nebo je u některého obchodu nastavené affiliate ID."""
+    import os
+    if os.environ.get("LOVCENY_AFFILIATE", "0") == "1":
+        return True
+    return any(s.affiliate_param and s.affiliate_env and os.environ.get(s.affiliate_env) for s in SHOPS.values())
+
+
+tpl.env.globals["AFFILIATE_ON"] = affiliate_on
+
+
 def _prague(d, fmt="%-d. %-m. %H:%M"):
     """Čas pro lidi v Česku (DB ukládá UTC)."""
     if not d:
@@ -441,8 +453,8 @@ def _cat_rows(db, c):
 
 CAT_VIEWS = {
     "": ("{name} – ceny, historie a verdikt", "Porovnání cen {gen} z českých e-shopů s historií ceny a verdiktem Kupuj/Počkej. Bez placených pozic, řazeno jen podle ceny."),
-    "nejlevnejsi": ("Nejlevnější {name_l} – aktuální ceny", "Nejlevnější {name_l} v českých e-shopech právě teď. Žebříček podle skutečné ceny, s historií a upozorněním na falešné slevy."),
-    "ve-sleve": ("{name} ve slevě – jen skutečné slevy", "{name} se skutečnou slevou: cena u 90denního minima a pod obvyklou cenou. Falešné slevy vyřazujeme."),
+    "nejlevnejsi": ("Nejlevnější {name_l} – aktuální ceny", "Nejlevnější {name_l} v českých e-shopech právě teď. Žebříček podle aktuální ceny, s historií a srovnáním slev s nejnižší cenou za 30 dní."),
+    "ve-sleve": ("{name} ve slevě – jen skutečné slevy", "{name} se skutečnou slevou: cena u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, nezařazujeme."),
 }
 
 
@@ -570,8 +582,8 @@ def admin(request: Request, dni: int = 30, _=Depends(require_admin), db=Depends(
 FAQ = [
     ("Platí vám obchody za lepší umístění?",
      "Ne. Pořadí nabídek je vždy jen podle ceny (nejlevnější nahoře). Placené pozice ani „doporučené“ obchody nemáme a mít nebudeme."),
-    ("Jak vzniká verdikt Kupuj / Počkej / Falešná sleva?",
-     "Porovnáme dnešní cenu s historií: Kupuj, když je cena do 3 % nad minimem za 90 dní. Falešná sleva, když obchod ukazuje „původní“ cenu, za kterou se v posledních 30 dnech neprodávalo, nebo cenu krátce před akcí zvedl. Jinak Počkej. Při méně než 7 dnech dat píšeme „Málo dat“."),
+    ("Jak vzniká verdikt Kupuj / Počkej / Za 30 dní bylo levněji?",
+     "Porovnáme dnešní cenu s naměřenou historií: Kupuj, když je cena do 3 % nad minimem za 90 dní. Za 30 dní bylo levněji, když se sleva počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí (stejně jako referenční cena podle § 12a zákona o ochraně spotřebitele), nebo když cena během posledních 3 týdnů vzrostla o 12 % a víc a sleva ji vrátila zpět. U štítku vždy uvádíme naměřenou cenu a datum. Jinak Počkej. Při méně než 7 dnech dat píšeme „Málo dat“. Verdikt je algoritmický odhad, ne záruka. Celá metodika je na stránce Jak řadíme a hodnotíme."),
     ("Odkud berete ceny?",
      "Z veřejných stránek produktů v obchodech, které automatické čtení dovolují (respektujeme robots.txt a čteme šetrně, nejvýš jednou za pár hodin), a z oficiálních feedů obchodů. Ochranu proti botům nikdy neobcházíme – obchod, který čtení blokuje, prostě nesledujeme."),
     ("Jak často se ceny aktualizují?",
@@ -586,7 +598,8 @@ FAQ = [
      "Ano. V Chrome/Edge na Androidu zvol „Přidat na plochu“ / „Nainstalovat aplikaci“. Na iPhonu v Safari klepni na Sdílet a pak „Přidat na plochu“ – teprve takto přidaný web může na iPhonu posílat upozornění na pokles ceny."),
 ]
 CONTACT_TOPICS = {"chyba": "Nahlásit chybu v ceně", "obchod": "Návrh obchodu ke sledování", "spoluprace": "Spolupráce / obchod",
-                  "soukromi": "Osobní údaje (GDPR)", "jine": "Něco jiného"}
+                  "soukromi": "Osobní údaje (GDPR)", "obchod-oprava": "Oprava/vyřazení obchodu",
+                  "jine": "Něco jiného"}
 _contact_rl: dict[str, list[float]] = {}
 
 
@@ -596,10 +609,10 @@ def _faq_ld():
 
 
 @app.get("/o-nas", response_class=HTMLResponse)
-def about(request: Request, odeslano: int = 0, chyba: str = ""):
+def about(request: Request, odeslano: int = 0, chyba: str = "", tema: str = ""):
     crumbs = [("Lovceny", "/"), ("O nás", "/o-nas")]
     return tpl.TemplateResponse(request, "about.html", {
-        "faq": FAQ, "topics": CONTACT_TOPICS, "sent": odeslano, "err": chyba[:200], "crumbs": crumbs,
+        "faq": FAQ, "topics": CONTACT_TOPICS, "topic": tema if tema in CONTACT_TOPICS else "", "sent": odeslano, "err": chyba[:200], "crumbs": crumbs,
         "ld": [_faq_ld(), seo.breadcrumb_ld(crumbs)]})
 
 
@@ -631,3 +644,57 @@ def contact(request: Request, message: str = Form(""), name: str = Form(""), rep
     db.query(CM).filter(CM.created_at < datetime.now(timezone.utc) - timedelta(days=365)).delete()
     db.commit()
     return RedirectResponse("/o-nas?odeslano=1#kontakt", 303)
+
+
+# ---------- Transparentnost: Jak řadíme, Pro e-shopy, Podmínky ----------
+REMOVE_DAYS = 7  # závazek: oprava / vyřazení obchodu do 7 dní
+
+
+def _fetch_times() -> str:
+    """Časy stahování z .github/workflows/fetch.yml (UTC) převedené na pražský čas."""
+    from zoneinfo import ZoneInfo
+    m, hrs = 17, [5, 11, 17]
+    wf = BASE.parent / ".github" / "workflows" / "fetch.yml"
+    try:
+        mt = re.search(r'cron:\s*"(\d+)\s+([\d,]+)\s', wf.read_text())
+        if mt:
+            m, hrs = int(mt.group(1)), [int(h) for h in mt.group(2).split(",")]
+    except OSError:
+        pass
+    today = datetime.now(timezone.utc).replace(minute=m, second=0, microsecond=0)
+    loc = [today.replace(hour=h).astimezone(ZoneInfo("Europe/Prague")).strftime("%-H:%M") for h in hrs]
+    return ", ".join(loc)
+
+
+@app.get("/jak-radime", response_class=HTMLResponse)
+def ranking_page(request: Request):
+    from . import verdict as vmod
+    from .shops import search as smod
+    crumbs = [("Lovceny", "/"), ("Jak řadíme a hodnotíme", "/jak-radime")]
+    shops = sorted(SHOPS.values(), key=lambda s: (s.status != "ok", s.name.lower()))
+    return tpl.TemplateResponse(request, "jak_radime.html", {
+        "crumbs": crumbs, "ld": [seo.breadcrumb_ld(crumbs)], "shops": shops, "t": vmod,
+        "pct": lambda x: round(x * 100), "fetch_times": _fetch_times(), "min_age": 2,
+        "live_cache_min": smod.CACHE_TTL_S // 60})
+
+
+@app.get("/pro-obchody", response_class=HTMLResponse)
+def for_shops_page(request: Request):
+    from .shops import scrape, search as smod
+    crumbs = [("Lovceny", "/"), ("Pro e-shopy", "/pro-obchody")]
+    return tpl.TemplateResponse(request, "pro_obchody.html", {
+        "crumbs": crumbs, "ld": [seo.breadcrumb_ld(crumbs)], "ua": scrape.USER_AGENT,
+        "scrape_delay": f"{scrape.MIN_DELAY_S:.0f}", "search_delay": f"{smod.MIN_DELAY_S:.0f}",
+        "remove_days": REMOVE_DAYS})
+
+
+@app.get("/podminky", response_class=HTMLResponse)
+def terms_page(request: Request):
+    crumbs = [("Lovceny", "/"), ("Podmínky užívání", "/podminky")]
+    return tpl.TemplateResponse(request, "terms.html", {"crumbs": crumbs, "ld": [seo.breadcrumb_ld(crumbs)]})
+
+
+# staré / alternativní adresy → 301
+for _old, _new in {"/metodika": "/jak-radime", "/bot": "/pro-obchody", "/pro-e-shopy": "/pro-obchody",
+                   "/podminky-uzivani": "/podminky"}.items():
+    app.add_api_route(_old, (lambda n: (lambda: RedirectResponse(n, 301)))(_new), methods=["GET"], include_in_schema=False)

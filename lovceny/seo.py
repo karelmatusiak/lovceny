@@ -57,7 +57,7 @@ def itemlist_ld(rows, path: str) -> dict:
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
-STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies"]
+STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky"]
 
 
 def sitemap_xml(db) -> str:

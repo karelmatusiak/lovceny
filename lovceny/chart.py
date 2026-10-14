@@ -155,7 +155,7 @@ def _svg(r: ChartRange, verdict, W: int = W, H: int = H, sfx: str = "") -> str:
     xc, yc = pts[-1]
     o.append(f'<circle cx="{xc:.1f}" cy="{yc:.1f}" r="5.5" fill="{COL_LINE}" stroke="#fff" stroke-width="2"/>')
     if verdict is not None and verdict.code in ("buy", "wait", "fake"):
-        txt = {"buy": "Kupuj", "wait": "Počkej", "fake": "Falešná sleva"}[verdict.code]
+        txt = {"buy": "Kupuj", "wait": "Počkej", "fake": "Za 30 dní bylo levněji"}[verdict.code]
         cls = verdict.code
         tw = 14 + 7.6 * len(txt)
         bx = min(max(xc - tw / 2, PAD_L), W - PAD_R - tw)
@@ -179,5 +179,5 @@ def verdict_note(v, ranges: list[ChartRange]) -> str:
         return (f"Počkej: cena je {v.reason}; {_d(r90.min_date)} stál {czk(r90.min)}. "
                 "Nastav si hlídání ceny, dáme vědět.")
     if v.code == "fake":
-        return f"Pozor: {v.reason}. Skutečná sleva je menší, než obchod tvrdí."
+        return f"{v.tooltip} Podrobnosti v metodice Jak řadíme a hodnotíme."
     return v.text

@@ -1,13 +1,13 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link %}
 {% block title %}Skutečné slevy – Lovceny{% endblock %}
-{% block description %}Poctivý žebříček produktů u 90denního minima a seznam falešných slev. Bez placených pozic.{% endblock %}
+{% block description %}Žebříček produktů u 90denního minima a přehled slev, u kterých jsme za 30 dní naměřili nižší cenu. Bez placených pozic.{% endblock %}
 {% block og_title %}Skutečné slevy – Lovceny{% endblock %}
 {% block body %}
 <section class="deals-hero"><div class="wrap deals-hero-grid"><div>
   <div class="eyebrow">Poctivý žebříček</div>
   <h1>Skutečné slevy</h1>
-  <p class="lead deals-lead">Produkty, jejichž aktuální cena je u minima za 90 dní (verdikt <b>Kupuj</b>). Řazeno podle úspory oproti obvyklé ceně (medián 90 dní) – ne podle toho, co obchod napsal na cedulku.</p>
-  </div><picture class="page-art"><source type="image/webp" srcset="{{ static('img/slevy-720.webp') }}"><img src="{{ static('img/slevy-720.jpg') }}" width="720" height="480" alt="Ilustrace: přeškrtnutá přifouknutá cenovka vedle poctivé cenovky a štít se zatržítkem" fetchpriority="high" decoding="async"></picture>
+  <p class="lead deals-lead">Produkty, jejichž aktuální cena je u minima za 90 dní (verdikt <b>Kupuj</b>). Řazeno podle úspory oproti obvyklé ceně (medián 90 dní) – ne podle výše uvedené slevy. {{ rank_link() }}</p>
+  </div><picture class="page-art"><source type="image/webp" srcset="{{ static('img/slevy-720.webp') }}"><img src="{{ static('img/slevy-720.jpg') }}" width="720" height="480" alt="Ilustrace: dvě cenovky a štít se zatržítkem" fetchpriority="high" decoding="async"></picture>
 </div></section>
 
 <section style="padding-top:8px"><div class="wrap">
@@ -48,8 +48,8 @@
 </div></section>
 
 <section class="deals-fake"><div class="wrap">
-  <h2>⚠️ Pozor na falešné slevy</h2>
-  <p class="sub">Verdikt <b>Falešná sleva</b>: „původní“ cena je přifouknutá, nebo cena těsně před akcí skokově vyrostla. Obchod tvrdí slevu, historie říká něco jiného.</p>
+  <h2 id="za-30-dni-levneji"><span aria-hidden="true">⚠️</span> Za 30 dní bylo levněji</h2>
+  <p class="sub">U těchto produktů jsme během 30 dní před akcí naměřili nižší cenu, než ze které se sleva počítá (srovnání s nejnižší cenou za 30 dní podle § 12a zákona o ochraně spotřebitele). U každého uvádíme naměřenou cenu a datum. <a href="/jak-radime#za-30-dni-levneji">Jak to počítáme</a></p>
   {% if fakes %}
   <div class="deals-list">
   {% for r in fakes %}
@@ -59,7 +59,7 @@
         <div class="deal-info">
           <div class="p-name sm">{{ r.product.name }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
-          {% if r.verdict.reason %}<p class="deal-why">{{ r.verdict.reason }}</p>{% endif %}
+          {% if r.verdict.tooltip %}<p class="deal-why">{{ r.verdict.tooltip }}</p>{% endif %}
         </div>
         <div class="deal-prices"><b class="pc-price">{{ r.best.price|czk }}</b></div>
       </a>
@@ -67,11 +67,11 @@
   {% endfor %}
   </div>
   {% else %}
-  <div class="notice deals-empty-ok">Teď žádnou falešnou slevu mezi sledovanými produkty nevidíme. Když nějakou poznáme, ukážeme ji tady.</div>
+  <div class="notice deals-empty-ok">U sledovaných produktů teď žádnou takovou slevu nevidíme. Když ji naměříme, ukážeme ji tady i s daty.</div>
   {% endif %}
 </div></section>
 
 <section><div class="wrap">
-  <p class="live-note">Metodika: <a href="/#metodika">Kupuj = do 3 % nad minimem 90 dní</a>. Úspora = rozdíl oproti mediánu 90 dní. Demo historie se{% if include_demo %} <b>započítává</b> a je označená{% else %} <b>nezapočítává</b>{% endif %}. Žebříček není placený.</p>
+  <p class="live-note">Metodika: <a href="/jak-radime">Kupuj = do 3 % nad minimem 90 dní</a>. Úspora = rozdíl oproti mediánu 90 dní. Demo historie se{% if include_demo %} <b>započítává</b> a je označená{% else %} <b>nezapočítává</b>{% endif %}. Žebříček není placený.</p>
 </div></section>
 {% endblock %}

@@ -38,10 +38,10 @@
       <p style="margin-top:14px;max-width:300px">Poctivý hlídač cen elektroniky a domácích spotřebičů. Bez placených pozic, bez reklam ve výsledcích.</p></div>
     <div><h2 class="foot-h">Kategorie</h2><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
     <div><h2 class="foot-h">Produkt</h2><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li><li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li><li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">📲</span> Přidat na plochu</button></li></ul></div>
-    <div><h2 class="foot-h">Transparentnost</h2><ul><li><a href="/#metodika">Metodika verdiktu</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
-    <div><h2 class="foot-h">Kontakt a právní</h2><ul><li><a href="/o-nas">O nás</a></li><li><a href="/o-nas#kontakt">Kontaktní formulář</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li></ul></div>
+    <div><h2 class="foot-h">Transparentnost</h2><ul><li><a href="/jak-radime">Jak řadíme a hodnotíme</a></li><li><a href="/pro-obchody">Pro e-shopy</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
+    <div><h2 class="foot-h">Kontakt a právní</h2><ul><li><a href="/o-nas">O nás</a></li><li><a href="/o-nas#kontakt">Kontaktní formulář</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li><li><a href="/podminky">Podmínky užívání</a></li></ul></div>
   </div>
-  <div class="legal"><span>© 2026 Lovceny.cz · MVP. Některé odkazy mohou být affiliate, na pořadí ani verdikt to nemá vliv.</span><span>Lovceny není spojen s uvedenými obchody.</span></div>
+  <div class="legal"><span>© 2026 Lovceny.cz · MVP. Řadíme jen podle ceny, nikdo za pořadí neplatí – <a href="/jak-radime">jak řadíme</a>.{% if AFFILIATE_ON() %} Odkaz může být provizní – na pořadí to nemá vliv.{% endif %}</span><span>Lovceny není spojen s uvedenými obchody.</span></div>
 </div></footer>
 <div id="cmp-bar" class="cmp-bar" hidden>
   <a id="cmp-go" class="btn btn-primary" href="/porovnani"><span aria-hidden="true">⚖️</span>&nbsp;Porovnat&nbsp;(<span id="cmp-n">0</span>)</a>

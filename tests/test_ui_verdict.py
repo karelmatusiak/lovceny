@@ -20,8 +20,8 @@ def test_verdict_headlines_and_reasons():
     assert compute(pts(lambda d: 1000), 1000, now=NOW).reason == "na 90denním minimu"
     w = compute(pts(lambda d: 900 if d > 40 else 1000), 1000, now=NOW)
     assert w.headline == "Počkej – bývalo levněji" and w.icon == "⏳" and "nad 90denním minimem" in w.reason
-    f = compute(pts(lambda d: 1200 if 3 <= d <= 18 else 1000), 1000, now=NOW)
-    assert f.icon == "⚠️" and f.headline == "Falešná sleva" and "zdražili" in f.reason
+    f = compute(pts(lambda d: 1200 if 3 <= d <= 18 else 1000), 1020, now=NOW)
+    assert f.icon == "⚠️" and f.headline == "Za 30 dní bylo levněji" and "nejnižší za 30 dní" in f.reason and f.tooltip.startswith("Nejnižší cena za posledních 30 dní byla")
     n = compute(pts(lambda d: 1000, days=3), 1000, now=NOW)
     assert n.headline == "Málo dat" and "7" in n.reason
 

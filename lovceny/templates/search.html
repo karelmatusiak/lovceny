@@ -1,11 +1,11 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard %}
+{% extends "base.html" %}{% from "_macros.html" import pcard, rank_link %}
 {% block title %}Hledání: {{ q }} | Lovceny{% endblock %}
 {% block body %}<section style="padding-top:24px"><div class="wrap">
   <h1 class="sr-only">Výsledky hledání: {{ q }}</h1>
   <form class="search" action="/hledat" method="get" style="margin:0 0 32px"><label><input name="q" value="{{ q }}" aria-label="Hledat" placeholder="Např. levná televize do 8 tisíc"></label><button class="btn btn-primary">Prověřit cenu</button></form>
   <p class="ai-hint" style="margin:-24px 0 24px">✨ Rozumíme i běžné řeči – napiš třeba „tichá pračka do 10 tisíc“.</p>
   {% if error %}<div class="notice warn">{{ error }} Podporujeme: {% for s in SHOPS.values() %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
-  {% if results %}<h2>Sledujeme pro „{{ q }}“</h2><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>{% endif %}
+  {% if results %}<h2>Sledujeme pro „{{ q }}“</h2><p class="sub rank-sub">Řazeno podle ceny, bez placených pozic. {{ rank_link() }}</p><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>{% endif %}
   {% if want_live and not error %}
   <div id="zive" class="live" data-q="{{ q }}" style="margin-top:{{ '36px' if results else '0' }}">
     {% if live_done %}{% include "_live.html" %}{% else %}

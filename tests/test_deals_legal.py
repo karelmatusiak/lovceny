@@ -33,7 +33,7 @@ def _seed():
     db = SessionLocal()
     big = _mk(db, "Slevy Lednice Velka", lambda d: 20000, 15000)     # −25 %, −5000 Kč
     small = _mk(db, "Slevy Mixer Maly", lambda d: 1000, 800)          # −20 %, −200 Kč
-    fake = _mk(db, "Slevy TV Falesna", lambda d: 1000, 990, original=1500)
+    fake = _mk(db, "Slevy TV Levneji", lambda d: 1000, 990, original=1500)
     demo = _mk(db, "Slevy Demo Pracka", lambda d: 50000, 10000, demo=True)
     wait = _mk(db, "Slevy Pockej Vysavac", lambda d: 800, 1000)
     db.close()
@@ -50,7 +50,7 @@ def test_ranking_sorted_by_real_savings_and_excludes_demo(monkeypatch):
     assert "Slevy Demo Pracka" not in names and "Slevy Pockej Vysavac" not in names
     top = next(x for x in r["buys"] if x.product.name == "Slevy Lednice Velka")
     assert round(top.savings_czk) == 5000 and round(top.savings_pct) == 25
-    assert "Slevy TV Falesna" in [x.product.name for x in r["fakes"]]
+    assert "Slevy TV Levneji" in [x.product.name for x in r["fakes"]]
 
 
 def test_demo_included_only_with_flag_and_labelled(monkeypatch):
@@ -65,7 +65,7 @@ def test_slevy_page_and_home_teaser():
     c = TestClient(app)
     h = c.get("/slevy").text
     assert "<title>Skutečné slevy – Lovceny</title>" in h and 'og:title" content="Skutečné slevy' in h
-    assert "Pozor na falešné slevy" in h and "přifouknutá" in h
+    assert "Za 30 dní bylo levněji" in h and "§ 12a" in h and "Nejnižší cena za posledních 30 dní byla" in h and "falešn" not in h.lower()
     assert "−25&nbsp;%" in h and "ušetříš 5\xa0000\xa0Kč" in h
     home = c.get("/").text
     assert "Slevy dne" in home and 'href="/slevy"' in home and "Jak vyděláváme" in home
@@ -75,7 +75,7 @@ def test_slevy_empty_state(monkeypatch):
     import lovceny.main as m
     monkeypatch.setattr(m, "real_deals", lambda db, **k: {"buys": [], "fakes": [], "include_demo": False})
     h = TestClient(app).get("/slevy").text
-    assert "Zatím máme málo historie" in h and "žádnou falešnou slevu" in h
+    assert "Zatím máme málo historie" in h and "žádnou takovou slevu" in h
 
 
 def test_legal_pages_linked_and_accurate():

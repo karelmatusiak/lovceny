@@ -1,8 +1,15 @@
-{% macro badge(v, big=false) -%}
-<div class="verdict v-{{ v.code }}{% if big %} verdict-lg{% endif %}">
+{% macro badge(v, big=false, link=false) -%}
+<div class="verdict v-{{ v.code }}{% if big %} verdict-lg{% endif %}"{% if v.tooltip %} title="{{ v.tooltip }}"{% endif %}>
   <span class="verdict-badge"><span class="sr-only">Verdikt: </span><span class="verdict-ico" aria-hidden="true">{{ v.icon }}</span><span class="verdict-label">{{ v.headline }}</span></span>
   {% if v.reason %}<span class="verdict-reason">{{ v.reason }}</span>{% endif %}
+  {% if link and v.code == 'fake' %}<a class="verdict-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
 </div>
+{%- endmacro %}
+{% macro rank_link() -%}
+<a class="rank-link" href="/jak-radime">Jak řadíme?</a>
+{%- endmacro %}
+{% macro affiliate_note() -%}
+{%- if AFFILIATE_ON() -%}<p class="aff-note"><span aria-hidden="true">ℹ️</span> Odkaz může být provizní – na pořadí to nemá vliv. <a href="/jak-radime#provize">Více</a></p>{%- endif -%}
 {%- endmacro %}
 {% macro badge_new() -%}
 <div class="verdict v-new">
@@ -22,6 +29,7 @@
   </div>
   <div class="pc-row">{{ badge(v) }}<b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>
 </a>
+{% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
 {{ cmp_button(p) }}
 </div>
 {%- endmacro %}

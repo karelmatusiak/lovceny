@@ -12,8 +12,9 @@ from .robots import Robots
 
 log = logging.getLogger("lovceny.scrape")
 
+BOT_INFO_URL = "https://lovceny.cz/pro-obchody"  # stránka pro e-shopy (popis bota, vyřazení)
 USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-              "Chrome/129.0 Safari/537.36 LovcenyBot/0.1 (+https://lovceny.cz/bot)")
+              "Chrome/129.0 Safari/537.36 LovcenyBot/0.1 (+" + BOT_INFO_URL + ")")
 ROBOTS_AGENT = "LovcenyBot"
 MIN_DELAY_S = 6.0  # min. rozestup dvou požadavků na stejnou doménu
 

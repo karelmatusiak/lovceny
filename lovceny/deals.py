@@ -1,5 +1,5 @@
 """Skutečné slevy: produkty s verdiktem Kupuj (u 90denního minima), řazené podle úspory
-oproti mediánu 90 dní; a samostatný seznam Falešná sleva.
+oproti mediánu 90 dní; a samostatný seznam „Za 30 dní bylo levněji“ (interní kód verdiktu „fake“).
 
 Demo body (PricePoint.is_demo) se v produkci z výpočtu vyřazují (LOVCENY_INCLUDE_DEMO≠1).
 """

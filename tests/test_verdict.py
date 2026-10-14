@@ -20,7 +20,7 @@ def test_wait():
 
 
 def test_fake_jump_before_sale():
-    assert compute(pts(lambda d: 1200 if 3 <= d <= 18 else 1000), 1000, now=NOW).code == "fake"
+    assert compute(pts(lambda d: 1200 if 3 <= d <= 18 else 1000), 1020, now=NOW).code == "fake"
 
 
 def test_fake_claimed_original():

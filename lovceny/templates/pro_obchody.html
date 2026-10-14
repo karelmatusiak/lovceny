@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Pro e-shopy – jak funguje LovcenyBot – Lovceny{% endblock %}
+{% block description %}Informace pro e-shopy: jak funguje robot LovcenyBot, co ukládáme a jak požádat o opravu údajů nebo vyřazení obchodu.{% endblock %}
+{% block og_title %}Pro e-shopy – Lovceny{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap prose">
+  <div class="eyebrow">Pro e-shopy</div>
+  <h1>Pro e-shopy</h1>
+  <p class="sub">Lovceny je nezávislý hlídač cen. Na tvůj obchod posíláme zákazníky, nic za to nechceme a nikomu neprodáváme pořadí.</p>
+
+  <h2 id="bot">Jak funguje náš robot</h2>
+  <ul>
+    <li>Identifikuje se v hlavičce User-Agent jako <code>LovcenyBot</code>. Celý řetězec:<br><code class="ua">{{ ua }}</code></li>
+    <li>Před každým požadavkem čte a <b>respektuje robots.txt</b> (pravidla pro <code>LovcenyBot</code> i pro <code>*</code>, včetně zástupných znaků). Stačí přidat <code>User-agent: LovcenyBot</code> a <code>Disallow: /</code>.</li>
+    <li><b>Rate limit:</b> stránky produktů stahujeme nejvýš jednou za {{ scrape_delay }} s na doménu, živé hledání nejvýš jednou za {{ search_delay }} s na doménu a jen na dotaz uživatele. Jednu nabídku kontrolujeme nejvýš 3× denně.</li>
+    <li>Ochranu proti botům (Cloudflare, captcha, JS challenge, HTTP 403/429) <b>neobcházíme</b> – když ji narazíme, přestaneme.</li>
+    <li>Nekopírujeme celé katalogy; čteme jen konkrétní produkty, které uživatelé sledují nebo hledají.</li>
+  </ul>
+
+  <h2 id="data">Co ukládáme</h2>
+  <ul>
+    <li>Jen <b>cenu, název produktu, odkaz na produkt a čas měření</b> (u feedu i EAN a dostupnost).</li>
+    <li>Náhledový obrázek nekopírujeme do databáze: zobrazujeme ho přes náš proxy server ve zmenšené podobě (do 640 px) s dočasnou cache a s odkazem na tvůj obchod. Popisy, recenze ani hodnocení nepřebíráme.</li>
+    <li>Ceny řadíme jen podle výše ceny – viz <a href="/jak-radime">Jak řadíme a hodnotíme</a>.</li>
+  </ul>
+
+  <h2 id="oprava">Oprava údajů nebo vyřazení obchodu</h2>
+  <p>Napiš nám přes <a href="/o-nas?tema=obchod-oprava#kontakt">kontaktní formulář</a> a zvol téma <b>„Oprava/vyřazení obchodu“</b>. Uveď název obchodu, doménu, odkaz na dotčený produkt a e-mail pro odpověď.</p>
+  <ul>
+    <li><b>Opravu nebo vyřazení provedeme nejpozději do {{ remove_days }} dní</b> od přijetí žádosti (obvykle dřív). Vyřazený obchod přestaneme stahovat i prohledávat a jeho nabídky skryjeme.</li>
+    <li>Pokud nám chceš dát oficiální produktový feed, napiš stejnou cestou – data z feedu mají přednost před čtením stránek.</li>
+  </ul>
+  <p><a class="btn btn-primary btn-sm" href="/o-nas?tema=obchod-oprava#kontakt">Požádat o opravu nebo vyřazení</a></p>
+</div></section>
+{% endblock %}

@@ -1,11 +1,11 @@
-{% from "_macros.html" import shop_img %}{% from "_macros.html" import badge_new, cmp_button %}{%- set searched = [] -%}{%- for st in statuses or [] -%}{%- set _ = searched.append(SHOPS[st.shop].name) -%}{%- endfor -%}
+{% from "_macros.html" import shop_img %}{% from "_macros.html" import badge_new, cmp_button, rank_link, affiliate_note %}{%- set searched = [] -%}{%- for st in statuses or [] -%}{%- set _ = searched.append(SHOPS[st.shop].name) -%}{%- endfor -%}
 {% if summary or (intent and intent.source == 'ai') or (intent and (intent.max_price or intent.min_price)) %}
 <div class="ai-box">{% if summary %}<p class="ai-sum"><span aria-hidden="true">✨</span> {{ summary }}</p>{% endif %}
 <p class="ai-meta">{% if intent.source == 'ai' %}Rozuměli jsme: hledáme {% for t in intent.queries %}<b>{{ t }}</b>{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Hledáme <b>{{ intent.queries|join(', ') }}</b>{% endif %}{% if intent.min_price %} · od {{ intent.min_price|czk }}{% endif %}{% if intent.max_price %} · do {{ intent.max_price|czk }}{% endif %}{% if ai_used %} · <span class="ai-tag">vybráno s AI</span>{% endif %}</p></div>
 {% endif %}
 {% if offers %}
 <h2>Nejlevnější nabídky v obchodech</h2>
-<p class="sub">Řazeno jen podle ceny. Kliknutím na <b>Sledovat tento produkt</b> začneme ukládat historii ceny.</p>
+<p class="sub">Řazeno jen podle ceny (bez dopravy). {{ rank_link() }} Kliknutím na <b>Sledovat tento produkt</b> začneme ukládat historii ceny.</p>
 <div class="offers-live">
 {% for h, tracked in offers %}{% set s = SHOPS[h.shop] %}
   <div class="card live-row">
@@ -27,4 +27,5 @@
 <h2>{{ q|capitalize }} zatím nikde nenacházíme…</h2>
 <p class="sub">V obchodech, které nám hledání dovolují, jsme nic nenašli. Zkus jiný název (třeba bez barvy či kapacity), nebo vlož přímo odkaz na produkt z e-shopu a začneme ho hlídat.</p>
 {% endif %}
+{{ affiliate_note() }}
 <p class="live-note">{% if searched %}Prohledáno živě: {{ searched|join(', ') }}. {% endif %}Alzu a Datart hledáme v jejich oficiálním feedu. Ostatní obchody vyhledávání robotům nedovolují nebo je blokují – ochrany neobcházíme.</p>

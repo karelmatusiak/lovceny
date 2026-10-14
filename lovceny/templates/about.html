@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}O nás – poctivé ceny bez placených pozic | Lovceny{% endblock %}
-{% block description %}Proč vznikly Lovceny: poctivé ceny elektroniky a spotřebičů, žádné placené pozice, verdikt Kupuj/Počkej/Falešná sleva z historie cen. Jak se lišíme od srovnávačů a jak vyděláváme.{% endblock %}
+{% block description %}Proč vznikly Lovceny: poctivé ceny elektroniky a spotřebičů, žádné placené pozice, verdikt Kupuj / Počkej / Za 30 dní bylo levněji z historie cen. Jak se lišíme od srovnávačů a jak vyděláváme.{% endblock %}
 {% block body %}
 <section class="about-hero"><div class="wrap">
   <div class="eyebrow">O nás</div>
@@ -25,9 +25,9 @@
     <ul class="about-list">
       <li><span class="vd vd-buy">Kupuj</span> cena je nejvýš 3 % nad minimem za 90 dní.</li>
       <li><span class="vd vd-wait">Počkej</span> cena je nad obvyklou úrovní, vyplatí se počkat.</li>
-      <li><span class="vd vd-fake">Falešná sleva</span> „původní“ cena neodpovídá tomu, za kolik se zboží posledních 30 dní prodávalo, nebo obchod cenu těsně před akcí zvedl.</li>
+      <li><span class="vd vd-fake">Za 30 dní bylo levněji</span> nejnižší cena naměřená za 30 dní před akcí byla nižší než cena, ze které se sleva počítá (u štítku vždy uvádíme cenu a datum).</li>
     </ul>
-    <p class="muted small">Při méně než 7 dnech historie píšeme „Málo dat“ – nehádáme.</p>
+    <p class="muted small">Při méně než 7 dnech historie píšeme „Málo dat“ – nehádáme. Verdikt je algoritmický odhad z naměřených cen, ne záruka. <a href="/jak-radime">Celá metodika</a></p>
   </article>
 </div></section>
 
@@ -41,7 +41,7 @@
       <tbody>
         <tr><th scope="row">Pořadí nabídek</th><td>Vždy jen podle ceny</td><td>Výchozí řazení může kromě ceny zohledňovat i další faktory, např. hodnocení nebo nabídku obchodu za proklik – podrobnosti uvádějí ve svých podmínkách</td></tr>
         <tr><th scope="row">Placené zvýraznění</th><td>Nemáme a mít nebudeme</td><td>Obchody obvykle platí za prokliky; reklamní a zvýrazněné pozice bývají označené</td></tr>
-        <tr><th scope="row">Historie ceny a verdikt</th><td>U každého produktu, s odhalením falešných slev</td><td>Graf vývoje ceny bývá k dispozici, verdikt Kupuj / Počkej v našem pojetí ne</td></tr>
+        <tr><th scope="row">Historie ceny a verdikt</th><td>U každého produktu, včetně srovnání slevy s nejnižší cenou za 30 dní</td><td>Graf vývoje ceny bývá k dispozici, verdikt Kupuj / Počkej v našem pojetí ne</td></tr>
         <tr><th scope="row">Počet obchodů</th><td>Vybrané obchody, které automatické čtení dovolují</td><td>Tisíce obchodů – v tom jsou silnější</td></tr>
       </tbody>
     </table></div>
@@ -79,7 +79,7 @@
         <div class="field"><label for="c-name">Jméno <span class="muted">(nepovinné)</span></label><input id="c-name" name="name" maxlength="100" autocomplete="name"></div>
         <div class="field"><label for="c-mail">E-mail pro odpověď <span class="muted">(nepovinné)</span></label><input id="c-mail" name="reply_to" type="email" maxlength="320" autocomplete="email" placeholder="ty@example.cz"></div>
       </div>
-      <div class="field"><label for="c-topic">Téma</label><select id="c-topic" name="topic">{% for k, v in topics.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="c-topic">Téma</label><select id="c-topic" name="topic">{% for k, v in topics.items() %}<option value="{{ k }}"{% if k == topic %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
       <div class="field"><label for="c-msg">Zpráva</label><textarea id="c-msg" name="message" rows="5" minlength="10" maxlength="3000" required></textarea></div>
       <div class="hp" aria-hidden="true"><label for="c-web">Web (nevyplňuj)</label><input id="c-web" name="website" tabindex="-1" autocomplete="off"></div>
       <button class="btn btn-primary btn-sm" type="submit">Odeslat zprávu</button>

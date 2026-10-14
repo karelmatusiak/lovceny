@@ -16,7 +16,7 @@
   <div class="verdicts" aria-label="Možné verdikty">
     <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
     <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
-    <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Falešná sleva</span></div>
+    <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
   </div>
   <picture class="hero-art"><source type="image/webp" srcset="{{ static('img/hero-720.webp') }} 720w, {{ static('img/hero-1200.webp') }} 1200w" sizes="(max-width:560px) 92vw, 760px"><img src="{{ static('img/hero-1200.jpg') }}" srcset="{{ static('img/hero-720.jpg') }} 720w, {{ static('img/hero-1200.jpg') }} 1200w" sizes="(max-width:560px) 92vw, 760px" width="1200" height="674" alt="Ilustrace: lupa nad grafem klesající ceny, kolem ní mobil, sluchátka, notebook, chytré hodinky, pračka a kávovar" fetchpriority="high" decoding="async"></picture>
 </div></header>
@@ -63,8 +63,9 @@
   <ul>
     <li>🟢 <span><b>Kupuj:</b> cena do 3 % nad minimem za 90 dní.</span></li>
     <li>🟠 <span><b>Počkej:</b> cena je nad obvyklou úrovní (mediánem).</span></li>
-    <li>🔴 <span><b>Falešná sleva:</b> „původní“ cena je vyšší než minimum za 30 dní před akcí, nebo cena těsně před slevou skokově vyrostla.</span></li>
+    <li>🔴 <span><b>Za 30 dní bylo levněji:</b> sleva se počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí, nebo cena krátce před slevou vzrostla o ≥ 12 %. U štítku vždy ukážeme naměřenou cenu a datum.</span></li>
   </ul>
+  <p style="margin-top:12px"><a href="/jak-radime">Celá metodika: Jak řadíme a hodnotíme</a></p>
 </div></div></section>
 <section id="vydelavame"><div class="wrap"><div class="card zasady">
   <div class="eyebrow">Naše zásady</div><h2>Jak vyděláváme</h2>

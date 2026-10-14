@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Jak řadíme a hodnotíme – Lovceny{% endblock %}
+{% block description %}Metodika Lovceny: řazení jen podle ceny, žádné placené pozice, seznam prohledávaných obchodů, aktualizace cen a přesná pravidla verdiktů Kupuj, Počkej a Za 30 dní bylo levněji.{% endblock %}
+{% block og_title %}Jak řadíme a hodnotíme – Lovceny{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap prose">
+  <div class="eyebrow">Transparentnost</div>
+  <h1>Jak řadíme a hodnotíme</h1>
+  <p class="sub">Tato stránka popisuje, jak Lovceny skutečně fungují: podle čeho řadíme nabídky, odkud bereme ceny a jak počítáme verdikty. Prahy níže jsou stejné, jaké používá náš kód.</p>
+
+  <h2 id="razeni">1. Podle čeho řadíme</h2>
+  <ul>
+    <li><b>Jediné kritérium pořadí je cena</b> – nejlevnější nabídka je nahoře. Jinou váhu nemá nic dalšího.</li>
+    <li>Porovnáváme <b>cenu zboží s DPH, jak ji obchod uvádí, bez dopravy</b>. Cenu dopravy ani platby zatím nenačítáme, proto ji do pořadí nezapočítáváme.</li>
+    <li>Nabídky, u kterých cenu zrovna nemáme (např. „cena bude doplněna“), jsou až na konci.</li>
+    <li>V kategoriích řadíme produkty podle nejnižší aktuální ceny napříč obchody; v pohledu „Ve slevě“ a na stránce Skutečné slevy podle úspory oproti obvyklé ceně (medián 90 dní).</li>
+    <li><b>Placené umístění nemáme.</b> Žádný obchod nám neplatí za pořadí, zvýraznění, zařazení ani verdikt.</li>
+  </ul>
+
+  <h2 id="provize">2. Provizní (affiliate) odkazy</h2>
+  <p>{% if AFFILIATE_ON() %}Některé odkazy do obchodů jsou provizní: když přes ně nakoupíš, obchod nám může zaplatit provizi. Cena pro tebe je stejná. U takových odkazů uvádíme: „Odkaz může být provizní – na pořadí to nemá vliv.“{% else %}Teď žádné provizní odkazy nepoužíváme. Pokud je zavedeme, u odkazů to výslovně označíme.{% endif %} Provize nikdy neovlivní pořadí ani verdikt.</p>
+
+  <h2 id="obchody">3. Které obchody prohledáváme</h2>
+  <p>Nepokrýváme celý trh – jen obchody níže. Obchody, které automatické čtení zakazují nebo blokují, nesledujeme, nebo je napojujeme jen přes oficiální feed.</p>
+  <div class="cmp-table-wrap" tabindex="0" role="region" aria-label="Seznam obchodů"><table class="tbl">
+    <caption class="sr-only">Prohledávané obchody a jejich stav</caption>
+    <thead><tr><th scope="col">Obchod</th><th scope="col">Zdroj cen</th><th scope="col">Živé hledání</th><th scope="col">Stav</th></tr></thead>
+    <tbody>{% for s in shops %}<tr><td><b>{{ s.name }}</b></td><td>{{ 'oficiální feed' if s.source=='feed' else 'stránka produktu' }}</td><td>{{ 'ano' if s.searcher else 'ne' }}</td>
+      <td>{% if s.status=='blocked' %}<span class="st st-bad">nesledujeme</span>{% elif s.source=='feed' and not s.feed_url %}<span class="st st-wait">čeká na feed</span>{% else %}<span class="st st-ok">sledujeme</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="small muted">Aktuální úspěšnost stahování po obchodech je na stránce <a href="/stav">Stav obchodů</a>, podrobnosti na <a href="/obchody">Hlídané obchody</a>.</p>
+
+  <h2 id="aktualizace">4. Jak často aktualizujeme ceny</h2>
+  <ul>
+    <li>Ceny sledovaných produktů stahujeme automaticky <b>3× denně</b> (přibližně v {{ fetch_times }} našeho času). Nabídku zkontrolovanou v posledních {{ min_age }} hodinách přeskočíme.</li>
+    <li>Živé hledání se ptá obchodů v okamžiku tvého dotazu; výsledek si pamatujeme nejvýš {{ live_cache_min }} minut.</li>
+    <li>Čerstvost hlídáme automaticky: obchod, u kterého selže většina požadavků nebo jehož poslední úspěšná cena je starší než 2 dny, se označí na stránce <a href="/stav">Stav obchodů</a> a my dostaneme upozornění.</li>
+    <li>U každé ceny na stránce produktu uvádíme, kdy jsme ji naposledy ověřili.</li>
+  </ul>
+
+  <h2 id="verdikty">5. Jak počítáme verdikty</h2>
+  <p>Verdikt je <b>algoritmický odhad</b> z cen, které jsme sami naměřili (za každý den bereme nejnižší cenu napříč obchody). Není to záruka budoucího vývoje ceny.</p>
+  <ul>
+    <li><b>Málo dat:</b> máme méně než {{ t.MIN_DAYS }} dní s cenou za posledních 90 dní – verdikt nedáváme.</li>
+    <li><b>✅ Kupuj:</b> dnešní nejnižší cena je nejvýš {{ pct(t.BUY_OVER_MIN) }} % nad minimem za 90 dní.</li>
+    <li><b>⏳ Počkej:</b> žádné z ostatních pravidel neplatí – za posledních 90 dní byla cena nižší.</li>
+  </ul>
+  <h3 id="za-30-dni-levneji">⚠️ Za 30 dní bylo levněji</h3>
+  <p>Podle <b>§ 12a zákona č. 634/1992 Sb., o ochraně spotřebitele</b>, má prodávající u slevy uvádět jako původní cenu nejnižší cenu, za kterou zboží nabízel v posledních 30 dnech. Stejné srovnání děláme z cen, které jsme sami naměřili. Štítek ukážeme, když platí jedno z pravidel:</p>
+  <ol>
+    <li>Obchod uvádí původní (přeškrtnutou) cenu, která je o víc než {{ pct(t.REF_OVER_MIN30) }} % vyšší než nejnižší cena, kterou jsme naměřili ve dnech 3 až 33 před dneškem, a dnešní cena je nižší než ta původní.</li>
+    <li>Během posledních 21 dní cena vzrostla alespoň o {{ pct(t.JUMP) }} % oproti mediánu ze dnů 21 až 60 zpět a dnešní cena je zpět na úrovni alespoň {{ 100 - pct(t.JUMP_BACK) }} % tohoto mediánu.</li>
+  </ol>
+  <p>U štítku vždy uvádíme data: „Nejnižší cena za posledních 30 dní byla X Kč (dne D). Sleva se počítá z vyšší ceny.“ a na stránce produktu graf historie. Štítek popisuje jen naměřené ceny, nehodnotí obchod. Naše měření nemusí zachytit každou cenu (např. krátkou akci mezi dvěma měřeními nebo cenu jen pro přihlášené).</p>
+
+  <h2 id="zdroje">6. Zdroje dat</h2>
+  <ul>
+    <li>Veřejné stránky produktů v obchodech, které to v robots.txt dovolují (strukturovaná data schema.org, případně meta tagy).</li>
+    <li>Oficiální produktové feedy obchodů (formát Heureka XML / CSV), kde jsou k dispozici.</li>
+    <li>Ochranu proti botům nikdy neobcházíme. Jak náš robot funguje, popisujeme na stránce <a href="/pro-obchody">Pro e-shopy</a>.</li>
+  </ul>
+
+  <h2 id="omezeni">7. Omezení</h2>
+  <ul>
+    <li><b>Ceny jsou orientační.</b> Rozhodující je vždy cena a podmínky v obchodě v okamžiku nákupu.</li>
+    <li>Cenu dopravy, slevové kódy, věrnostní ceny a ceny pro přihlášené nezahrnujeme.</li>
+    <li>Sledujeme jen část trhu; jinde může být levněji.</li>
+    <li>Data mohou být chybná nebo zpožděná. Chybu nám prosím nahlas přes <a href="/o-nas?tema=chyba#kontakt">kontaktní formulář</a>.</li>
+  </ul>
+  <p class="small muted">Viz také <a href="/podminky">Podmínky užívání</a>.</p>
+</div></section>
+{% endblock %}

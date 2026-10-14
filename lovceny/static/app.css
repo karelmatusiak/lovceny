@@ -324,3 +324,10 @@ main:focus{outline:none}
 .push-ios .small,.contact .small,.adm-card .small,.about-card .small,.about-wide .small{text-align:left}
 .cmp-dl+.cmp-dl{margin-top:12px}
 .contact .notice{margin:14px 0 16px}
+/* Transparentnost: Jak řadíme, data u štítku, affiliate */
+.rank-link{font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+.rank-link:hover{color:inherit}
+.verdict-how{display:inline-block;font-size:13px;font-weight:600;text-decoration:underline;color:#8E1F18;margin-top:2px;padding:4px 0}
+.pc-how{margin:0 0 6px 2px}
+.aff-note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.prose code.ua{display:inline-block;word-break:break-all;font-size:13px;background:#F3F4F6;padding:4px 6px;border-radius:6px;margin-top:4px}
