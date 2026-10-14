@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Cookies – Lovceny{% endblock %}
+{% block description %}Informace o cookies a úložišti prohlížeče na Lovceny.cz.{% endblock %}
+{% block og_title %}Cookies – Lovceny{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap prose">
+  <div class="eyebrow">Právní informace</div>
+  <h1>Cookies a úložiště prohlížeče</h1>
+  <p class="sub">Platnost od 14.&nbsp;10.&nbsp;2026. Audit kódu MVP: žádné sledovací cookies, žádná analytika třetích stran.</p>
+
+  <h2>Cookies</h2>
+  <p>Aplikace Lovceny.cz <b>nenastavuje cookies</b> (ani technické session cookies z naší strany). Nepoužíváme Google Analytics, reklamní pixely ani podobné nástroje. Proto <b>nezobrazujeme cookie lištu / banner souhlasu</b> – není k čemu dávat souhlas.</p>
+  <p>Hosting nebo prohlížeč mohou mít vlastní technické chování mimo naši kontrolu; my do odpovědí cookies nepřidáváme.</p>
+
+  <h2>localStorage (úložiště v prohlížeči)</h2>
+  <p>Pro funkci <a href="/porovnani">Porovnání cen</a> ukládáme v tvém prohlížeči klíč:</p>
+  <ul>
+    <li><code>lovceny_porovnani</code> – seznam až 4 číselných ID produktů, které sis vybral k porovnání.</li>
+  </ul>
+  <p>Data zůstávají jen v zařízení. Na server se neodesílají automaticky; při otevření <code>/porovnani?ids=…</code> si stránku načteš podle URL (tu můžeš i sdílet). Smazáním dat webu v prohlížeči nebo tlačítkem „Zrušit výběr“ výběr vymažeš.</p>
+  <p>Toto úložiště je nezbytné pro výběr k porovnání (technicky nutné pro funkci, kterou jsi sám spustil). Nejde o cookie třetí strany ani o sledování napříč weby.</p>
+
+  <h2>Další informace</h2>
+  <p>Osobní údaje (e-mail u hlídání ceny, AI dotazy) popisuje <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>
+</div></section>
+{% endblock %}

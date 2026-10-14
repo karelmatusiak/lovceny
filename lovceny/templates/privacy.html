@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Ochrana osobních údajů – Lovceny{% endblock %}
+{% block description %}Zásady ochrany osobních údajů (GDPR) služby Lovceny.cz.{% endblock %}
+{% block og_title %}Ochrana osobních údajů – Lovceny{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap prose">
+  <div class="eyebrow">Právní informace</div>
+  <h1>Ochrana osobních údajů</h1>
+  <p class="sub">Platnost od 14.&nbsp;10.&nbsp;2026. Text popisuje, co služba Lovceny.cz skutečně dělá. <em>Nejde o právní radu</em> – při pochybnostech se obraťte na právníka nebo ÚOOÚ.</p>
+
+  <h2>1. Správce</h2>
+  <p>Správcem osobních údajů je:</p>
+  <ul>
+    <li><b>Karel Matusiak</b></li>
+    <li>e-mail: <a href="mailto:ahoj@lovceny.cz">ahoj@lovceny.cz</a></li>
+    <li><span class="legal-placeholder">[DOPLNIT: adresa trvalého bydliště / sídla]</span></li>
+    <li><span class="legal-placeholder">[DOPLNIT: IČO – zatím nemáte; po získání doplňte]</span></li>
+  </ul>
+
+  <h2>2. Co zpracováváme a proč</h2>
+  <h3>2.1 Hlídání ceny (e-mail + cílová cena)</h3>
+  <p>Když si nastavíš hlídání ceny, uložíme <b>e-mail</b>, <b>cílovou cenu</b>, identifikátor produktu, volitelně příznak „jen skladem“, unikátní token a stav (nepotvrzeno / aktivní / zrušeno).</p>
+  <ul>
+    <li><b>Účel:</b> poslat potvrzovací e-mail (double opt-in) a později upozornění, až cena klesne na cíl.</li>
+    <li><b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR) – udělený potvrzením odkazu v e-mailu. Bez potvrzení hlídání neaktivujeme. Odhlásit se lze kdykoli odkazem v e-mailu nebo na stránce zrušení.</li>
+    <li><b>Doba uložení:</b> do odhlášení / zrušení hlídání, nejdéle 24 měsíců od posledního upozornění nebo vytvoření (nepotvrzená hlídání můžeme smazat dříve).</li>
+  </ul>
+
+  <h3>2.2 AI hledání (Google Gemini)</h3>
+  <p>U delších dotazů v přirozené řeči (např. „tichá pračka do 10 tisíc“) můžeme text dotazu a názvy + ceny nabídek z e-shopů poslat službě <b>Google Gemini</b> (free tier API), aby porozuměla filtru a seřadila relevantní výsledky. Z textu před odesláním <b>odstraňujeme e-maily a telefonní čísla</b>. Neposíláme jméno ani údaje z hlídání ceny.</p>
+  <ul>
+    <li><b>Účel:</b> lepší výsledky hledání.</li>
+    <li><b>Právní základ:</b> oprávněný zájem (čl. 6 odst. 1 písm. f) na funkčním vyhledávání; krátké prosté dotazy AI nevolají. Bez API klíče nebo při chybě/kvótě hledáme bez AI.</li>
+    <li><b>Příjemce:</b> Google (Gemini API). U bezplatné úrovně (free tier) Google podle svých podmínek může obsah požadavků a odpovědí použít ke zlepšování svých produktů a mohou jej číst lidští posuzovatelé – proto do vyhledávání nepiš osobní údaje. Odpovědi si krátce (<abbr title="asi 1 hodina">~1&nbsp;h</abbr>) cachujeme na našem serveru (jen text dotazu / výsledek, bez e-mailů).</li>
+  </ul>
+
+  <h3>2.3 Technické logy hostingu</h3>
+  <p>Hosting (Render) a databáze (Neon) mohou krátkodobě zaznamenat IP adresu, User-Agent a čas požadavku v provozních logách – nezbytné pro bezpečnost a provoz služby (oprávněný zájem).</p>
+
+  <h3>2.4 Co nezpracováváme</h3>
+  <p>Nemáme uživatelské účty, neprovádíme profilování pro reklamu, nepoužíváme reklamní ani analytické cookies třetích stran (žádný Google Analytics, Meta Pixel apod.).</p>
+
+  <h2>3. Kde data leží (zpracovatelé)</h2>
+  <ul>
+    <li><b>Render</b> – hosting aplikace, region Frankfurt (EU).</li>
+    <li><b>Neon</b> – PostgreSQL databáze, region Frankfurt (EU).</li>
+    <li><b>Google</b> – Gemini API (jen při AI hledání; viz výše).</li>
+    <li>Odesílání e-mailů je v MVP zatím jen logované; až napojíme poskytovatele (např. Resend / Brevo), doplníme ho sem.</li>
+  </ul>
+
+  <h2>4. Cookies a úložiště v prohlížeči</h2>
+  <p>Podrobnosti jsou na stránce <a href="/cookies">Cookies</a>. Stručně: <b>nepoužíváme cookies</b> pro sledování. V <b>localStorage</b> prohlížeče si ukládáme jen seznam ID produktů k porovnání (klíč <code>lovceny_porovnani</code>) – zůstává u tebe v zařízení, na server se neposílá automaticky. Není potřeba cookie lišta.</p>
+
+  <h2>5. Affiliate odkazy</h2>
+  <p>U některých obchodů (např. Alza, Datart) můžeme k odkazu přidat affiliate parametr. Na pořadí výsledků ani na verdikt to nemá vliv. Viz <a href="/#vydelavame">Jak vyděláváme</a>.</p>
+
+  <h2>6. Tvá práva</h2>
+  <p>Máš právo na přístup, opravu, výmaz, omezení zpracování, přenositelnost a námitku proti zpracování založenému na oprávněném zájmu, a právo souhlas kdykoli odvolat (odhlášením hlídání). Pro uplatnění napiš na <a href="mailto:ahoj@lovceny.cz">ahoj@lovceny.cz</a>.</p>
+  <p>Máš také právo podat stížnost u <b>Úřadu pro ochranu osobních údajů (ÚOOÚ)</b>, Pplk. Sochora 27, 170 00 Praha 7, <a href="https://www.uoou.cz" rel="noopener" target="_blank">uoou.cz</a>.</p>
+
+  <h2>7. Změny</h2>
+  <p>Při podstatné změně textu upravíme datum platnosti na této stránce.</p>
+</div></section>
+{% endblock %}

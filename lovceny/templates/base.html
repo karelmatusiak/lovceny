@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Lovceny – poctivý hlídač cen elektroniky a spotřebičů{% endblock %}</title>
+<meta name="description" content="{% block description %}Poctivý hlídač cen elektroniky a spotřebičů. Řekneme na rovinu: kupovat, nebo počkat.{% endblock %}">
 <link rel="icon" href="/static/brand/favicon.ico" sizes="any"><link rel="icon" href="/static/brand/ikona.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png"><meta name="theme-color" content="#0B6E4F">
-<meta property="og:site_name" content="Lovceny"><meta property="og:title" content="Lovceny – poctivý hlídač cen elektroniky a spotřebičů"><meta property="og:image" content="https://lovceny.cz/static/brand/og-image.png"><meta name="twitter:card" content="summary_large_image">
+<meta property="og:site_name" content="Lovceny"><meta property="og:title" content="{% block og_title %}Lovceny – poctivý hlídač cen elektroniky a spotřebičů{% endblock %}"><meta property="og:description" content="{{ self.description() }}"><meta property="og:type" content="website">{% if request %}<meta property="og:url" content="https://lovceny.cz{{ request.url.path }}"><link rel="canonical" href="https://lovceny.cz{{ request.url.path }}">{% endif %}<meta property="og:image" content="https://lovceny.cz/static/brand/og-image.png"><meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 <div class="wrap">
   <nav>
     <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="/static/brand/logo.svg" alt="lovceny" width="131" height="46"></a>
-    <div class="nav-links"><a href="/#jak">Jak to funguje</a><a href="/obchody">Hlídané obchody</a><a href="/#nezavislost">Proč nám věřit</a></div>
+    <div class="nav-links"><a href="/slevy">Skutečné slevy</a><a href="/#jak">Jak to funguje</a><a href="/obchody">Hlídané obchody</a><a href="/#nezavislost">Proč nám věřit</a></div>
     <a class="btn btn-ghost" href="/#hledat">🔔 Hlídat cenu</a>
   </nav>
 </div>
@@ -21,9 +22,9 @@
   <div class="foot">
     <div><a class="logo" href="/"><img class="logo-img" src="/static/brand/logo.svg" alt="lovceny" width="108" height="38"></a>
       <p style="margin-top:14px;max-width:300px">Poctivý hlídač cen elektroniky a domácích spotřebičů. Bez placených pozic, bez reklam ve výsledcích.</p></div>
-    <div><h5>Produkt</h5><ul><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li></ul></div>
-    <div><h5>Transparentnost</h5><ul><li><a href="/#metodika">Metodika verdiktu</a></li><li><a href="/obchody">Hlídané obchody</a></li></ul></div>
-    <div><h5>Kontakt</h5><ul><li><a href="mailto:ahoj@lovceny.cz">ahoj@lovceny.cz</a></li></ul></div>
+    <div><h5>Produkt</h5><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li></ul></div>
+    <div><h5>Transparentnost</h5><ul><li><a href="/#metodika">Metodika verdiktu</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/#vydelavame">Jak vyděláváme</a></li></ul></div>
+    <div><h5>Kontakt a právní</h5><ul><li><a href="mailto:ahoj@lovceny.cz">ahoj@lovceny.cz</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li></ul></div>
   </div>
   <div class="legal"><span>© 2026 Lovceny.cz · MVP. Některé odkazy mohou být affiliate, na pořadí ani verdikt to nemá vliv.</span><span>Lovceny není spojen s uvedenými obchody.</span></div>
 </div></footer>

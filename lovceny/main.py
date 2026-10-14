@@ -16,6 +16,7 @@ from .models import Product, Offer, PricePoint, Watch
 from .shops import SHOPS, get_shop
 from .service import add_by_url, create_watch, search_db, offers_for_query, smart_offers
 from .verdict import compute
+from .deals import real_deals
 from .util import czk
 
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +54,23 @@ def product_summary(p: Product):
 def home(request: Request, db=Depends(get_db)):
     products = db.scalars(select(Product).order_by(Product.created_at.desc()).limit(6)).all()
     cards = [(p, *product_summary(p)) for p in products]
-    return tpl.TemplateResponse(request, "index.html", {"cards": cards})
+    deals = real_deals(db, top=3)["buys"]
+    return tpl.TemplateResponse(request, "index.html", {"cards": cards, "deals": deals})
+
+
+@app.get("/slevy", response_class=HTMLResponse)
+def deals_page(request: Request, db=Depends(get_db)):
+    return tpl.TemplateResponse(request, "deals.html", real_deals(db))
+
+
+@app.get("/ochrana-osobnich-udaju", response_class=HTMLResponse)
+def privacy(request: Request):
+    return tpl.TemplateResponse(request, "privacy.html", {})
+
+
+@app.get("/cookies", response_class=HTMLResponse)
+def cookies(request: Request):
+    return tpl.TemplateResponse(request, "cookies.html", {})
 
 
 @app.get("/hledat", response_class=HTMLResponse)

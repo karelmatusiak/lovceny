@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard %}
+{% extends "base.html" %}{% from "_macros.html" import pcard, badge %}
 {% block body %}
 <header class="hero" id="hledat"><div class="wrap">
   <span class="pill"><i>MVP</i> Poctivý hlídač cen elektroniky a spotřebičů, bez placených pozic</span>
@@ -19,6 +19,25 @@
     <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Falešná sleva</span></div>
   </div>
 </div></header>
+
+{% if deals %}
+<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
+  <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
+  <div class="teaser-grid">{% for r in deals %}
+    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+      <div class="p-name sm">{{ r.product.name }}</div>
+      {{ badge(r.verdict) }}
+      <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>
+      {% if r.savings_czk > 0 %}<small>ušetříš {{ r.savings_czk|czk }} oproti obvyklé ceně</small>{% endif %}
+      {% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}
+    </a>{% endfor %}
+  </div>
+</div></section>
+{% else %}
+<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
+  <div class="card teaser-empty"><b>🏷️ Slevy dne</b> – jakmile budeme mít u sledovaných produktů aspoň týden historie, ukážeme tu nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></div>
+</div></section>
+{% endif %}
 
 {% if cards %}
 <section style="padding-top:24px"><div class="wrap">
@@ -43,6 +62,14 @@
     <li>🟢 <span><b>Kupuj:</b> cena do 3 % nad minimem za 90 dní.</span></li>
     <li>🟠 <span><b>Počkej:</b> cena je nad obvyklou úrovní (mediánem).</span></li>
     <li>🔴 <span><b>Falešná sleva:</b> „původní“ cena je vyšší než minimum za 30 dní před akcí, nebo cena těsně před slevou skokově vyrostla.</span></li>
+  </ul>
+</div></div></section>
+<section id="vydelavame"><div class="wrap"><div class="card zasady">
+  <div class="eyebrow">Naše zásady</div><h2>Jak vyděláváme</h2>
+  <ul>
+    <li><b>Affiliate odkazy:</b> u některých obchodů (např. Alza, Datart) můžeme dostat malou provizi, když přes náš odkaz nakoupíš. Cena pro tebe je stejná.</li>
+    <li><b>Žádné placené pozice:</b> pořadí obchodů je jen podle ceny a verdikt počítáme z historie cen – provize na ně nemá vliv.</li>
+    <li><b>Žádné reklamy ani sledovací cookies.</b> Podrobnosti: <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>, <a href="/cookies">Cookies</a>.</li>
   </ul>
 </div></div></section>
 {% endblock %}

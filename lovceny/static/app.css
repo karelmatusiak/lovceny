@@ -95,3 +95,40 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}
 .ai-sum{margin:0 0 4px;font-size:1.05rem;font-weight:600}
 .ai-meta{margin:0;color:#555;font-size:.9rem}
 .ai-tag{background:#ede9fe;color:#5b21b6;border-radius:999px;padding:1px 8px;font-size:.8rem}
+/* Skutečné slevy */
+.deals-hero{padding:32px 0 8px}.deals-hero h1{font-size:clamp(30px,6vw,46px);margin:6px 0 10px}
+.deals-lead{max-width:720px}
+.deals-list{display:grid;gap:12px}
+.deal-row{position:relative;padding:16px 18px}
+.deal-main{display:grid;grid-template-columns:64px 1fr auto auto;gap:16px;align-items:center;color:inherit;text-decoration:none}
+.deal-main>*{min-width:0}
+.deal-info .deal-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.deal-prices{text-align:right;display:flex;flex-direction:column}
+.deal-was{font-size:13px;color:var(--muted)}
+.deal-save{display:flex;flex-direction:column;align-items:flex-end;background:#E8F5EE;border-radius:12px;padding:8px 12px;min-width:110px}
+.save-pct{font-weight:800;color:#0B6E4F;font-size:20px}
+.save-czk{font-size:13px;color:#0B6E4F}
+.deal-row .btn-cmp{margin-top:10px}
+.deal-why{margin:6px 0 0;font-size:14px;color:#7A3413}
+.deals-fake{padding-top:40px}.deal-fake{border-left:4px solid #E4572E}
+.deals-empty,.deals-empty-ok{line-height:1.5}
+.deals-empty-ok{background:#F4F7F5;border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.teaser-head{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.teaser-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.teaser-card{display:flex;flex-direction:column;gap:10px;padding:18px;color:inherit;text-decoration:none}
+.teaser-price{display:flex;gap:10px;align-items:baseline}.teaser-price b{font-size:22px}
+.teaser-card small{color:var(--muted)}
+.teaser-empty{padding:16px 18px}
+/* Právní stránky */
+.legal-page{padding:32px 0}.prose{max-width:760px}
+.prose h1{font-size:clamp(28px,6vw,40px);margin:6px 0 10px}
+.prose h2{font-size:22px;margin:28px 0 8px}.prose h3{font-size:17px;margin:18px 0 6px}
+.prose p,.prose li{line-height:1.6}.prose ul{padding-left:20px;display:grid;gap:6px}
+.legal-placeholder{background:#FFF4D6;border:1px dashed #C99A00;border-radius:6px;padding:1px 6px;font-weight:700}
+.zasady{padding:28px}.zasady ul{padding-left:20px;display:grid;gap:8px;line-height:1.55}
+@media (max-width:700px){
+  .deal-main{grid-template-columns:52px 1fr;gap:10px 12px}
+  .deal-prices{grid-column:2;text-align:left;flex-direction:row;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .deal-save{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
+  .teaser-grid{grid-template-columns:1fr}
+}
