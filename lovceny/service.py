@@ -69,6 +69,9 @@ def update_offer(db: Session, offer: Offer) -> str:
     p.image_url = p.image_url or res.image
     p.ean = p.ean or res.ean
     p.category = p.category or res.category
+    if not p.category_slug:
+        from .categories import classify
+        p.category_slug = classify(p.name, p.category)
     record_price(db, offer, res.price, res.original_price, res.in_stock, "scrape")
     return "ok"
 

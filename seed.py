@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Naplní DB několika skutečnými produkty z Planea (ceny se stáhnou živě) a doplní
-VYGENEROVANOU demo historii (price_points.is_demo = true), aby grafy něco ukazovaly.
+"""Naplní DB katalogem populární elektroniky (seed_catalog.json, ~90 produktů z obchodů, které čtení
+dovolují) a několika produkty z Planea s VYGENEROVANOU demo historií (price_points.is_demo = true).
 
-  python seed.py            # přidá produkty + demo historii
-  python seed.py --no-demo  # jen skutečné produkty
-  python seed.py --purge-demo  # smaže všechna demo data
+Idempotentní: produkt se pozná podle URL nabídky; už existující se jen zařadí do kategorie, znovu se
+nestahuje a demo historie se nepřidá podruhé. Ceny se stahují živě (robots.txt, ≥ 6 s mezi dotazy na doménu).
+
+  python seed.py                  # katalog + demo produkty
+  python seed.py --no-demo        # bez vygenerované demo historie
+  python seed.py --category pracky --limit 5
+  python seed.py --dry-run        # jen vypíše, co by přidal (nic nestahuje, nic nezapisuje)
+  python seed.py --purge-demo     # smaže všechna demo data
 """
+import json
+from pathlib import Path
 import argparse
 import math
 import random
@@ -48,11 +55,67 @@ def demo_history(db, offer, shape, days=120):
                           original_price=None, captured_at=t, is_demo=True, source="demo"))
 
 
-def main():
+CATALOG_FILE = Path(__file__).with_name("seed_catalog.json")
+
+
+def load_catalog() -> list[dict]:
+    """[{cat, name, url}] – kategorie musí existovat, URL patřit obchodu se source=scrape."""
+    return json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+
+
+def _apply_meta(prod, it):
+    """Název z katalogu, když obchod žádný nedal (název je jen odvozený z URL), a obrázek z výpisu obchodu."""
+    from lovceny.service import _name_from_url
+    from lovceny.util import slugify
+    if any(prod.name == _name_from_url(o.url) for o in prod.offers):
+        prod.name, prod.slug = it["name"], slugify(it["name"])
+    if not prod.image_url and it.get("image"):
+        prod.image_url = it["image"]
+    if not prod.category_slug:
+        prod.category_slug = it["cat"]
+
+
+def seed_catalog(db, items, dry_run=False, fetch=True) -> dict:
+    from lovceny.categories import BY_SLUG
+    from lovceny.shops import shop_for_url
+    stats = {"new": 0, "existing": 0, "priced": 0, "failed": 0}
+    for it in items:
+        assert it["cat"] in BY_SLUG, it
+        shop = shop_for_url(it["url"])
+        url = shop.canonical_url(it["url"]) if shop else it["url"]
+        o = db.scalar(select(Offer).where(Offer.url == url))
+        if o:
+            stats["existing"] += 1
+            _apply_meta(o.product, it)
+            db.commit()
+            continue
+        if dry_run:
+            print(f"+  [{it['cat']}] {it['name']}  {url}")
+            stats["new"] += 1
+            continue
+        prod, msg = add_by_url(db, url, fetch_now=fetch)
+        if prod is None:
+            print(f"!! {it['name']}: {msg}")
+            stats["failed"] += 1
+            continue
+        prod.category_slug = it["cat"]
+        _apply_meta(prod, it)
+        db.commit()
+        stats["new"] += 1
+        price = prod.offers[0].price
+        stats["priced" if price else "failed"] += 1
+        print(f"{'OK' if price else '!!'} [{it['cat']}] {prod.name} – {price or msg}")
+    return stats
+
+
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-demo", action="store_true")
     ap.add_argument("--purge-demo", action="store_true")
-    a = ap.parse_args()
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--category")
+    ap.add_argument("--limit", type=int)
+    a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
     if a.purge_demo:
@@ -60,10 +123,18 @@ def main():
         db.commit()
         print(f"Smazáno {n} demo bodů.")
         return
+    items = [i for i in load_catalog() if not a.category or i["cat"] == a.category][:a.limit]
+    print(f"Katalog: {len(items)} položek")
+    st = seed_catalog(db, items, dry_run=a.dry_run)
+    print(f"Katalog hotov: {st}")
+    if a.dry_run or a.category or a.limit:
+        return
     products = []
     for url, shape in PRODUCTS:
         prod, msg = add_by_url(db, url)
         print(f"{'OK ' if not msg else '!! '} {prod.name if prod else url} {msg}")
+        if prod is None:
+            continue
         products.append(prod)
         o = prod.offers[0]
         if not a.no_demo and o.price and not db.scalar(select(PricePoint).where(PricePoint.offer_id == o.id, PricePoint.is_demo.is_(True))):
@@ -71,7 +142,7 @@ def main():
             db.commit()
     for url, idx in FEED_OFFERS:
         from lovceny.shops import shop_for_url
-        if not db.scalar(select(Offer).where(Offer.url == url)):
+        if idx < len(products) and not db.scalar(select(Offer).where(Offer.url == url)):
             db.add(Offer(product=products[idx], shop=shop_for_url(url).slug, url=url, status="pending"))
     db.commit()
     print("Seed hotov.")

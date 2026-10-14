@@ -16,6 +16,8 @@ class Product(Base):
     ean: Mapped[str | None] = mapped_column(String(32), index=True)
     image_url: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(200))
+    # slug z lovceny/categories.py (SEO stránky /kategorie/…); None = nezařazeno
+    category_slug: Mapped[str | None] = mapped_column(String(40), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")
@@ -71,3 +73,29 @@ class Watch(Base):
     notified_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     product: Mapped[Product] = relationship(back_populates="watches")
+
+
+class PushSubscription(Base):
+    """Web Push odběr prohlížeče pro hlídání ceny (alternativa k e-mailu). Bez e-mailu, jen endpoint + klíče."""
+    __tablename__ = "push_subscriptions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    target_price: Mapped[float] = mapped_column(Numeric(12, 2))
+    only_in_stock: Mapped[bool] = mapped_column(Boolean, default=False)
+    token: Mapped[str] = mapped_column(String(64), unique=True)  # odhlášení bez účtu
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notified_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    product: Mapped[Product] = relationship()
+    __table_args__ = (Index("ix_push_endpoint", "endpoint"),)
+
+
+class TrackRequest(Base):
+    """Záznam o přidání produktu ze živého hledání (rate limit podle IP hashe)."""
+    __tablename__ = "track_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

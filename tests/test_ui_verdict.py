@@ -51,7 +51,7 @@ def test_live_results_show_neutral_badge(monkeypatch):
     monkeypatch.setattr(SHOPS["mironet"], "searcher",
                         lambda q: [SearchHit("mironet", "Zcela nova pracka XY", 9990, "https://www.mironet.cz/xy+dp9/")])
     html = TestClient(app).get("/hledat/zive?q=zcela nova pracka").text
-    assert "Zatím bez historie" in html and "Klikni na Hlídat" in html and "🔔 Hlídat" in html
+    assert "Zatím bez historie" in html and "Klikni na Sledovat" in html and "Sledovat tento produkt" in html
 
 
 def test_watch_routes_renamed_and_legacy_redirects():

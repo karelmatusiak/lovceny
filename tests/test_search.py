@@ -106,7 +106,7 @@ def test_search_page_and_live_fragment(monkeypatch):
     r = c.get("/hledat?q=garmin")
     assert r.status_code == 200 and "Hledáme „garmin“ v obchodech" in r.text and "/hledat/zive" in r.text
     r = c.get("/hledat/zive?q=garmin")
-    assert "Garmin Fenix 8" in r.text and "Mironet" in r.text and "Hlídat" in r.text and "19" in r.text
+    assert "Garmin Fenix 8" in r.text and "Mironet" in r.text and "Sledovat tento produkt" in r.text and "19" in r.text
     r = c.get("/hledat?q=garmin&zive=1")
     assert "Garmin Fenix 8" in r.text
     search.clear_cache()

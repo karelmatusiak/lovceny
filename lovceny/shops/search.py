@@ -404,3 +404,14 @@ def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_sh
 
 def clear_cache():
     _cache.clear()
+
+
+def find_cached_hit(url: str) -> SearchHit | None:
+    """Najde výsledek živého hledání v cache podle URL (pro stránku /nahled – bez nového dotazu do obchodu)."""
+    from ..util import normalize_url
+    want = normalize_url(url)
+    for _t, res in list(_cache.values()):
+        for h in res.hits:
+            if normalize_url(h.url) == want:
+                return h
+    return None

@@ -1,10 +1,18 @@
-name: Naplnit databázi (jednorázově)
+name: Naplnit databázi (katalog produktů)
+# Ruční spuštění: Actions → „Naplnit databázi (katalog produktů)“ → Run workflow.
+# Idempotentní – opakované spuštění přidá jen chybějící produkty z seed_catalog.json, nic nezdvojí.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "Volby seed.py (např. --no-demo, --dry-run, --category pracky, --limit 10)"
+        required: false
+        default: "--no-demo"
+concurrency: { group: fetch-prices, cancel-in-progress: false }   # neběží souběžně se stahováním cen
 jobs:
   seed:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -13,4 +21,5 @@ jobs:
       - name: Seed
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python seed.py
+          ARGS: ${{ inputs.args }}
+        run: python seed.py $ARGS

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ hit.name if hit else 'Produkt z obchodu ' ~ shop.name }} – náhled | Lovceny{% endblock %}
+{% block body %}
+<section style="padding-top:24px"><div class="wrap narrow">
+  <div class="card preview">
+    <div class="p-head">
+      <div class="p-img">{% if hit and hit.image %}<img src="{{ hit.image }}" alt="" width="64" height="64">{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+      <div><h1 class="p-name">{{ hit.name if hit else 'Produkt z obchodu ' ~ shop.name }}</h1>
+        <div class="p-cat"><span class="shop-dot" style="background:{{ shop.color }}"></span>{{ shop.name }}</div></div>
+    </div>
+    {% if hit %}<div class="price-row"><span class="price">{{ hit.price|czk }}</span>{% if hit.original_price %}<span class="was">{{ hit.original_price|czk }}</span>{% endif %}</div>
+    <p class="muted small">Cena z výpisu obchodu při hledání. Historii zatím nemáme.</p>{% endif %}
+    <div class="verdict v-new"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">🆕</span><span class="verdict-label">Zatím bez historie</span></span>
+      <span class="verdict-reason">Tento produkt zatím nesledujeme</span></div>
+    <div class="preview-why">
+      <h2 class="h3">Sledovat tento produkt?</h2>
+      <p>Začneme ukládat jeho cenu 3× denně. Za týden uvidíš graf, minimum a verdikt <b>Kupuj / Počkej</b> a můžeš si nastavit hlídání ceny.</p>
+    </div>
+    <div class="preview-act">
+      <form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>
+      <a class="btn btn-ghost" href="{{ shop.affiliate_link(url) }}" target="_blank" rel="noopener nofollow sponsored">Do obchodu ↗</a>
+    </div>
+  </div>
+</div></section>
+{% endblock %}

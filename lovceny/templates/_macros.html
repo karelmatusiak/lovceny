@@ -7,7 +7,7 @@
 {% macro badge_new() -%}
 <div class="verdict v-new">
   <span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">🆕</span><span class="verdict-label">Zatím bez historie</span></span>
-  <span class="verdict-reason">Klikni na Hlídat a začneme ukládat historii ceny</span>
+  <span class="verdict-reason">Klikni na Sledovat a začneme ukládat historii ceny</span>
 </div>
 {%- endmacro %}
 {% macro cmp_button(p, cls="btn-cmp") -%}
@@ -17,7 +17,7 @@
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ p.slug }}">
   <div class="p-head">
-    <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+    <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" width="60" height="60" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}📦{% endif %}</div>
     <div><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{{ p.category or '' }}</div></div>
   </div>
   <div class="pc-row">{{ badge(v) }}<b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>

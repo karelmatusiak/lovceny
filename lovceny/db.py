@@ -29,7 +29,8 @@ def init_db():
 
 
 # Jednoduché doplnění sloupců do existujících tabulek (create_all je nepřidá). Idempotentní.
-_ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)")]
+_ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
+                ("products", "category_slug", "VARCHAR(40)")]
 
 
 def _migrate():
