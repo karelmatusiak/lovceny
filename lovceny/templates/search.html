@@ -17,7 +17,7 @@
   {% if not live_done %}<script>
   (function(){var el=document.getElementById('zive');
     fetch('/hledat/zive?q='+encodeURIComponent(el.dataset.q)).then(function(r){return r.text()})
-    .then(function(h){el.innerHTML=h}).catch(function(){el.innerHTML='<div class="notice warn">Obchody se nepodařilo prohledat. Zkus to prosím za chvíli znovu.</div>'});})();
+    .then(function(h){el.innerHTML=h;if(window.lovcenyCmp)window.lovcenyCmp.render()}).catch(function(){el.innerHTML='<div class="notice warn">Obchody se nepodařilo prohledat. Zkus to prosím za chvíli znovu.</div>'});})();
   </script>{% endif %}
   {% elif not results and not error %}<h2>Nic jsme nenašli</h2><p class="sub">Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
 </div></section>{% endblock %}

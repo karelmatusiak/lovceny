@@ -1,0 +1,72 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}Porovnání cen – Lovceny{% endblock %}
+{% block body %}
+<section style="padding-top:16px"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-pridat="{{ pridat }}">
+  <h1 class="cmp-title">⚖️ Porovnání cen</h1>
+  {% if items|length < 2 %}
+  <div class="notice warn cmp-empty">
+    {% if items %}Do porovnání máš zatím jen <b>{{ items[0].p.name }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Porovnat</b> u karty nebo v detailu.
+    {% else %}Porovnání je prázdné. U produktů klikni na <b>⚖️ Porovnat</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
+    <a href="/">Najít produkty →</a>
+  </div>
+  {% endif %}
+  {% if items %}
+  <p class="sub cmp-share">Odkaz na tuto stránku můžeš poslat dál, porovnání se otevře stejně. <button type="button" class="cmp-copy" id="cmp-copy">Kopírovat odkaz</button></p>
+  {% if items|length > 1 %}<p class="cmp-swipe">Posuň do strany pro další produkty ({{ items|length }}) →</p>{% endif %}
+  <div class="cmp-scroll" role="region" aria-label="Porovnávané produkty" tabindex="0">
+    <div class="cmp-grid" style="--n:{{ items|length }}">
+      {% for it in items %}{% set p = it.p %}
+      <article class="card cmp-col" style="border-top:5px solid {{ it.color }}">
+        <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ p.name }} z porovnání">✕ Odebrat</button>
+        <div class="cmp-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+        <h2 class="cmp-name"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
+        <dl class="cmp-dl">
+          <div><dt>Nejnižší cena</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small> v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}</small>{% else %}cena bude doplněna{% endif %}</dd></div>
+          <div><dt>Verdikt</dt><dd>{{ badge(it.v) }}</dd></div>
+          <div class="cmp-mm"><div><dt>Minimum 90 dní</dt><dd>{{ it.v.min90|czk }}</dd></div><div><dt>Maximum 90 dní</dt><dd>{{ it.v.max90|czk }}</dd></div></div>
+          <div><dt>Obchody</dt><dd><ul class="cmp-shops">
+            {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="nofollow sponsored noopener">{{ s.name if s else o.shop }}</a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
+          </ul></dd></div>
+          <div><dt>Parametry</dt><dd class="muted">Parametry doplníme brzy.</dd></div>
+        </dl>
+        <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ p.slug }}">Detail a historie →</a>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card cmp-chart">
+    <div class="chart-top"><h3>Historie nejnižší ceny</h3>
+      <div class="seg" id="seg"><button data-d="30">30 dní</button><button data-d="90" class="on">90 dní</button><button data-d="365">365 dní</button></div></div>
+    {% if '"data": [{' in chart_json %}<div style="position:relative;height:320px"><canvas id="chart" aria-label="Graf historie cen porovnávaných produktů" role="img"></canvas></div>
+    {% else %}<p class="muted" style="padding:30px 0">Historie zatím není k dispozici.</p>{% endif %}
+    <p class="fair">Každá čára = nejnižší cena produktu napříč obchody v daný den. Řazení i verdikt počítáme jen z cen.</p>
+  </div>
+  {% endif %}
+</div></section>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const C = {{ chart_json|safe }};
+const el = document.getElementById('chart');
+if (el && window.Chart) {
+  let chart;
+  function draw(days){
+    const cut = new Date(Date.now() - days*864e5).toISOString().slice(0,10);
+    const labels = [...new Set(C.datasets.flatMap(d => d.data.map(p => p.x)))].filter(x => x >= cut).sort();
+    const ds = C.datasets.map(d => { const m = Object.fromEntries(d.data.map(p => [p.x, p.y]));
+      return {label: d.label, data: labels.map(l => m[l] ?? null), borderColor: d.color, backgroundColor: d.color,
+              spanGaps: true, tension: .25, pointRadius: 0, borderWidth: 2.5}; });
+    if (chart) chart.destroy();
+    chart = new Chart(el, {type: 'line', data: {labels, datasets: ds}, options: {maintainAspectRatio: false, animation: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {position: 'bottom', labels: {boxWidth: 14, boxHeight: 3}},
+        tooltip: {callbacks: {label: c => c.raw == null ? null : `${c.dataset.label}: ${Math.round(c.raw).toLocaleString('cs-CZ')} Kč`}}},
+      scales: {y: {ticks: {callback: v => v.toLocaleString('cs-CZ') + ' Kč'}}, x: {ticks: {maxTicksLimit: 6}}}}});
+  }
+  document.querySelectorAll('#seg button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#seg button').forEach(x => x.classList.remove('on')); b.classList.add('on'); draw(+b.dataset.d); });
+  draw(90);
+}
+</script>
+{% endblock %}

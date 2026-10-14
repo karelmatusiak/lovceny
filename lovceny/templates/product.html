@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% extends "base.html" %}{% from "_macros.html" import badge, cmp_button %}
 {% block title %}{{ p.name }} – Lovceny{% endblock %}
 {% block body %}
 <section style="padding-top:12px"><div class="wrap">
@@ -10,7 +10,7 @@
         <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="">{% else %}📦{% endif %}</div>
         <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{{ p.category or '' }}{% if p.ean %} · EAN {{ p.ean }}{% endif %}</div></div>
       </div>
-      <div>{{ badge(v, big=true) }}</div>
+      <div class="p-verdict-row">{{ badge(v, big=true) }}{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}</div>
       <div class="price-row">
         <span class="price">{% if best %}{{ best.price|czk }}{% else %}–{% endif %}</span>
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}

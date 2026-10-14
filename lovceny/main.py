@@ -93,10 +93,12 @@ def search_live(request: Request, q: str = "", db=Depends(get_db)):
 
 
 @app.post("/sledovat")
-def track(url: str = Form(...), db=Depends(get_db)):
+def track(url: str = Form(...), compare: int = Form(0), db=Depends(get_db)):
     prod, msg = add_by_url(db, url)
     if prod is None:
         raise HTTPException(422, msg)
+    if compare:  # „Porovnat“ u živého výsledku: nejdřív sledovat, pak přidat do porovnání (JS sloučí s výběrem)
+        return RedirectResponse(f"/porovnani?pridat={prod.id}", 303)
     r = f"/produkt/{prod.id}-{prod.slug}"
     return RedirectResponse(r + (f"?msg={quote(msg)}" if msg else ""), 303)
 
@@ -177,3 +179,41 @@ def legacy_watch_links(action: str, token: str):
     if action not in ("potvrdit", "zrusit"):
         raise HTTPException(404)
     return RedirectResponse(f"/hlidani/{action}/{token}", 301)
+
+
+# ---------- porovnání ----------
+COMPARE_MAX = 4
+COMPARE_COLORS = ["#0B6E4F", "#FF7A45", "#2B5BD7", "#B3261E"]
+
+
+def parse_ids(raw: str) -> list[int]:
+    out = []
+    for part in re.split(r"[,\s]+", raw or ""):
+        if part.isdigit() and int(part) not in out:
+            out.append(int(part))
+    return out[:COMPARE_MAX]
+
+
+@app.get("/porovnani", response_class=HTMLResponse)
+def compare(request: Request, ids: str = "", pridat: str = "", db=Depends(get_db)):
+    from .verdict import daily_best
+    wanted = parse_ids(ids)
+    if pridat.isdigit() and int(pridat) not in wanted and len(wanted) < COMPARE_MAX:
+        wanted.append(int(pridat))
+    items, datasets = [], []
+    since = datetime.now(timezone.utc) - timedelta(days=365)
+    for pid in wanted:
+        p = db.get(Product, pid)
+        if not p:
+            continue
+        best, v = product_summary(p)
+        offers = sorted(p.offers, key=lambda o: (o.price is None, float(o.price or 0)))
+        color = COMPARE_COLORS[len(items) % len(COMPARE_COLORS)]
+        series = daily_best([pt for o in p.offers for pt in o.points], since)
+        datasets.append({"label": p.name[:40], "color": color,
+                         "data": [{"x": d.isoformat(), "y": round(val, 2)} for d, val in series.items()]})
+        items.append({"p": p, "best": best, "v": v, "offers": offers, "color": color,
+                      "best_shop": get_shop(best.shop) if best else None})
+    return tpl.TemplateResponse(request, "compare.html", {
+        "items": items, "ids": ",".join(str(i["p"].id) for i in items), "pridat": pridat,
+        "chart_json": json.dumps({"datasets": datasets}), "get_shop": get_shop, "max": COMPARE_MAX})
