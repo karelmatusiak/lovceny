@@ -60,3 +60,22 @@ def digest_email(d, items: list[dict], sub) -> Email:
     return _render("digest", f"Týdenní přehled slev {d.week}. týden: {len(items)} skutečných slev", d=d, items=items,
                    start=a, end=b, page_url=f"{base}/prehled/{slug(d)}?utm_source=email",
                    unsub_url=f"{base}/prehled/email/zrusit/{sub.token}")
+
+
+def budget_confirm_email(b) -> Email:
+    from .budget import describe
+    base = public_url()
+    return _render("budget_confirm", f"Potvrď hlídání rozpočtu: {describe(b)}", what=describe(b),
+                   confirm_url=f"{base}/hlidat-rozpocet/potvrdit/{b.token}",
+                   unsub_url=f"{base}/hlidat-rozpocet/zrusit/{b.token}")
+
+
+def budget_alert_email(b, items) -> Email:
+    from .budget import describe
+    from .shops import get_shop
+    base = public_url()
+    n = len(items)
+    word = "produkt" if n == 1 else ("produkty" if n <= 4 else "produktů")
+    return _render("budget_alert", f"V rozpočtu: {n} {word} – {describe(b)}", what=describe(b), items=items,
+                   shop_name=lambda o: get_shop(o.shop).name if get_shop(o.shop) else o.shop,
+                   manage_url=f"{base}/hlidat-rozpocet/{b.token}", unsub_url=f"{base}/hlidat-rozpocet/zrusit/{b.token}")

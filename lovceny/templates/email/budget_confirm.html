@@ -1,0 +1,7 @@
+{% extends "_layout.html" %}{% block content %}
+<h1 style="font-size:22px;margin:0 0 12px">Potvrď hlídání rozpočtu</h1>
+<p style="margin:0 0 12px">Hlídáš: <b>{{ what }}</b>. Jakmile se objeví produkt v tomto rozpočtu (nebo už nalezený ještě zlevní), napíšeme ti. Nejvýš 3 e-maily denně.</p>
+<p style="margin:20px 0"><a href="{{ confirm_url }}" style="background:#0B6E4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Ano, hlídat rozpočet</a></p>
+<p style="margin:0;font-size:14px;color:#5B6B63">Bez potvrzení nic posílat nebudeme. Pokud jsi o nic nežádal(a), e-mail ignoruj – adresu do 7 dnů smažeme.</p>
+{% endblock %}
+{% block footer %}Tento e-mail ti posíláme, protože někdo zadal tuto adresu pro hlídání rozpočtu. <a href="{{ unsub_url }}" style="color:#5B6B63">Zrušit a smazat adresu</a>{% endblock %}

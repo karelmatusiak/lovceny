@@ -57,7 +57,7 @@ def itemlist_ld(rows, path: str) -> dict:
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
-STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled"]
+STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday"]
 
 
 def sitemap_xml(db) -> str:
@@ -83,6 +83,8 @@ def robots_txt() -> str:
         "Disallow: /nahled",
         "Disallow: /porovnani",
         "Disallow: /hlidani/",
+        "Disallow: /hlidat-rozpocet/",
+        "Disallow: /black-friday/odhlasit/",
         "Disallow: /api/",
         "Disallow: /admin",
         "Disallow: /img/",

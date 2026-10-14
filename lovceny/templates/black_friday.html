@@ -1,0 +1,122 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link %}
+{% block title %}Black Friday {{ s.year }}: které slevy jsou opravdu nejnižší | Lovceny{% endblock %}
+{% block description %}Black Friday {{ s.year }} ({{ cz_date(s.bf) }}): přehled aktuálních slev elektroniky a spotřebičů s historií cen. Ukážeme, co je na nejnižší naměřené ceně a kde bylo za 30 dní levněji (§ 12a).{% endblock %}
+{% block body %}
+<section class="bf-hero"><div class="wrap bf-hero-grid">
+  <div>
+    <div class="eyebrow"><span aria-hidden="true">🛍️</span> Black Friday {{ s.year }}</div>
+    <h1 class="page-h1">Které slevy na Black Friday jsou <span class="hl">opravdu nejnižší?</span></h1>
+    <p class="lead">Nevěř procentům na cenovce. Každou slevu porovnáme s cenami, které jsme v obchodech sami naměřili – s nejnižší cenou za 30 dní, obvyklou cenou a minimem za celou dobu sledování. Jen naše data, žádné placené pozice. {{ rank_link() }}</p>
+  </div>
+  <div class="card bf-count" id="bf-count" data-bf="{{ bf_iso }}">
+    {% set dl = (s.bf - today).days %}
+    <p class="bf-count-h">{% if dl > 0 %}Do Black Friday {{ s.year }} zbývá<span class="sr-only">: {{ countdown }}</span>{% else %}{{ countdown }}{% endif %}</p>
+    {% if dl > 0 %}
+    <div class="bf-clock" aria-hidden="true">
+      <div><b data-u="d">{{ dl - 1 if dl > 0 else 0 }}</b><span>dní</span></div><div><b data-u="h">–</b><span>hodin</span></div><div><b data-u="m">–</b><span>minut</span></div>
+    </div>
+    {% endif %}
+    <dl class="bf-dates"><div><dt>Black Friday</dt><dd>pátek {{ cz_date(s.bf) }}</dd></div><div><dt>Cyber Monday</dt><dd>pondělí {{ cz_date(s.cm) }}</dd></div></dl>
+    <p class="small">Řada obchodů začíná s akcemi už začátkem listopadu – slevy tu přibývají průběžně, ceny stahujeme 3× denně.</p>
+  </div>
+</div></section>
+
+<section class="bf-sum-sec"><div class="wrap">
+  {% if include_demo %}<div class="notice demo"><b>DEMO data:</b> výpočet zahrnuje ukázkovou historii (vývojové prostředí). V produkci se demo data nepočítají.</div>{% endif %}
+  <ul class="bf-sum" aria-label="Souhrn aktuálních slev">
+    <li><b>{{ sm.total }}</b><span>aktuálních slev{% if kategorie or obchod %} (filtr){% endif %}</span></li>
+    <li class="s-low"><b>{{ sm.lowest }}</b><span>na nejnižší ceně, jakou jsme naměřili</span></li>
+    <li class="s-buy"><b>{{ sm.buy }}</b><span>u 90denního minima (Kupuj)</span></li>
+    <li class="s-fake"><b>{{ sm.fake }}</b><span>za 30 dní bylo levněji</span></li>
+  </ul>
+</div></section>
+
+<section class="bf-low-sec" aria-labelledby="bf-low-h"><div class="wrap">
+  <h2 id="bf-low-h"><span aria-hidden="true">🏆</span> Opravdu nejnižší ceny</h2>
+  <p class="sub">Dnešní cena je nejnižší, jakou jsme u produktu za celou dobu sledování naměřili (aspoň 30 dní dat), a zároveň u 90denního minima. Nic lepšího v našich datech není.</p>
+  {% if lowest %}
+  <div class="bf-low">{% for r in lowest %}
+    <a class="card bf-low-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+      <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span>
+      <span class="p-name sm">{{ r.product.name }}</span>
+      <span class="bf-low-price"><b>{{ r.best.price|czk }}</b>{% if r.real_pct >= 1 %}<span class="save-pct">−{{ '%.0f'|format(r.real_pct) }}&nbsp;%</span>{% endif %}</span>
+      <small>{{ get_shop(r.best.shop).name if get_shop(r.best.shop) else r.best.shop }} · sledujeme {{ r.days }} dní{% if r.verdict.median90 %} · obvykle {{ r.verdict.median90|czk }}{% endif %}</small>
+    </a>{% endfor %}
+  </div>
+  {% else %}
+  <div class="card chart-empty"><p><b>Zatím žádná sleva není na nejnižší ceně, jakou jsme naměřili.</b> {% if phase == 'pred' %}Do Black Friday je ještě čas – tahle část se naplní, jakmile obchody zlevní pod dosavadní minima.{% else %}I to je užitečná informace: dnešní akce zatím nepřekonaly ceny z předchozích týdnů.{% endif %}</p></div>
+  {% endif %}
+</div></section>
+
+<section class="bf-list-sec" aria-labelledby="bf-list-h"><div class="wrap">
+  <h2 id="bf-list-h">Všechny aktuální slevy s verdiktem</h2>
+  <form class="bf-filter" method="get" action="/black-friday#bf-list-h">
+    <div class="field"><label for="bf-cat">Kategorie</label><select id="bf-cat" name="kategorie"><option value="">Všechny kategorie</option>{% for c in cats %}{% set cc = CATEGORIES|selectattr('slug', 'equalto', c)|first %}<option value="{{ c }}"{% if c == kategorie %} selected{% endif %}>{{ cc.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="bf-shop">Obchod</label><select id="bf-shop" name="obchod"><option value="">Všechny obchody</option>{% for x in shops %}<option value="{{ x }}"{% if x == obchod %} selected{% endif %}>{{ SHOPS[x].name if x in SHOPS else x }}</option>{% endfor %}</select></div>
+    <button class="btn btn-ghost" type="submit">Filtrovat</button>
+    {% if kategorie or obchod %}<a class="btn-link" href="/black-friday#bf-list-h">Zrušit filtr</a>{% endif %}
+  </form>
+  {% if rows %}
+  <p class="cat-count">{{ rows|length }} {% if rows|length == 1 %}sleva{% elif rows|length < 5 %}slevy{% else %}slev{% endif %} · nahoře nejnižší naměřené ceny, pak Kupuj, Počkej, „Za 30 dní bylo levněji“ a nakonec produkty, u kterých máme zatím málo dat</p>
+  <ul class="bf-list">{% for r in rows %}{% set sh = get_shop(r.best.shop) %}
+    <li class="card bf-row bf-{{ r.kind }}">
+      <a class="bf-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+        <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span>
+        <span class="bf-info"><span class="p-name sm">{{ r.product.name }}</span>
+          <span class="bf-meta">{{ sh.name if sh else r.best.shop }}{% if r.best.last_checked %} · ověřeno {{ r.best.last_checked|prague }}{% endif %}{% if r.has_demo %} · <span class="demo-tag">DEMO</span>{% endif %}</span></span>
+        <span class="bf-price"><b>{{ r.best.price|czk }}</b>{% if r.claimed_pct %}<small>obchod uvádí −{{ '%.0f'|format(r.claimed_pct) }}&nbsp;% z {{ r.best.original_price|czk }}</small>{% endif %}</span>
+      </a>
+      <div class="bf-verdict">
+        {% if r.is_lowest %}<p class="bf-chip bf-chip-low"><span aria-hidden="true">🏆</span> Nejnižší naměřená cena</p>{% endif %}
+        {{ badge(r.verdict, link=true) }}
+        {% if r.min30 or r.verdict.median90 %}<dl class="bf-facts">
+          <div><dt>Nejnižší za 30 dní</dt><dd>{{ r.min30|czk }}{% if r.min30_date %} <small>({{ r.min30_date.day }}. {{ r.min30_date.month }}.)</small>{% endif %}</dd></div>
+          <div><dt>Obvyklá cena</dt><dd>{{ r.verdict.median90|czk }}</dd></div>
+          <div><dt>Vůči obvyklé</dt><dd>{% if r.real_pct >= 0.5 %}−{{ '%.0f'|format(r.real_pct) }}&nbsp;%{% elif r.verdict.median90 %}bez rozdílu{% else %}–{% endif %}</dd></div>
+        </dl>{% endif %}
+      </div>
+      {{ cmp_button(r.product) }}
+    </li>{% endfor %}
+  </ul>
+  {% else %}
+  <div class="card chart-empty"><p><b>{% if kategorie or obchod %}S tímto filtrem teď žádnou slevu nevidíme.{% else %}Teď nevidíme žádné slevy.{% endif %}</b> Zobrazujeme jen ceny ověřené za poslední 3 dny, kde obchod uvádí slevu aspoň 3 %, nebo kde je cena u 90denního minima a aspoň 3 % pod obvyklou cenou.</p></div>
+  {% endif %}
+</div></section>
+
+<section class="bf-optin-sec"><div class="wrap">
+  <div class="card dg-optin topic-optin" id="bf-optin" data-vapid="{{ push_key }}" data-topic="black-friday" data-store="lovceny-black-friday">
+    <div class="dg-optin-ico" aria-hidden="true">🔔</div>
+    <div class="dg-optin-main">
+      <h2 class="h3" id="bf-optin-h">Black Friday přehled do prohlížeče</h2>
+      <p>Ráno v pátek {{ cz_date(s.bf, false) }} a v pondělí {{ cz_date(s.cm, false) }} jedno upozornění: kolik slev je opravdu na nejnižší naměřené ceně. Nic dalšího. Vypnout jde kdykoli.</p>
+      {% if push_key %}
+      <div class="dg-ui" hidden>
+        <button type="button" class="dg-toggle" role="switch" aria-checked="false" aria-labelledby="bf-optin-h bf-state"><span class="dg-knob" aria-hidden="true"></span><span id="bf-state" class="t-state">Vypnuto</span></button>
+        <p class="push-msg t-msg" role="status" aria-live="polite"></p>
+      </div>
+      <p class="dg-unsupported ov-muted" hidden>Tento prohlížeč upozornění nepodporuje.</p>
+      <p class="dg-ios ov-muted" hidden>Na iPhonu fungují upozornění jen z webu přidaného na plochu (Sdílet → Přidat na plochu, iOS 16.4+).</p>
+      <noscript><p class="ov-muted">Zapnutí upozornění potřebuje JavaScript.</p></noscript>
+      {% else %}<p class="ov-muted">Upozornění v prohlížeči teď nejsou zapnutá.</p>{% endif %}
+    </div>
+  </div>
+  <p class="bf-also">Hlídáš konkrétní věc? <a href="/hlidat-rozpocet">Nastav hlídání podle rozpočtu</a> – třeba „televize do 15 000 Kč“ – nebo si u produktu zapni hlídání ceny.</p>
+</div></section>
+
+<section class="bf-law" id="paragraf-12a"><div class="wrap">
+  <div class="card bf-law-card">
+    <div class="eyebrow">Jak číst slevy</div>
+    <h2>§ 12a zákona o ochraně spotřebitele v kostce</h2>
+    <p>Od 6. ledna 2023 platí, že když obchod u zboží oznamuje slevu, musí jako <b>původní cenu uvést nejnižší cenu, za kterou zboží nabízel v posledních 30 dnech</b> před slevou (§ 12a zákona č. 634/1992 Sb.). Sleva se tedy nemá počítat z ceny, která platila jen krátce nebo dávno.</p>
+    <ul class="bf-law-list">
+      <li><span aria-hidden="true">✅</span><span><b>Kupuj</b> – dnešní cena je do 3 % nad minimem, které jsme naměřili za 90 dní.</span></li>
+      <li><span aria-hidden="true">⏳</span><span><b>Počkej</b> – za posledních 90 dní bylo znatelně levněji.</span></li>
+      <li><span aria-hidden="true">⚠️</span><span><b>Za 30 dní bylo levněji</b> – za 30 dní před akcí jsme naměřili nižší cenu, než ze které se sleva počítá, nebo cena krátce před slevou vzrostla. U štítku vždy uvádíme naměřenou cenu a datum.</span></li>
+    </ul>
+    <p class="small">Vycházíme jen z cen, které jsme sami naměřili v obchodech, které sledujeme (3× denně). Obchod mohl mít jiné ceny v kanálech, které nevidíme (aplikace, prodejna, věrnostní program). Naše štítky jsou informativní, nejde o právní posouzení. Podrobně: <a href="/jak-radime#za-30-dni-levneji">Jak řadíme a hodnotíme</a>.</p>
+  </div>
+  <h2 class="bf-faq-h">Časté otázky</h2>
+  <div class="bf-faq">{% for q, a in faq %}<details class="card"><summary>{{ q }}</summary><p>{{ a }}</p></details>{% endfor %}</div>
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="{{ static('bf.js') }}" defer></script>{% endblock %}

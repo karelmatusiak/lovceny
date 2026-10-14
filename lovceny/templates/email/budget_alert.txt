@@ -1,0 +1,15 @@
+V tvém rozpočtu: {{ what }}
+
+{% for p, o in items[:10] %}
+- {{ p.name }}: {{ o.price|czk }} ({{ shop_name(o) }})
+  {{ base }}/produkt/{{ p.id }}-{{ p.slug }}
+{% endfor %}
+{% if items|length > 10 %}… a dalších {{ items|length - 10 }}: {{ manage_url }}
+{% endif %}
+
+Ceny se mění rychle – zkontroluj aktuální cenu v obchodě. Stejný produkt ti znovu pošleme, jen když ještě zlevní.
+
+--
+Lovceny – poctivý hlídač cen
+Upravit nebo zrušit hlídání: {{ manage_url }}
+Zrušit jedním klikem: {{ unsub_url }}

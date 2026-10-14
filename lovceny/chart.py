@@ -181,3 +181,75 @@ def verdict_note(v, ranges: list[ChartRange]) -> str:
     if v.code == "fake":
         return f"{v.tooltip} Podrobnosti v metodice Jak řadíme a hodnotíme."
     return v.text
+
+
+# ---------- v7: Srovnání produktů – více čar v jednom grafu ----------
+DASHES = ["", "7 5", "2 4"]   # barva + vzor čáry (rozlišitelné i bez barev / při barvosleposti)
+
+
+def _multi_svg(series: list[dict], key: str, label: str, W: int, H: int, sfx: str, summary: str) -> str:
+    PAD_L = 64 if W > 500 else 58
+    allv = [v for s in series for _, v in s["items"]]
+    alld = [d for s in series for d, _ in s["items"]]
+    lo, hi = min(allv), max(allv)
+    if hi - lo < max(hi * 0.02, 1):
+        lo, hi = lo * 0.97, hi * 1.03
+    step = _nice_step(hi - lo)
+    y0, y1 = (lo // step) * step, -(-hi // step) * step
+    if y1 == y0:
+        y1 = y0 + step
+    d0, d1 = min(alld), max(alld)
+    span = max((d1 - d0).days, 1)
+    iw, ih = W - PAD_L - PAD_R, H - PAD_T - PAD_B
+    X = lambda d: PAD_L + ((d - d0).days / span) * iw  # noqa: E731
+    Y = lambda v: PAD_T + (1 - (v - y0) / (y1 - y0)) * ih  # noqa: E731
+    o = [f'<svg class="chart chart-multi" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" '
+         f'aria-labelledby="mt-{key}{sfx} md-{key}{sfx}" preserveAspectRatio="xMidYMid meet">'
+         f'<title id="mt-{key}{sfx}">Historie nejnižší ceny – {escape(label)}</title><desc id="md-{key}{sfx}">{escape(summary)}</desc>']
+    v = y0
+    while v <= y1 + 1e-6:
+        y = Y(v)
+        o.append(f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y:.1f}" y2="{y:.1f}" stroke="{COL_GRID}"/>'
+                 f'<text x="{PAD_L - 8}" y="{y + 4:.1f}" text-anchor="end" class="ax">{escape(_kc(v))}</text>')
+        v += step
+    n_lab = 5 if W > 500 else 3
+    for i in range(n_lab):
+        d = d0 + timedelta(days=round(i * span / (n_lab - 1)))
+        anchor = "start" if i == 0 else ("end" if i == n_lab - 1 else "middle")
+        o.append(f'<text x="{X(d):.1f}" y="{H - 10}" text-anchor="{anchor}" class="ax">{_d(d)}</text>')
+    for s in series:
+        pts = [(X(d), Y(val)) for d, val in s["items"]]
+        if not pts:
+            continue
+        dash = f' stroke-dasharray="{s["dash"]}"' if s["dash"] else ""
+        if len(pts) > 1:
+            path = f"M{pts[0][0]:.1f},{pts[0][1]:.1f}" + "".join(f" H{x:.1f} V{y:.1f}" for x, y in pts[1:])
+            o.append(f'<path d="{path}" fill="none" stroke="{s["color"]}" stroke-width="2.75" stroke-linejoin="round"{dash}/>')
+        xc, yc = pts[-1]
+        o.append(f'<circle cx="{xc:.1f}" cy="{yc:.1f}" r="5" fill="{s["color"]}" stroke="#fff" stroke-width="2"/>')
+    o.append("</svg>")
+    return "".join(o)
+
+
+def build_multi(products: list[dict], now: datetime | None = None) -> list[dict]:
+    """products: [{"name", "color", "dash", "points"}] → pro 30 / 90 / 365 dní {key, label, svg, svg_m, n, summary}."""
+    now = now or datetime.now(timezone.utc)
+    out = []
+    for key, label, days in (("30", "30 dní", 30), ("90", "90 dní", 90), ("365", "Rok", 365)):
+        series = []
+        for p in products:
+            items = list(daily_best(p["points"], now - timedelta(days=days)).items())
+            series.append({**p, "items": items})
+        have = [s for s in series if s["items"]]
+        r = {"key": key, "label": label, "n": sum(len(s["items"]) for s in series), "svg": "", "svg_m": "",
+             "enough": any(len(s["items"]) >= 2 for s in series)}
+        parts = []
+        for s in have:
+            vals = [v for _, v in s["items"]]
+            parts.append(f"{s['name']}: nejnižší {czk(min(vals))}, aktuálně {czk(vals[-1])}")
+        r["summary"] = (f"Za {label.lower()}: " + "; ".join(parts) + ".") if parts else "Za toto období zatím nemáme ceny."
+        if r["enough"]:
+            r["svg"] = _multi_svg(have, key, label, W, H + 20, "", r["summary"])
+            r["svg_m"] = _multi_svg(have, key, label, 380, 280, "m", r["summary"])
+        out.append(r)
+    return out

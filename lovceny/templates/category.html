@@ -24,7 +24,14 @@
     <p style="margin-top:14px"><a class="btn btn-ghost" href="/#hledat">Vyhledat produkt</a></p>
   </div>
   {% endif %}
+  <div class="bw-cat" id="hlidat-rozpocet">
+    <div class="bw-cat-text"><div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
+      <h2 class="h3">Nehledáš konkrétní model? Ohlídáme rozpočet.</h2>
+      <p>Zadej maximální cenu (a případně značku). Jakmile bude některý produkt z kategorie {{ c.name }} na této ceně nebo pod ní, dáme vědět. <a href="/hlidat-rozpocet">Jak to funguje</a></p></div>
+    {% with fixed_cat=c %}{% include "_budget_form.html" %}{% endwith %}
+  </div>
   <h2 class="cat-other-h">Další kategorie</h2>
   <ul class="cat-chips">{% for o in CATEGORIES if o.slug != c.slug %}<li><a href="/kategorie/{{ o.slug }}"><span aria-hidden="true">{{ o.icon }}</span> {{ o.name }}</a></li>{% endfor %}</ul>
 </div></section>
 {% endblock %}
+{% block scripts %}{% if push_key %}<script src="{{ static('budget.js') }}" defer></script>{% endif %}{% endblock %}

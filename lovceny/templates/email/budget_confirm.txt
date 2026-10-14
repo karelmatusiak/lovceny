@@ -1,0 +1,13 @@
+Potvrď hlídání rozpočtu
+
+Hlídáš: {{ what }}
+Jakmile se objeví produkt v tomto rozpočtu (nebo už nalezený ještě zlevní), napíšeme ti. Nejvýš 3 e-maily denně.
+
+Potvrdit hlídání: {{ confirm_url }}
+
+Bez potvrzení nic posílat nebudeme. Pokud jsi o nic nežádal(a), e-mail ignoruj – adresu do 7 dnů smažeme.
+
+--
+Lovceny – poctivý hlídač cen
+Zrušit a smazat adresu: {{ unsub_url }}
+Ochrana osobních údajů: {{ base }}/ochrana-osobnich-udaju

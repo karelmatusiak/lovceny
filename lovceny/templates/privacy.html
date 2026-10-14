@@ -72,7 +72,14 @@
   <p>Týdenní přehled je <b>samostatný odběr</b>, oddělený od hlídání cen. Upozornění v prohlížeči: po tvém povolení uložíme adresu odběru push služby prohlížeče, jeho šifrovací klíče, téma „Týdenní přehled“, datum vytvoření a posledního odeslání a odhlašovací kód – žádný e-mail ani IP adresu. Posíláme jednou týdně (v pátek). Odhlásit se můžeš přepínačem na stránce <a href="/prehled">Týdenní přehled slev</a> nebo tlačítkem „Odhlásit přehled“ přímo v oznámení; zaniklé odběry mažeme při dalším odesílání. V localStorage si pamatujeme odhlašovací kód (klíč <code>lovceny-prehled</code>).</p>
   <p><b>E-mailová verze</b> je připravená, ale zatím <b>vypnutá</b>. Až ji zapneme, bude potřeba zvlášť zadat e-mail a potvrdit ho odkazem (double opt-in); uložíme e-mail, kód pro odhlášení, stav potvrzení a datum posledního odeslání. Nepotvrzené adresy mažeme po 7 dnech, odhlášením (odkaz v každém e-mailu) adresu hned smažeme. <b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR, § 7 zákona č. 480/2004 Sb.). E-maily by odesílalo Brevo (viz bod 3).</p>
 
-  <h3>2.11 Co nezpracováváme</h3>
+  <h3 id="rozpocet">2.11 Hlídání podle rozpočtu</h3>
+  <p>Když si zapneš hlídání podle rozpočtu v prohlížeči, uložíme kategorii, volitelné slovo z názvu (např. značku), maximální cenu, volbu „jen skladem“, adresu odběru push služby prohlížeče a jeho šifrovací klíče, náhodný kód pro správu a zrušení, datum vytvoření a posledního upozornění a seznam produktů a cen, o kterých jsme ti už dali vědět (aby se upozornění neopakovala). Jméno ani e-mail nepotřebujeme. Právní základ: plnění služby, o kterou žádáš (čl. 6 odst. 1 písm. b) GDPR). Zrušení: odkazem v upozornění nebo na stránce správy hlídání – záznam se rovnou smaže. Hlídání bez upozornění 12 měsíců mažeme automaticky.</p>
+  <p><b>E-mailová verze</b> je připravená, ale zatím <b>vypnutá</b>. Až ji zapneme, bude potřeba e-mail potvrdit odkazem (double opt-in); nepotvrzené adresy mažeme po 7 dnech.</p>
+
+  <h3 id="black-friday">2.12 Black Friday přehled</h3>
+  <p>Samostatný odběr upozornění v prohlížeči (téma „Black Friday přehled“), nejvýš dvě upozornění ročně – v den Black Friday a Cyber Monday. Ukládáme totéž jako u Týdenního přehledu (adresa odběru, klíče, téma, kód pro odhlášení, data). Vypnout jde přepínačem na stránce Black Friday nebo z upozornění.</p>
+
+  <h3>2.13 Co nezpracováváme</h3>
   <p>Nemáme uživatelské účty, neprovádíme profilování pro reklamu, nepoužíváme žádné cookies ani analytiku třetích stran (žádný Google Analytics, Meta Pixel apod.). Tlačítko Sdílet nenačítá žádné skripty sociálních sítí – jen otevře odkaz, když na něj klikneš.</p>
 
   <h2>3. Kde data leží (zpracovatelé)</h2>
@@ -87,7 +94,7 @@
   </ul>
 
   <h2>4. Cookies a úložiště v prohlížeči</h2>
-  <p>Podrobnosti jsou na stránce <a href="/cookies">Cookies</a>. Stručně: <b>nepoužíváme cookies</b> pro sledování. V <b>localStorage</b> prohlížeče si ukládáme jen seznam ID produktů k porovnání (klíč <code>lovceny_porovnani</code>) a u zapnutých upozornění v prohlížeči ID produktu, cílovou cenu a odhlašovací kód (klíč <code>lovceny-push</code>) a stav výzvy „Přidat na plochu“ (klíč <code>lovceny-pwa</code>: počet návštěv a kdy jsi výzvu zavřel), a u zapnutého Týdenního přehledu jeho odhlašovací kód (klíč <code>lovceny-prehled</code>) – zůstává u tebe v zařízení, na server se neposílá. Service worker si ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů pro rychlejší načítání; ceny ani stránky ne. Není potřeba cookie lišta.</p>
+  <p>Podrobnosti jsou na stránce <a href="/cookies">Cookies</a>. Stručně: <b>nepoužíváme cookies</b> pro sledování. V <b>localStorage</b> prohlížeče si ukládáme jen seznam ID produktů ke srovnání (klíče <code>lovceny_porovnani</code> a <code>lovceny_porovnani_slugy</code>) a u zapnutých upozornění v prohlížeči ID produktu, cílovou cenu a odhlašovací kód (klíč <code>lovceny-push</code>) a stav výzvy „Přidat na plochu“ (klíč <code>lovceny-pwa</code>: počet návštěv a kdy jsi výzvu zavřel), a u zapnutého Týdenního přehledu nebo Black Friday přehledu jejich odhlašovací kód (klíče <code>lovceny-prehled</code>, <code>lovceny-black-friday</code>) – zůstává u tebe v zařízení, na server se neposílá. Service worker si ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů pro rychlejší načítání; ceny ani stránky ne. Není potřeba cookie lišta.</p>
 
   <h2>5. Affiliate odkazy</h2>
   <p>U některých obchodů (např. Alza, Datart) můžeme k odkazu přidat affiliate parametr. Na pořadí výsledků ani na verdikt to nemá vliv. Viz <a href="/#vydelavame">Jak vyděláváme</a>.</p>

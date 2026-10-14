@@ -175,7 +175,7 @@ def cleanup_push(db: Session, now: datetime | None = None) -> int:
 
 
 # ---------- odběr témat (Týdenní přehled slev) ----------
-TOPICS = {"tydenni": "Týdenní přehled slev"}
+TOPICS = {"tydenni": "Týdenní přehled slev", "black-friday": "Black Friday přehled"}
 
 
 def subscribe_topic(db: Session, topic: str, sub: dict):

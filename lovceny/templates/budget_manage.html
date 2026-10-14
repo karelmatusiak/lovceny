@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img, rank_link %}
+{% block title %}Hlídání rozpočtu: {{ label }} | Lovceny{% endblock %}
+{% block body %}
+<section class="bw-hero"><div class="wrap">
+  <div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
+  <h1 class="page-h1">{{ label }}</h1>
+  {% if potvrzeno %}<div class="notice ok-notice" role="status">Hlídání je potvrzené. Ozveme se, až se objeví něco nového v rozpočtu.</div>{% endif %}
+  {% if zmeneno %}<div class="notice ok-notice" role="status">Rozpočet jsme upravili.</div>{% endif %}
+  {% if chyba %}<div class="notice warn" role="alert">{{ chyba }}</div>{% endif %}
+  {% if not b.confirmed %}<div class="notice warn">Hlídání čeká na potvrzení odkazem z e-mailu.</div>{% endif %}
+  <p class="sub">{% if b.channel == 'push' %}Upozornění chodí do prohlížeče, ve kterém jsi hlídání zapnul(a).{% else %}Upozornění chodí na e-mail.{% endif %}{% if b.only_in_stock %} Jen produkty skladem.{% endif %}{% if b.last_sent_at %} Naposledy jsme psali {{ b.last_sent_at|prague }}.{% endif %} Tuto stránku si můžeš uložit – je jen pro tebe.</p>
+  <div class="bw-manage">
+    <form class="card bw-edit" method="post" action="/hlidat-rozpocet/{{ b.token }}/upravit">
+      <div class="field"><label for="bw-max2">Maximální cena</label><div class="suffix"><input id="bw-max2" name="max_price" type="number" step="1" min="100" max="1000000" required value="{{ b.max_price|int }}"><span>Kč</span></div></div>
+      <button class="btn btn-ghost" type="submit">Uložit rozpočet</button>
+    </form>
+    <form class="bw-del" method="post" action="/hlidat-rozpocet/{{ b.token }}/zrusit"><button class="btn btn-danger" type="submit">Zrušit hlídání</button></form>
+  </div>
+</div></section>
+<section style="padding-top:8px"><div class="wrap">
+  <h2 class="h3">Teď v rozpočtu ({{ found|length }})</h2>
+  {% if found %}
+  <ul class="bw-list">{% for p, o in found[:30] %}{% set s = SHOPS.get(o.shop) %}
+    <li class="card bw-item"><a href="/produkt/{{ p.id }}-{{ p.slug }}"><span class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span><span class="bw-name"><span class="bw-n">{{ p.name }}</span><small>{{ s.name if s else o.shop }}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</small></span><b>{{ o.price|czk }}</b></a></li>{% endfor %}
+  </ul>
+  <p class="fair">Řazeno jen podle ceny (bez dopravy). {{ rank_link() }}</p>
+  {% else %}<p class="sub">Teď nic takového nevidíme. Jakmile se to změní, ozveme se.</p>{% endif %}
+  {% if cat %}<p style="margin-top:16px"><a class="btn btn-ghost" href="/kategorie/{{ cat.slug }}">Kategorie {{ cat.name }} →</a></p>{% endif %}
+</div></section>
+{% endblock %}

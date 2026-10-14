@@ -18,7 +18,7 @@
 </div>
 {%- endmacro %}
 {% macro cmp_button(p, cls="btn-cmp") -%}
-<button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" aria-pressed="false"><span aria-hidden="true">⚖️</span> <span class="cmp-txt">Porovnat</span></button>
+<button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ p.slug }}" aria-pressed="false"><span aria-hidden="true">⚖️</span> <span class="cmp-txt">Přidat do srovnání</span></button>
 {%- endmacro %}
 {% macro pcard(p, best, v) -%}
 <div class="card pcard">
@@ -39,12 +39,12 @@
 {%- else -%}<img src="{{ url }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %} referrerpolicy="no-referrer">
 {%- endif -%}
 {%- endmacro %}
-{% macro share(url, text, title) -%}
+{% macro share(url, text, title, heading="Sdílet produkt") -%}
 {%- set u = url|urlencode -%}{%- set t = text|urlencode -%}
 <details class="share" data-share-url="{{ url }}" data-share-text="{{ text }}" data-share-title="{{ title }}">
   <summary class="btn btn-ghost btn-cmp btn-share"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="18" cy="5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="19" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.3 10.8 7.4-4.4M8.3 13.2l7.4 4.4" stroke="currentColor" stroke-width="2"/></svg> Sdílet</summary>
   <div class="share-pop" role="group" aria-label="Sdílet odkaz">
-    <div class="share-top"><b>Sdílet produkt</b><button type="button" class="share-close" aria-label="Zavřít sdílení">×</button></div>
+    <div class="share-top"><b>{{ heading }}</b><button type="button" class="share-close" aria-label="Zavřít sdílení">×</button></div>
     <div class="share-copy"><label class="sr-only" for="share-url">Odkaz na stránku</label><input id="share-url" type="url" readonly value="{{ url }}"><button type="button" class="btn btn-sm share-copy-btn">Kopírovat odkaz</button></div>
     <p class="share-msg" role="status" aria-live="polite"></p>
     <ul class="share-list">

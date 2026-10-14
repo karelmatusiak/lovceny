@@ -1,0 +1,10 @@
+{% extends "_layout.html" %}{% block content %}
+<h1 style="font-size:22px;margin:0 0 12px">V tvém rozpočtu</h1>
+<p style="margin:0 0 16px">Hlídáš <b>{{ what }}</b>. Tohle teď vychází:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+{% for p, o in items[:10] %}<tr><td style="padding:8px 0;border-bottom:1px solid #E1E8E4"><a href="{{ base }}/produkt/{{ p.id }}-{{ p.slug }}" style="color:#13251C;font-weight:bold">{{ p.name }}</a><br><span style="color:#5B6B63;font-size:14px">{{ shop_name(o) }}</span></td><td align="right" style="padding:8px 0 8px 12px;border-bottom:1px solid #E1E8E4;font-weight:bold;white-space:nowrap">{{ o.price|czk }}</td></tr>
+{% endfor %}</table>
+<p style="margin:20px 0"><a href="{{ manage_url }}" style="background:#0B6E4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Zobrazit všechny shody</a></p>
+<p style="margin:0;font-size:14px;color:#5B6B63">Ceny se mění rychle – zkontroluj aktuální cenu v obchodě. Stejný produkt ti znovu pošleme, jen když ještě zlevní.</p>
+{% endblock %}
+{% block footer %}Tento e-mail ti posíláme, protože sis na Lovceny nastavil(a) hlídání rozpočtu. <a href="{{ unsub_url }}" style="color:#5B6B63">Zrušit jedním klikem</a>{% endblock %}

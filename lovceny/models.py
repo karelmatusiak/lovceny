@@ -202,3 +202,50 @@ class DigestEmail(Base):
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BudgetWatch(Base):
+    """v7 – Hlídání podle rozpočtu: kategorie (+ volitelně klíčové slovo / značka) a maximální cena.
+    Kanál „push“ (endpoint prohlížeče, bez e-mailu) nebo „email“ (double opt-in; posílá se jen s EMAIL_BACKEND)."""
+    __tablename__ = "budget_watches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True)       # správa / zrušení bez účtu
+    category_slug: Mapped[str] = mapped_column(String(40), index=True)
+    keyword: Mapped[str | None] = mapped_column(String(60))           # např. „bosch“, „65“, „oled“
+    max_price: Mapped[float] = mapped_column(Numeric(12, 2))
+    only_in_stock: Mapped[bool] = mapped_column(Boolean, default=False)
+    channel: Mapped[str] = mapped_column(String(10), default="push")  # push | email
+    endpoint: Mapped[str | None] = mapped_column(Text)
+    p256dh: Mapped[str | None] = mapped_column(String(200))
+    auth: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str | None] = mapped_column(String(320))
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)   # push = hned True
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_day: Mapped[str | None] = mapped_column(String(10))           # YYYY-MM-DD (Praha) – denní strop
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)
+    hits: Mapped[list["BudgetHit"]] = relationship(back_populates="budget", cascade="all, delete-orphan")
+    __table_args__ = (Index("ix_budget_endpoint", "endpoint"),)
+
+
+class BudgetHit(Base):
+    """Co jsme k danému hlídání rozpočtu už oznámili (proti duplicitám): znovu jen při dalším poklesu ceny."""
+    __tablename__ = "budget_hits"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    budget_id: Mapped[int] = mapped_column(ForeignKey("budget_watches.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    price: Mapped[float] = mapped_column(Numeric(12, 2))
+    notified: Mapped[bool] = mapped_column(Boolean, default=True)     # False = jen výchozí stav při založení
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    budget: Mapped[BudgetWatch] = relationship(back_populates="hits")
+    __table_args__ = (Index("ux_budget_hit", "budget_id", "product_id", unique=True),)
+
+
+class TopicSend(Base):
+    """Jednorázová rozesílka tématu (např. Black Friday přehled v daný den) – idempotence napříč běhy."""
+    __tablename__ = "topic_sends"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(60), unique=True)          # např. „black-friday:2026-11-27“
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    sent: Mapped[int] = mapped_column(Integer, default=0)
+    items: Mapped[str | None] = mapped_column(Text)                    # JSON snímek položek

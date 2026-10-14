@@ -99,7 +99,9 @@ def home(request: Request, db=Depends(get_db)):
     products = db.scalars(select(Product).order_by(Product.created_at.desc()).limit(6)).all()
     cards = [(p, *product_summary(p)) for p in products]
     deals = real_deals(db, top=3)["buys"]
-    return tpl.TemplateResponse(request, "index.html", {"cards": cards, "deals": deals})
+    from . import blackfriday as bfmod
+    bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
+    return tpl.TemplateResponse(request, "index.html", {"cards": cards, "deals": deals, "bf": bf})
 
 
 @app.get("/slevy", response_class=HTMLResponse)
@@ -202,7 +204,7 @@ def track(request: Request, url: str = Form(...), compare: int = Form(0), db=Dep
     if prod is None:
         raise HTTPException(422, msg)
     if compare:  # „Porovnat“ u živého výsledku: nejdřív sledovat, pak přidat do porovnání (JS sloučí s výběrem)
-        return RedirectResponse(f"/porovnani?pridat={prod.id}", 303)
+        return RedirectResponse(f"/porovnat?pridat={prod.id}", 303)
     r = f"/produkt/{prod.id}-{prod.slug}"
     return RedirectResponse(r + (f"?msg={quote(msg)}" if msg else ""), 303)
 
@@ -330,9 +332,9 @@ def legacy_watch_links(action: str, token: str):
     return RedirectResponse(f"/hlidani/{action}/{token}", 301)
 
 
-# ---------- porovnání ----------
-COMPARE_MAX = 4
-COMPARE_COLORS = ["#0B6E4F", "#FF7A45", "#2B5BD7", "#B3261E"]
+# ---------- porovnání (v7: Srovnání produktů /porovnat?p=…) ----------
+COMPARE_MAX = 3
+COMPARE_COLORS = ["#0B6E4F", "#C2410C", "#2B5BD7"]
 
 
 def parse_ids(raw: str) -> list[int]:
@@ -343,29 +345,78 @@ def parse_ids(raw: str) -> list[int]:
     return out[:COMPARE_MAX]
 
 
-@app.get("/porovnani", response_class=HTMLResponse)
-def compare(request: Request, ids: str = "", pridat: str = "", db=Depends(get_db)):
-    from .verdict import daily_best
-    wanted = parse_ids(ids)
-    if pridat.isdigit() and int(pridat) not in wanted and len(wanted) < COMPARE_MAX:
-        wanted.append(int(pridat))
-    items, datasets = [], []
-    since = datetime.now(timezone.utc) - timedelta(days=365)
-    for pid in wanted:
-        p = db.get(Product, pid)
-        if not p:
+def compare_token(p: Product) -> str:
+    return f"{p.id}-{p.slug}"
+
+
+def resolve_compare(db, raw: str) -> list[Product]:
+    """?p=12-iphone-16,samsung-qe65 → produkty. Token „ID-slug“ (jednoznačný) nebo jen slug / jen ID."""
+    out: list[Product] = []
+    for part in re.split(r"[,\s]+", (raw or "")[:600]):
+        part = part.strip().strip("/").lower()
+        if not part or len(out) >= COMPARE_MAX:
             continue
-        best, v = product_summary(p)
-        offers = sorted(p.offers, key=lambda o: (o.price is None, float(o.price or 0)))
-        color = COMPARE_COLORS[len(items) % len(COMPARE_COLORS)]
-        series = daily_best([pt for o in p.offers for pt in o.points], since)
-        datasets.append({"label": p.name[:40], "color": color,
-                         "data": [{"x": d.isoformat(), "y": round(val, 2)} for d, val in series.items()]})
-        items.append({"p": p, "best": best, "v": v, "offers": offers, "color": color,
-                      "best_shop": get_shop(best.shop) if best else None})
+        m = re.match(r"^(\d+)(?:-[a-z0-9-]*)?$", part)
+        p = db.get(Product, int(m.group(1))) if m else (
+            db.scalar(select(Product).where(Product.slug == part).order_by(Product.id).limit(1))
+            if re.match(r"^[a-z0-9-]{1,200}$", part) else None)
+        if p and all(x.id != p.id for x in out):
+            out.append(p)
+    return out
+
+
+@app.get("/porovnani")
+def compare_legacy(ids: str = "", pridat: str = "", db=Depends(get_db)):
+    """Původní adresa (?ids=1,2) → nové /porovnat?p=… (301; ?pridat= zachová)."""
+    toks = [compare_token(p) for p in (db.get(Product, i) for i in parse_ids(ids)) if p]
+    q = ("p=" + ",".join(toks)) if toks else ""
+    if pridat.isdigit():
+        q += ("&" if q else "") + f"pridat={pridat}"
+    return RedirectResponse("/porovnat" + (f"?{q}" if q else ""), 301)
+
+
+@app.get("/porovnat", response_class=HTMLResponse)
+def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db)):
+    from .verdict import daily_best
+    from .chart import build_multi, DASHES
+    from . import specs as specsmod
+    from statistics import median
+    products = resolve_compare(db, p)
+    if pridat.isdigit() and len(products) < COMPARE_MAX:
+        extra = db.get(Product, int(pridat))
+        if extra and all(x.id != extra.id for x in products):
+            products.append(extra)
+    now = datetime.now(timezone.utc)
+    items = []
+    for i, prod in enumerate(products):
+        best, v = product_summary(prod)
+        pts = [pt for o in prod.offers for pt in o.points]
+        # nejnižší cena za 30 dní PŘED dneškem (stejně jako u § 12a a na /black-friday)
+        d30 = {d: x for d, x in daily_best(pts, now - timedelta(days=30)).items() if d < now.date()}
+        min30 = min(d30.items(), key=lambda x: (x[1], x[0]), default=None)
+        if v.code == "fake" and v.ref_min30 is not None:   # stejné číslo jako u štítku (okno před akcí)
+            min30 = (v.ref_date, v.ref_min30)
+        d90 = list(daily_best(pts, now - timedelta(days=90)).values())
+        priced = sorted([o for o in prod.offers if o.price is not None], key=lambda o: float(o.price))
+        items.append({"p": prod, "best": best, "v": v, "best_shop": get_shop(best.shop) if best else None,
+                      "offers": priced + [o for o in prod.offers if o.price is None],
+                      "n_shops": len(priced), "color": COMPARE_COLORS[i], "dash": DASHES[i],
+                      "min30": min30[1] if min30 else None, "min30_date": min30[0] if min30 else None,
+                      "usual": median(d90) if d90 else None, "days": len(daily_best(pts, now - timedelta(days=3650))),
+                      "has_demo": any(getattr(pt, "is_demo", False) for pt in pts), "token": compare_token(prod),
+                      "pts": pts})
+    priced_items = [it for it in items if it["best"]]
+    cheapest = min(priced_items, key=lambda it: float(it["best"].price))["p"].id if len(priced_items) > 1 else None
+    ranges = build_multi([{"name": it["p"].name[:60], "color": it["color"], "dash": it["dash"], "points": it["pts"]}
+                          for it in items], now) if len(items) >= 2 else []
+    spec_rows = specsmod.table([it["p"].name for it in items])
+    tokens = ",".join(it["token"] for it in items)
+    title = " vs. ".join(it["p"].name[:40] for it in items) if len(items) >= 2 else "Srovnání produktů"
     return tpl.TemplateResponse(request, "compare.html", {
-        "items": items, "ids": ",".join(str(i["p"].id) for i in items), "pridat": pridat,
-        "chart_json": json.dumps({"datasets": datasets}), "get_shop": get_shop, "max": COMPARE_MAX, "noindex": True})
+        "items": items, "ids": ",".join(str(it["p"].id) for it in items), "tokens": tokens, "pridat": pridat,
+        "cheapest": cheapest, "ranges": ranges, "spec_rows": spec_rows, "get_shop": get_shop, "max": COMPARE_MAX,
+        "page_title": title, "share_url": f"{public_url()}/porovnat?p={tokens}" if tokens else f"{public_url()}/porovnat",
+        "noindex": True, "has_demo": any(it["has_demo"] for it in items)})
 
 
 # ---------- Web Push ----------
@@ -493,6 +544,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
     priced = [float(b.price) for _, b, _ in rows if b]
     return tpl.TemplateResponse(request, "category.html", {
         "c": c, "view": view, "rows": rows, "crumbs": crumbs, "canonical_path": path,
+        "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
         "page_title": t.format(**fmt), "page_desc": d.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
         "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(rows, path)]})
 
@@ -976,3 +1028,190 @@ def digest_email_unsub(request: Request, token: str, db=Depends(get_db)):
         db.commit()
     return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "noindex": True,
                                 "text": "Týdenní přehled ti už posílat nebudeme a tvůj e-mail jsme smazali."})
+
+
+# ---------- v7: Hlídání podle rozpočtu ----------
+from . import budget as budgetmod  # noqa: E402
+
+BUDGET_PER_IP_HOUR = 10
+
+
+def _budget_ctx(**kw) -> dict:
+    return {"push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(), **kw}
+
+
+@app.get("/hlidat-rozpocet", response_class=HTMLResponse)
+def budget_page(request: Request, kategorie: str = "", hledat: str = "", max: str = "", email: str = "",
+                category: str = "", keyword: str = "", max_price: str = "", db=Depends(get_db)):
+    kategorie, hledat, max = kategorie or category, hledat or keyword, max or max_price
+    cat = BY_SLUG.get(kategorie)
+    kw = budgetmod.clean_keyword(hledat)
+    try:
+        mp = float(max.replace(" ", "").replace("\u00a0", "")) if max else None
+    except ValueError:
+        mp = None
+    preview = None
+    if cat and mp and budgetmod.MIN_PRICE <= mp <= budgetmod.MAX_PRICE:
+        preview = budgetmod.matches(db, cat.slug, kw, mp, fresh_only=False)
+    crumbs = [("Lovceny", "/"), ("Hlídání podle rozpočtu", "/hlidat-rozpocet")]
+    return tpl.TemplateResponse(request, "budget.html", _budget_ctx(
+        cat=cat, keyword=kw or "", max_price=int(mp) if mp else "", preview=preview, crumbs=crumbs,
+        ld=[seo.breadcrumb_ld(crumbs)], email_msg=email[:20], canonical_path="/hlidat-rozpocet",
+        noindex=bool(request.url.query and not email), limits={"day": budgetmod.MAX_PER_DAY, "per": budgetmod.MAX_PER_ENDPOINT}))
+
+
+@app.post("/api/rozpocet")
+def budget_subscribe(request: Request, payload: dict = Body(...), db=Depends(get_db)):
+    if not pushmod.enabled():
+        raise HTTPException(404, "Upozornění v prohlížeči nejsou zapnutá.")
+    if not verifymod.rate_ok(_client_ip(request), per_hour=BUDGET_PER_IP_HOUR, scope="rozpocet"):
+        raise HTTPException(429, "Moc pokusů za hodinu. Zkus to prosím později.")
+    try:
+        b = budgetmod.subscribe_push(db, str(payload.get("category") or ""), str(payload.get("keyword") or ""),
+                                     payload.get("max_price"), payload.get("subscription") or {},
+                                     bool(payload.get("only_in_stock")))
+    except budgetmod.BudgetError as e:
+        raise HTTPException(422, str(e))
+    now_in = len(budgetmod.matches(db, b.category_slug, b.keyword, float(b.max_price), b.only_in_stock, fresh_only=False))
+    return {"ok": True, "token": b.token, "manage_url": f"/hlidat-rozpocet/{b.token}", "label": budgetmod.describe(b),
+            "now_matching": now_in}
+
+
+@app.post("/api/rozpocet/moje")
+def budget_mine(request: Request, payload: dict = Body(...), db=Depends(get_db)):
+    if not verifymod.rate_ok(_client_ip(request), per_hour=120, scope="rozpocet-moje"):
+        raise HTTPException(429, "Moc pokusů za hodinu.")
+    endpoint = str(payload.get("endpoint") or "")
+    if not pushmod.valid_endpoint(endpoint):
+        return {"items": []}
+    return {"items": [{"token": b.token, "label": budgetmod.describe(b), "manage_url": f"/hlidat-rozpocet/{b.token}"}
+                      for b in budgetmod.by_endpoint(db, endpoint)]}
+
+
+@app.post("/api/rozpocet/zrusit")
+def budget_unsubscribe_api(payload: dict = Body(...), db=Depends(get_db)):
+    return {"ok": True, "deleted": budgetmod.delete(db, str(payload.get("token") or ""))}
+
+
+@app.post("/hlidat-rozpocet/email")
+def budget_email_subscribe(request: Request, category: str = Form(""), keyword: str = Form(""), max_price: str = Form(""),
+                           email: str = Form(""), only_in_stock: str = Form(""), website: str = Form(""),
+                           db=Depends(get_db)):
+    if not digestmod.email_enabled():
+        raise HTTPException(404)
+    back = f"/hlidat-rozpocet?kategorie={quote(category)}&email="
+    if website:
+        return RedirectResponse(back + "odeslano#nastavit", 303)
+    email = email.strip().lower()[:320]
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return RedirectResponse(back + "chyba#nastavit", 303)
+    if not verifymod.rate_ok(_client_ip(request), per_hour=5, scope="rozpocet-email"):
+        return RedirectResponse(back + "limit#nastavit", 303)
+    try:
+        budgetmod.subscribe_email(db, category, keyword, max_price.replace(" ", ""), email, bool(only_in_stock))
+    except budgetmod.BudgetError:
+        return RedirectResponse(back + "chyba#nastavit", 303)
+    return RedirectResponse(back + "odeslano#nastavit", 303)
+
+
+def _budget_or_404(db, token: str):
+    from .models import BudgetWatch
+    b = db.scalar(select(BudgetWatch).where(BudgetWatch.token == token)) if token else None
+    if not b:
+        raise HTTPException(404)
+    return b
+
+
+@app.get("/hlidat-rozpocet/potvrdit/{token}", response_class=HTMLResponse)
+def budget_confirm(request: Request, token: str, db=Depends(get_db)):
+    b = _budget_or_404(db, token)
+    b.confirmed = True
+    db.commit()
+    return RedirectResponse(f"/hlidat-rozpocet/{b.token}?potvrzeno=1", 303)
+
+
+@app.get("/hlidat-rozpocet/zrusit/{token}", response_class=HTMLResponse)
+def budget_unsubscribe_link(request: Request, token: str, db=Depends(get_db)):
+    budgetmod.delete(db, token)
+    return tpl.TemplateResponse(request, "message.html", {
+        "title": "Hlídání rozpočtu zrušeno", "noindex": True,
+        "text": "Hlídání jsme zrušili a smazali i s odběrem. Nové si můžeš kdykoli nastavit na stránce Hlídání podle rozpočtu."})
+
+
+@app.get("/hlidat-rozpocet/{token}", response_class=HTMLResponse)
+def budget_manage(request: Request, token: str, potvrzeno: int = 0, zmeneno: int = 0, chyba: str = "", db=Depends(get_db)):
+    b = _budget_or_404(db, token)
+    found = budgetmod.matches(db, b.category_slug, b.keyword, float(b.max_price), b.only_in_stock, fresh_only=False)
+    return tpl.TemplateResponse(request, "budget_manage.html", _budget_ctx(
+        b=b, cat=BY_SLUG.get(b.category_slug), label=budgetmod.describe(b), found=found, noindex=True,
+        potvrzeno=potvrzeno, zmeneno=zmeneno, chyba=chyba[:80]))
+
+
+@app.post("/hlidat-rozpocet/{token}/upravit")
+def budget_edit(token: str, max_price: str = Form(""), db=Depends(get_db)):
+    b = _budget_or_404(db, token)
+    try:
+        budgetmod.update(db, b, max_price.replace(" ", ""))
+    except budgetmod.BudgetError as e:
+        return RedirectResponse(f"/hlidat-rozpocet/{token}?chyba={quote(str(e))}", 303)
+    return RedirectResponse(f"/hlidat-rozpocet/{token}?zmeneno=1", 303)
+
+
+@app.post("/hlidat-rozpocet/{token}/zrusit")
+def budget_delete(token: str, db=Depends(get_db)):
+    budgetmod.delete(db, token)
+    return RedirectResponse("/hlidat-rozpocet/zrusit/-", 303)
+
+
+# ---------- v7: Black Friday ----------
+from . import blackfriday as bfmod  # noqa: E402
+
+BF_FAQ = [
+    ("Co říká § 12a zákona o ochraně spotřebitele?",
+     "Když obchod oznamuje slevu, musí jako původní cenu uvést nejnižší cenu, za kterou zboží nabízel v posledních 30 dnech před slevou. Sleva se tedy má počítat z této ceny, ne z ceny, která platila jen krátce nebo kdysi."),
+    ("Jak poznáte, že sleva na Black Friday je opravdu výhodná?",
+     "Porovnáme dnešní cenu s cenami, které jsme v obchodech sami naměřili: s nejnižší cenou za 30 dní, s minimem a obvyklou cenou za 90 dní a s nejnižší cenou za celou dobu sledování. Nehodnotíme obchody, jen ukazujeme čísla a data."),
+    ("Co znamená štítek „Za 30 dní bylo levněji“?",
+     "Že jsme za 30 dní před akcí naměřili nižší cenu, než ze které obchod slevu počítá, nebo že cena krátce před slevou vzrostla. U štítku vždy uvádíme naměřenou cenu a datum. Obchod mohl mít jiné ceny v kanálech, které nevidíme (např. v aplikaci nebo na prodejně)."),
+    ("Kdy je Black Friday 2026?",
+     "Black Friday připadá na pátek 27. listopadu 2026, Cyber Monday na pondělí 30. listopadu 2026. Mnoho obchodů ale začíná s akcemi už začátkem listopadu."),
+]
+
+
+@app.get("/black-friday", response_class=HTMLResponse)
+def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Depends(get_db)):
+    kategorie = kategorie if kategorie in BY_SLUG else ""
+    obchod = obchod if obchod in SHOPS else ""
+    s = bfmod.season()
+    all_rows = bfmod.rows(db)
+    rows = [r for r in all_rows if (not kategorie or r.product.category_slug == kategorie) and (not obchod or r.best.shop == obchod)]
+    cats = sorted({r.product.category_slug for r in all_rows if r.product.category_slug}, key=lambda c: [x.slug for x in CATEGORIES].index(c))
+    shops = sorted({r.best.shop for r in all_rows}, key=lambda x: SHOPS[x].name if x in SHOPS else x)
+    crumbs = [("Lovceny", "/"), (f"Black Friday {s.year}", "/black-friday")]
+    ld = [seo.breadcrumb_ld(crumbs),
+          {"@context": "https://schema.org", "@type": "FAQPage",
+           "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in BF_FAQ]}]
+    if rows:
+        ld.append({"@context": "https://schema.org", "@type": "ItemList", "url": seo._abs("/black-friday"),
+                   "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": seo._abs(f"/produkt/{r.product.id}-{r.product.slug}"),
+                                        "name": r.product.name} for i, r in enumerate(rows[:30])]})
+    return tpl.TemplateResponse(request, "black_friday.html", {
+        "s": s, "today": bfmod.today_prague(), "countdown": bfmod.countdown_text(), "phase": s.phase(bfmod.today_prague()),
+        "rows": rows, "sm": bfmod.summary(rows), "lowest": [r for r in rows if r.is_lowest][:6], "cats": cats, "shops": shops,
+        "kategorie": kategorie, "obchod": obchod, "crumbs": crumbs, "ld": ld, "faq": BF_FAQ, "cz_date": bfmod.cz_date,
+        "canonical_path": "/black-friday", "noindex": bool(kategorie or obchod), "get_shop": get_shop,
+        "push_key": pushmod.public_key() if pushmod.enabled() else "", "include_demo": bfmod_include_demo(),
+        "bf_iso": datetime.combine(s.bf, datetime.min.time(), tzinfo=bfmod.PRAGUE).isoformat()})
+
+
+def bfmod_include_demo() -> bool:
+    from .deals import include_demo
+    return include_demo()
+
+
+@app.get("/black-friday/odhlasit/{token}", response_class=HTMLResponse)
+def bf_push_unsub_link(request: Request, token: str, db=Depends(get_db)):
+    pushmod.unsubscribe_topic(db, token=token, topic=bfmod.TOPIC)
+    return tpl.TemplateResponse(request, "message.html", {
+        "title": "Black Friday přehled vypnut", "noindex": True,
+        "text": "Black Friday přehled už do tohoto prohlížeče posílat nebudeme a odběr jsme smazali."})

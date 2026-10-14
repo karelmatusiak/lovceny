@@ -1,0 +1,35 @@
+{# Formulář Hlídání podle rozpočtu. fixed_cat = kategorie pevně daná (stránka kategorie), jinak výběr. #}
+{% set fc = fixed_cat if fixed_cat is defined else none %}
+<form class="card bw-form" id="bw-form" {% if email_on %}method="post" action="/hlidat-rozpocet/email"{% else %}method="get" action="/hlidat-rozpocet#nahled"{% endif %} data-vapid="{{ push_key }}" novalidate>
+  {% if fc %}<input type="hidden" name="category" value="{{ fc.slug }}">
+  {% else %}
+  <div class="field"><label for="bw-cat">Kategorie</label>
+    <select id="bw-cat" name="category" required>
+      <option value="">Vyber kategorii…</option>
+      {% for c in CATEGORIES %}<option value="{{ c.slug }}"{% if cat and cat.slug == c.slug %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    </select></div>
+  {% endif %}
+  <div class="row2">
+    <div class="field"><label for="bw-max">Maximální cena</label><div class="suffix"><input id="bw-max" name="max_price" type="number" inputmode="numeric" step="1" min="100" max="1000000" required value="{{ max_price if max_price is defined else '' }}" placeholder="např. 12000"><span>Kč</span></div></div>
+    <div class="field"><label for="bw-kw">Značka nebo slovo</label><input id="bw-kw" name="keyword" type="text" maxlength="60" value="{{ keyword if keyword is defined else '' }}" placeholder="nepovinné, např. {{ 'OLED' if fc and fc.slug == 'televize' else 'Bosch' }}" aria-describedby="bw-kw-h" autocomplete="off"></div>
+  </div>
+  <p class="bw-hint" id="bw-kw-h">Slovo hledáme v názvu produktu bez ohledu na diakritiku (např. „Bosch“, „OLED 65“). Nepovinné.</p>
+  <label class="check"><input type="checkbox" name="only_in_stock" value="1"> Jen produkty skladem</label>
+  {% if push_key %}
+  <div class="bw-push" hidden>
+    <button type="button" class="btn btn-primary bw-go" id="bw-go"><span aria-hidden="true">🔔</span> Hlídat rozpočet v prohlížeči</button>
+  </div>
+  <p class="bw-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje.{% if email_on %} Použij prosím e-mail níže.{% endif %}</p>
+  <p class="bw-ios small" hidden>Na iPhonu fungují upozornění jen z webu přidaného na plochu (Sdílet → Přidat na plochu, iOS 16.4+).{% if email_on %} Nebo použij e-mail.{% endif %}</p>
+  <noscript><p class="small">Upozornění v prohlížeči potřebují JavaScript.{% if email_on %} E-mail funguje i bez něj.{% endif %}</p></noscript>
+  {% else %}<p class="small bw-off">Upozornění v prohlížeči teď nejsou zapnutá.</p>{% endif %}
+  {% if email_on %}
+  <div class="or"><span>nebo e-mailem</span></div>
+  <div class="bw-email"><label for="bw-em" class="sr-only">E-mail</label><input id="bw-em" name="email" type="email" placeholder="ty@example.cz" autocomplete="email">
+    <button class="btn btn-ghost" type="submit">Hlídat e-mailem</button></div>
+  <div class="hp" aria-hidden="true"><label>Web <input name="website" tabindex="-1" autocomplete="off"></label></div>
+  {% endif %}
+  <p class="push-msg" id="bw-msg" role="status" aria-live="polite"></p>
+  <button class="btn-link bw-preview-btn" type="submit" formmethod="get" formaction="/hlidat-rozpocet#nahled" formnovalidate>Ukázat, co teď do rozpočtu vychází →</button>
+  <p class="small bw-fine">Ozveme se, až se objeví produkt v rozpočtu, nebo když už nalezený ještě zlevní. Nejvýš 3 upozornění denně, bez e-mailu a bez účtu. Zrušit jde jedním klepnutím.</p>
+</form>

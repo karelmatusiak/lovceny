@@ -109,6 +109,19 @@ def main(argv=None):
         log.info("Úklid push odběrů (24 měsíců): %d", push.cleanup_push(db))
     else:
         log.info("Web Push vypnutý (chybí VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)")
+    # 3c) v7: hlídání podle rozpočtu (push; e-mail jen s EMAIL_BACKEND) + Black Friday přehled (jen v BF/CM)
+    from lovceny import budget, blackfriday
+    try:
+        log.info("Hlídání rozpočtu: %s", budget.check_budgets(db))
+        log.info("Úklid hlídání rozpočtu: %d", budget.cleanup(db))
+    except Exception as e:  # noqa: BLE001 – nesmí shodit souhrn stahování
+        db.rollback()
+        log.error("Hlídání rozpočtu selhalo: %s", e)
+    try:
+        log.info("Black Friday přehled: %s", blackfriday.run_digest(db))
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.error("Black Friday přehled selhal: %s", e)
     log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
     log.info("SOUHRN: %s", dict(report))
     db.close()

@@ -23,7 +23,7 @@ def _product(db, name, price, shop="planeo", days=10):
 
 
 def test_parse_ids():
-    assert parse_ids("3,1,3, x,7,8,9") == [3, 1, 7, 8]
+    assert parse_ids("3,1,3, x,7,8,9") == [3, 1, 7]  # v7: max. 3 produkty
     assert parse_ids("") == []
 
 
@@ -35,19 +35,21 @@ def test_compare_page_side_by_side():
     r = TestClient(app).get(f"/porovnani?ids={a.id},{b.id},999999")
     assert r.status_code == 200
     h = r.text
-    assert h.count('class="card cmp-col"') == 2  # neexistující id se ignoruje
+    assert h.count('class="card cmp-col') == 2  # neexistující id se ignoruje
     assert "Porovnani Pracka A" in h and "Porovnani Pracka B" in h
     assert "9\xa0990\xa0Kč" in h and "v obchodě Mironet" in h
-    assert "Minimum 90 dní" in h and "Maximum 90 dní" in h and "Parametry doplníme brzy" in h
+    assert "Minimum 90 dní" in h and "Minimum 30 dní" in h and "Nejnižší cena za 30 dní" in h
+    assert "Parametry z názvů produktů jsme nerozpoznali" in h
     assert f'data-cmp-remove="{a.id}"' in h and f'/produkt/{a.id}-' in h
     assert 'class="verdict v-' in h and "verdict-reason" in h
-    assert f'data-ids="{a.id},{b.id}"' in h and '"label": "Porovnani Pracka A"' in h  # jedna čára na produkt
+    assert f'data-ids="{a.id},{b.id}"' in h and f'data-tokens="{a.id}-{a.slug},{b.id}-{b.slug}"' in h
+    assert h.count('class="chart chart-multi"') >= 2 and "chart.js" not in h.lower()  # SVG ze serveru, bez CDN
     db.close()
 
 
 def test_compare_empty_and_single():
     c = TestClient(app)
-    assert "Porovnání je prázdné" in c.get("/porovnani").text
+    assert "Srovnání je prázdné" in c.get("/porovnani").text
     init_db()
     db = SessionLocal()
     a = _product(db, "Porovnani Single", 100)
@@ -71,7 +73,7 @@ def test_live_compare_tracks_then_adds(monkeypatch):
     p.id = 42
     monkeypatch.setattr(main, "add_by_url", lambda db, url: (p, ""))
     r = TestClient(app).post("/sledovat", data={"url": "https://www.mironet.cz/x+dp1/", "compare": "1"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/porovnani?pridat=42"
+    assert r.status_code == 303 and r.headers["location"] == "/porovnat?pridat=42"
 
 
 def test_live_results_offer_compare(monkeypatch):
@@ -84,4 +86,4 @@ def test_live_results_offer_compare(monkeypatch):
 
 def test_compare_js_served():
     js = TestClient(app).get("/static/compare.js").text
-    assert "lovceny_porovnani" in js and "MAX = 4" in js
+    assert "lovceny_porovnani" in js and "MAX = 3" in js and "/porovnat" in js
