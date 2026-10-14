@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, share, rank_link, affiliate_note %}
+{% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, badge, cmp_button, share, rank_link, affiliate_note %}
 {% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
@@ -20,6 +20,7 @@
       </div>
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
       {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
+      {% if cat %}{{ season_hint(cat.slug) }}{% endif %}
     </div>
     <div class="p-chart">
       <div class="chart-top"><h2 class="h3" id="hist-h">Historie ceny</h2></div>

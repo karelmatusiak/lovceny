@@ -56,3 +56,7 @@
   </div>
 </details>
 {%- endmacro %}
+{% macro season_hint(slug) -%}
+{%- set tip = season_tip(slug) -%}
+{%- if tip -%}<p class="season-hint"><span aria-hidden="true">🗓️</span><span><span class="sr-only">Tip, kdy nakupovat: </span>{{ tip }} <a href="/kdy-nakupovat#{{ slug }}">Kdy nakupovat →</a></span></p>{%- endif -%}
+{%- endmacro %}
