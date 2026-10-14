@@ -5,9 +5,10 @@ import time
 import logging
 from dataclasses import dataclass
 from urllib.parse import urlparse
-from urllib.robotparser import RobotFileParser
 
 import httpx
+
+from .robots import Robots
 
 log = logging.getLogger("lovceny.scrape")
 
@@ -38,22 +39,20 @@ class PoliteClient:
     def __init__(self):
         self.client = httpx.Client(headers={"User-Agent": USER_AGENT, "Accept-Language": "cs-CZ,cs;q=0.9"},
                                    follow_redirects=True, timeout=20)
-        self._robots: dict[str, RobotFileParser] = {}
+        self._robots: dict[str, Robots] = {}
         self._last: dict[str, float] = {}
 
     def allowed(self, url: str) -> bool:
         p = urlparse(url)
         base = f"{p.scheme}://{p.netloc}"
         if base not in self._robots:
-            rp = RobotFileParser()
+            rp = Robots()
             try:
                 r = self.client.get(base + "/robots.txt")
-                if r.status_code >= 400:
-                    rp.parse([])  # robots chybí → vše povoleno (403 řeší detekce blokace)
-                else:
-                    rp.parse(r.text.splitlines())
+                if r.status_code < 400:  # robots chybí → vše povoleno (403 řeší detekce blokace)
+                    rp = Robots(r.text)
             except httpx.HTTPError:
-                rp.parse([])
+                pass
             self._robots[base] = rp
         return self._robots[base].can_fetch(ROBOTS_AGENT, url)
 

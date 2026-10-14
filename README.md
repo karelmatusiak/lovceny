@@ -32,6 +32,20 @@ Alza a Datart jsou nastavené jako `source="feed"`. Vložený odkaz z Alzy/Datar
 - **Affiliate odkazy**: `ALZA_AFFILIATE_ID` přidá k odkazům `?idp=<ID>`; `DATART_AFFILIATE_ID` analogicky (název parametru upravte v registry podle podmínek programu). Na pořadí ani verdikt to nemá vliv.
 - Test: `tests/test_feed.py`.
 
+### Živé hledání v obchodech (`lovceny/shops/search.py`)
+Když text v DB najde méně než 4 produkty, stránka `/hledat` hned zobrazí načítání a přes `/hledat/zive?q=` (bez JS `?zive=1`)
+prohledá obchody s `searcher` v registry – souběžně, timeout 8 s/obchod, cache 10 min v paměti, ≥ 2 s mezi dotazy na doménu.
+Výsledky (+ feedové nabídky Alzy/Datartu z DB) jsou řazené jen podle ceny; tlačítko **Hlídat** (`POST /sledovat`) volá `add_by_url`.
+robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy ignoruje).
+| Obchod | Živé hledání (test 14. 10. 2026) |
+|---|---|
+| Mironet | ✅ `/ProductList/showSearch?EXPF=` – robots povoluje, HTML výpis (název, cena, URL, obrázek) |
+| Planeo | ❌ `/vyhledavani*` zakázáno v robots.txt (sledování produktů funguje dál) |
+| Xzone | ❌ `?term=` zakázáno v robots.txt |
+| Suntech | ❌ `Disallow: /` |
+| Euronics | ❌ F5 JS challenge |
+| Alza, Datart | hledáme v importovaném feedu v DB |
+
 ## Lokální spuštění
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt

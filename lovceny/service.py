@@ -159,3 +159,46 @@ def check_watches(db: Session) -> int:
             sent += 1
     db.commit()
     return sent
+
+
+# ---------- vyhledávání podle názvu ----------
+def search_db(db: Session, q: str, limit: int = 30) -> list[Product]:
+    from sqlalchemy import or_
+    stmt = select(Product)
+    for t in q.split():
+        stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
+    return list(db.scalars(stmt.limit(limit)).all())
+
+
+def search_feed_offers(db: Session, q: str, limit: int = 30):
+    """Feed obchody (Alza, Datart): hledáme v importovaných položkách feedu v DB."""
+    from .shops.registry import SHOPS
+    from .shops.search import SearchHit
+    feed_slugs = [s.slug for s in SHOPS.values() if s.source == "feed"]
+    stmt = select(Offer).join(Product).where(Offer.shop.in_(feed_slugs), Offer.price.is_not(None))
+    for t in q.split():
+        stmt = stmt.where(Product.name.ilike(f"%{t}%"))
+    return [SearchHit(o.shop, o.product.name, float(o.price), get_shop(o.shop).affiliate_link(o.url),
+                      o.product.image_url, float(o.original_price) if o.original_price else None)
+            for o in db.scalars(stmt.limit(limit)).all()]
+
+
+def offers_for_query(db: Session, q: str, live: bool = True):
+    """Sloučí nabídky z feedů v DB a živého hledání; seřazeno jen podle ceny.
+    Vrací (list[(hit, tracked_product|None)], shop_statuses)."""
+    from .shops.search import live_search
+    hits = search_feed_offers(db, q)
+    statuses = []
+    if live:
+        res = live_search(q)
+        hits += res.hits
+        statuses = res.shops
+    urls = [normalize_url(h.url) for h in hits]
+    tracked = {o.url: o.product for o in db.scalars(select(Offer).where(Offer.url.in_(urls))).all()} if urls else {}
+    out, seen = [], set()
+    for h, u in sorted(zip(hits, urls), key=lambda x: x[0].price):
+        if u in seen:
+            continue
+        seen.add(u)
+        out.append((h, tracked.get(u)))
+    return out, statuses

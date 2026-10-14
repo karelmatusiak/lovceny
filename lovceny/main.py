@@ -3,6 +3,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -13,7 +14,7 @@ from sqlalchemy import select, func, or_
 from .db import SessionLocal, init_db
 from .models import Product, Offer, PricePoint, Watch
 from .shops import SHOPS, get_shop
-from .service import add_by_url, create_watch
+from .service import add_by_url, create_watch, search_db, offers_for_query
 from .verdict import compute
 from .util import czk
 
@@ -56,7 +57,7 @@ def home(request: Request, db=Depends(get_db)):
 
 
 @app.get("/hledat", response_class=HTMLResponse)
-def search(request: Request, q: str = "", db=Depends(get_db)):
+def search(request: Request, q: str = "", zive: int = 0, db=Depends(get_db)):
     q = q.strip()
     if not q:
         return RedirectResponse("/", 303)
@@ -67,12 +68,37 @@ def search(request: Request, q: str = "", db=Depends(get_db)):
             return tpl.TemplateResponse(request, "search.html", {"q": q, "results": [], "error": msg}, status_code=422)
         r = f"/produkt/{prod.id}-{prod.slug}"
         return RedirectResponse(r + (f"?msg={msg}" if msg else ""), 303)
-    terms = [t for t in q.split() if t]
-    stmt = select(Product)
-    for t in terms:
-        stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
-    results = [(p, *product_summary(p)) for p in db.scalars(stmt.limit(30)).all()]
-    return tpl.TemplateResponse(request, "search.html", {"q": q, "results": results, "error": None})
+    results = [(p, *product_summary(p)) for p in search_db(db, q)]
+    # Málo shod v DB → živé hledání v obchodech. Bez JS (?zive=1) se načte rovnou, jinak přes fetch.
+    want_live = len(results) < LIVE_THRESHOLD
+    ctx = {"q": q, "results": results, "error": None, "want_live": want_live}
+    if want_live and zive:
+        ctx.update(_live_ctx(db, q))
+    return tpl.TemplateResponse(request, "search.html", ctx)
+
+
+LIVE_THRESHOLD = 4
+
+
+def _live_ctx(db, q: str) -> dict:
+    offers, statuses = offers_for_query(db, q)
+    return {"offers": offers, "statuses": statuses, "live_done": True}
+
+
+@app.get("/hledat/zive", response_class=HTMLResponse)
+def search_live(request: Request, q: str = "", db=Depends(get_db)):
+    q = q.strip()[:100]
+    ctx = {"q": q, **(_live_ctx(db, q) if q else {"offers": [], "statuses": [], "live_done": True})}
+    return tpl.TemplateResponse(request, "_live.html", ctx)
+
+
+@app.post("/sledovat")
+def track(url: str = Form(...), db=Depends(get_db)):
+    prod, msg = add_by_url(db, url)
+    if prod is None:
+        raise HTTPException(422, msg)
+    r = f"/produkt/{prod.id}-{prod.slug}"
+    return RedirectResponse(r + (f"?msg={quote(msg)}" if msg else ""), 303)
 
 
 @app.get("/produkt/{pid:int}-{slug}", response_class=HTMLResponse)

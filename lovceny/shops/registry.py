@@ -9,6 +9,7 @@ status (výsledek testu z 14. 10. 2026):
 """
 import os
 from dataclasses import dataclass, field
+from typing import Callable
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 
@@ -25,6 +26,9 @@ class Shop:
     affiliate_env: str | None = None
     color: str = "#0B6E4F"
     extra: dict = field(default_factory=dict)
+    # živé vyhledávání: funkce(query) -> list[SearchHit]; None = obchod živě nehledáme
+    searcher: Callable | None = None
+    search_note: str = ""
 
     @property
     def feed_url(self) -> str:
@@ -49,12 +53,17 @@ class Shop:
 SHOPS: dict[str, Shop] = {s.slug: s for s in [
     Shop("alza", "Alza", ["alza.cz"], source="feed", status="ok", color="#2B5BD7",
          note="Cloudflare blokuje přímé stahování – ceny z feedu / affiliate exportu.",
-         feed_url_env="ALZA_FEED_URL", affiliate_param="idp", affiliate_env="ALZA_AFFILIATE_ID"),
+         search_note="Hledáme v importovaném feedu (DB).", feed_url_env="ALZA_FEED_URL", affiliate_param="idp", affiliate_env="ALZA_AFFILIATE_ID"),
     Shop("datart", "Datart", ["datart.cz"], source="feed", status="ok", color="#E2001A",
          note="F5 ochrana blokuje přímé stahování – ceny z feedu / affiliate exportu.",
-         feed_url_env="DATART_FEED_URL", affiliate_param="utm_source", affiliate_env="DATART_AFFILIATE_ID"),
+         search_note="Hledáme v importovaném feedu (DB).", feed_url_env="DATART_FEED_URL", affiliate_param="utm_source", affiliate_env="DATART_AFFILIATE_ID"),
     Shop("planeo", "Planeo", ["planeo.cz"], source="scrape", status="ok", color="#FF7A45",
-         note="JSON-LD schema.org Product na stránce, robots.txt povoluje."),
+         note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
+         search_note="Vyhledávání (/vyhledavani…) zakazuje robots.txt – živě nehledáme."),
+    Shop("mironet", "Mironet", ["mironet.cz"], source="scrape", status="ok", color="#0067B1",
+         note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
+         searcher=lambda q: _search.search_mironet(q),
+         search_note="Živé vyhledávání /ProductList/showSearch povoleno robots.txt."),
     Shop("czc", "CZC", ["czc.cz"], source="scrape", status="blocked", color="#7A4BD1",
          note="czc.cz přesměrovává na obchod na Allegru; allegro.cz vrací DataDome (403)."),
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",
@@ -66,6 +75,9 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
     Shop("kasa", "Kasa", ["kasa.cz"], source="scrape", status="blocked", note="F5 JS challenge."),
     Shop("tsbohemia", "TS Bohemia", ["tsbohemia.cz"], source="scrape", status="blocked", note="403."),
 ]}
+
+
+from . import search as _search  # noqa: E402
 
 
 def get_shop(slug: str) -> Shop | None:

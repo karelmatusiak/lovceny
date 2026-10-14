@@ -1,0 +1,24 @@
+{%- set searched = [] -%}{%- for st in statuses or [] -%}{%- set _ = searched.append(SHOPS[st.shop].name) -%}{%- endfor -%}
+{% if offers %}
+<h2>Nejlevnější nabídky v obchodech</h2>
+<p class="sub">Řazeno jen podle ceny. Kliknutím na <b>Hlídat</b> začneme sledovat historii ceny.</p>
+<div class="offers-live">
+{% for h, tracked in offers %}{% set s = SHOPS[h.shop] %}
+  <div class="card live-row">
+    <div class="p-img">{% if h.image %}<img src="{{ h.image }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+    <div class="live-main"><a class="p-name sm" href="{{ h.url }}" target="_blank" rel="noopener nofollow">{{ h.name }}</a>
+      <div class="p-cat"><span class="shop-dot" style="background:{{ s.color }}"></span>{{ s.name }}{% if s.source == 'feed' %} · z feedu{% endif %}</div></div>
+    <div class="live-price">{% if h.original_price %}<s>{{ h.original_price|czk }}</s>{% endif %}<b>{{ h.price|czk }}</b></div>
+    <div class="live-act">
+      {% if tracked %}<a class="btn btn-ghost" href="/produkt/{{ tracked.id }}-{{ tracked.slug }}">Už hlídáme</a>
+      {% else %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ h.url }}"><button class="btn btn-primary">🐶 Hlídat</button></form>{% endif %}
+      <a class="live-link" href="{{ h.url }}" target="_blank" rel="noopener nofollow">Do obchodu ↗</a>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<h2>{{ q|capitalize }} zatím nikde nenacházíme…</h2>
+<p class="sub">V obchodech, které nám hledání dovolují, jsme nic nenašli. Zkus jiný název (třeba bez barvy či kapacity), nebo vlož přímo odkaz na produkt z e-shopu a začneme ho hlídat.</p>
+{% endif %}
+<p class="live-note">{% if searched %}Prohledáno živě: {{ searched|join(', ') }}. {% endif %}Alzu a Datart hledáme v jejich oficiálním feedu. Ostatní obchody vyhledávání robotům nedovolují nebo je blokují – ochrany neobcházíme.</p>

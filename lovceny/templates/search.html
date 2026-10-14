@@ -2,6 +2,22 @@
 {% block body %}<section style="padding-top:24px"><div class="wrap">
   <form class="search" action="/hledat" method="get" style="margin:0 0 32px"><label><input name="q" value="{{ q }}" aria-label="Hledat"></label><button class="btn btn-primary">Prověřit cenu</button></form>
   {% if error %}<div class="notice warn">{{ error }} Podporujeme: {% for s in SHOPS.values() %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
-  {% if results %}<h2>Výsledky pro „{{ q }}“</h2><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>
-  {% elif not error %}<h2>Nic jsme nenašli</h2><p class="sub">Zatím sledujeme jen produkty, které někdo přidal. Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
+  {% if results %}<h2>Sledujeme pro „{{ q }}“</h2><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>{% endif %}
+  {% if want_live and not error %}
+  <div id="zive" class="live" data-q="{{ q }}" style="margin-top:{{ '36px' if results else '0' }}">
+    {% if live_done %}{% include "_live.html" %}{% else %}
+    <div class="live-loading" role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <div><b>Hledáme „{{ q }}“ v obchodech…</b><p class="sub" style="margin:4px 0 0">Ptáme se obchodů, které to dovolují. Trvá to obvykle pár sekund.</p></div>
+    </div>
+    <div class="live-skel" aria-hidden="true">{% for i in range(4) %}<div class="skel-row"></div>{% endfor %}</div>
+    <noscript><p><a class="btn btn-primary" href="/hledat?q={{ q|urlencode }}&zive=1">Prohledat obchody</a></p></noscript>
+    {% endif %}
+  </div>
+  {% if not live_done %}<script>
+  (function(){var el=document.getElementById('zive');
+    fetch('/hledat/zive?q='+encodeURIComponent(el.dataset.q)).then(function(r){return r.text()})
+    .then(function(h){el.innerHTML=h}).catch(function(){el.innerHTML='<div class="notice warn">Obchody se nepodařilo prohledat. Zkus to prosím za chvíli znovu.</div>'});})();
+  </script>{% endif %}
+  {% elif not results and not error %}<h2>Nic jsme nenašli</h2><p class="sub">Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
 </div></section>{% endblock %}
