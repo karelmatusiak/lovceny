@@ -1,0 +1,88 @@
+{% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img %}
+{% block title %}{% if r %}Ověření slevy: {{ (r.name or (r.query|pretty_name) or 'produkt')[:70] }}{% else %}Ověř slevu z jakéhokoli e-shopu{% endif %} | Lovceny{% endblock %}
+{% block description %}Vlož odkaz na produkt z e-shopu: ukážeme aktuální cenu, historii, nejnižší cenu za posledních 30 dní (§ 12a zákona o ochraně spotřebitele) a nabídky v dalších obchodech.{% endblock %}
+{% block body %}
+<section class="ov"><div class="wrap">
+  <div class="ov-hero">
+    <div class="eyebrow">Ověř slevu</div>
+    <h1 class="page-h1">{% if r %}Ověření slevy{% else %}Je ta sleva opravdu sleva?{% endif %}</h1>
+    {% if not r %}<p class="sub">Vlož odkaz na produkt z <b>jakéhokoli</b> e-shopu. Ukážeme aktuální cenu, historii, nejnižší cenu za posledních 30 dní a kde je produkt levněji.</p>{% endif %}
+    <form class="search ov-form" action="/over-slevu" method="get" role="search" autocomplete="off">
+      <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+        <input id="ov-url" name="url" type="url" inputmode="url" required maxlength="2000" value="{{ url_in }}" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu"></label>
+      <button class="btn btn-primary" type="submit"><span aria-hidden="true">🔎</span> Ověřit slevu</button>
+    </form>
+    {% if error %}<div class="notice warn" role="alert">{{ error }}</div>{% endif %}
+    {% if limited %}<div class="notice warn" role="alert">Ověřování je teď hodně, zkus to prosím za chvíli. Výsledky, které už někdo ověřil, se zobrazují bez omezení.</div>{% endif %}
+  </div>
+
+  {% if r %}
+  <div class="ov-grid">
+    <article class="card ov-card" aria-labelledby="ov-name">
+      <div class="p-head">
+        <div class="p-img">{% if r.image %}{{ shop_img(r.image, 60, priority=true) }}{% elif r.product and r.product.image_url %}{{ shop_img(r.product.image_url, 60, priority=true) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+        <div><h2 class="p-name" id="ov-name">{{ r.name or (r.query|pretty_name) or 'Produkt' }}</h2>
+          <div class="p-cat">{% if r.shop %}<span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}{% else %}{{ host }}{% endif %} · <a href="{{ r.url }}" target="_blank" rel="noopener nofollow">otevřít v obchodě ↗</a></div></div>
+      </div>
+      {% if r.message %}<div class="notice {{ 'info' if r.status in ('feed','unknown_shop') else 'warn' }} ov-status">{{ r.message }}{% if r.status == 'unknown_shop' %} <a href="/o-nas?tema=obchod#kontakt">Navrhnout obchod ke sledování</a>{% endif %}</div>{% endif %}
+      {% if r.price %}
+      <div class="price-row"><span class="price">{{ r.price|czk }}</span>
+        {% if r.original_price %}<span class="was">{{ r.original_price|czk }}</span><span class="claimed">−{{ ((1 - r.price/r.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}</div>
+      <p class="ov-muted">Cena ze stránky obchodu{% if r.fetched_at %}, načteno {{ r.fetched_at|prague }}{% endif %}{% if r.in_stock is not none %} · {{ 'skladem' if r.in_stock else 'není skladem' }}{% endif %}.</p>
+      {% elif r.product and r.verdict and r.verdict.current %}
+      <div class="price-row"><span class="price">{{ r.verdict.current|czk }}</span></div>
+      <p class="ov-muted">Nejnižší cena, kterou u produktu evidujeme.</p>
+      {% endif %}
+
+      <section class="ov-check" aria-labelledby="ov-check-h">
+        <h3 id="ov-check-h">Kontrola 30 dní <small>(§ 12a zákona o ochraně spotřebitele)</small></h3>
+        {% set c = r.check %}
+        {% if c and c.enough %}
+          {% if c.flag %}
+          <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span><span class="verdict-label">Za 30 dní bylo levněji</span></span></div>
+          <p>Obchod uvádí původní cenu <b>{{ c.claimed|czk }}</b>. Nejnižší cena, kterou jsme za posledních 30 dní naměřili, byla <b>{{ c.min30|czk }}</b> (dne {{ c.min30_date.day }}. {{ c.min30_date.month }}. {{ c.min30_date.year }}). Vůči ní je dnešní cena {% if c.current < c.min30 %}nižší o {{ ((1 - c.current/c.min30)*100)|round|int }} %{% elif c.current > c.min30 %}vyšší o {{ ((c.current/c.min30 - 1)*100)|round|int }} %{% else %}stejná{% endif %}. <a href="/jak-radime#za-30-dni-levneji">Jak to počítáme</a></p>
+          {% else %}
+          <p>Nejnižší cena za posledních 30 dní podle našich měření: <b>{{ c.min30|czk }}</b> (dne {{ c.min30_date.day }}. {{ c.min30_date.month }}. {{ c.min30_date.year }}).
+          {% if c.claimed %}Uváděná původní cena {{ c.claimed|czk }} odpovídá naměřené historii (není o víc než 5 % vyšší).{% elif c.current and c.current <= c.min30 %}Dnešní cena je na 30denním minimu nebo pod ním.{% elif c.current %}Dnešní cena je o {{ ((c.current/c.min30 - 1)*100)|round|int }} % vyšší.{% endif %}</p>
+          {% endif %}
+          <p class="ov-muted">Z {{ c.days }} dní měření za 90 dní{% if c.has_demo %} (obsahuje ukázková demo data){% endif %}. <a href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Celá historie ceny →</a></p>
+        {% elif r.product %}
+          <p>Produkt sledujeme teprve {{ c.days if c else 0 }} {{ 'den' if (c and c.days == 1) else ('dny' if (c and 2 <= c.days <= 4) else 'dní') }} – na kontrolu 30 dní potřebujeme aspoň týden měření. <a href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Historie ceny →</a></p>
+        {% else %}
+          <p>Tento produkt zatím nesledujeme, takže jeho historii nemáme a kontrolu 30 dní udělat nemůžeme.{% if r.original_price %} Obchod uvádí původní cenu {{ r.original_price|czk }} – podle zákona by to měla být nejnižší cena za posledních 30 dní před slevou.{% endif %}</p>
+        {% endif %}
+      </section>
+
+      {% if r.product and r.verdict %}<div class="ov-verdict">{{ badge(r.verdict, link=true) }}</div>{% endif %}
+      <div class="ov-actions">
+        {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}#hlidani"><span aria-hidden="true">🔔</span> Detail a hlídání ceny</a>{% endif %}
+        {% if r.can_track %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ r.url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>{% endif %}
+        {{ share(share_url, share_text, 'Ověření slevy na Lovceny') }}
+      </div>
+    </article>
+
+    <aside class="ov-side">
+      <div class="card ov-elsewhere" id="ov-jinde" data-url="{{ r.url }}" aria-live="polite">
+        {% if live_done %}{% include "_over_jinde.html" %}{% else %}
+        <div class="live-loading" role="status"><span class="spinner" aria-hidden="true"></span><div><b>Hledáme v dalších obchodech…</b><p class="ov-muted">Obvykle pár sekund.</p></div></div>
+        <noscript><p><a class="btn btn-ghost" href="{{ request.url.path }}?url={{ r.url|urlencode }}&amp;jinde=1">Prohledat další obchody</a></p></noscript>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+  {% if not live_done %}<script>
+  (function(){var el=document.getElementById('ov-jinde');
+    fetch('/over-slevu/jinde?url='+encodeURIComponent(el.dataset.url)).then(function(r){if(!r.ok)throw 0;return r.text()})
+    .then(function(h){el.innerHTML=h}).catch(function(){el.innerHTML='<p class="ov-muted">Další obchody se teď nepodařilo prohledat. Zkus to prosím za chvíli.</p>'});})();
+  </script>{% endif %}
+  {% else %}
+  <div class="ov-how">
+    <div class="card ov-step"><span class="num">1</span><h2 class="h3">Vlož odkaz</h2><p>Z jakéhokoli e-shopu – Alza, Datart, Mironet, menší obchody…</p></div>
+    <div class="card ov-step"><span class="num">2</span><h2 class="h3">Ověříme cenu</h2><p>U obchodů, které čtení dovolují, načteme aktuální cenu ze stránky. Ostatní neobcházíme – najdeme produkt podle názvu jinde.</p></div>
+    <div class="card ov-step"><span class="num">3</span><h2 class="h3">Uvidíš fakta</h2><p>Nejnižší cenu za 30 dní (pokud produkt sledujeme), verdikt a nejlevnější nabídky v dalších obchodech.</p></div>
+  </div>
+  <p class="ov-muted ov-foot">Ověřený odkaz si můžeš poslat dál – výsledek má vlastní adresu. Rychleji to jde s naším <a href="/rozsireni">rozšířením do prohlížeče</a>. Odkaz, který vložíš, neukládáme.</p>
+  {% endif %}
+</div></section>
+{% endblock %}
+{% block scripts %}{% if r %}<script src="{{ static('share.js') }}" defer></script>{% endif %}{% endblock %}

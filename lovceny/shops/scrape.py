@@ -154,3 +154,53 @@ def parse_product(html: str) -> ScrapeResult | None:
         name = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', html)
         return ScrapeResult(_num(m.group(1)), None, None, name.group(1) if name else None, None, None, None)
     return None
+
+
+
+
+
+def _md(html: str, prop: str) -> str | None:
+    """První hodnota schema.org microdata vlastnosti (atribut content, jinak text elementu)."""
+    for m in re.finditer(r'<[a-z][a-z0-9]*\b[^>]*\bitemprop=["\']' + prop + r'["\'][^>]*>', html, re.I):
+        tag = m.group(0)
+        c = re.search(r'\bcontent=["\']([^"\']*)["\']', tag, re.I)
+        if c and c.group(1).strip():
+            return c.group(1).strip()
+        txt = re.match(r'([^<]*)', html[m.end():m.end() + 300])
+        if txt and txt.group(1).strip():
+            return txt.group(1).strip()
+    return None
+
+
+def parse_microdata(html: str) -> ScrapeResult | None:
+    """schema.org/Product jako microdata (itemscope/itemprop) – fallback pro obchody bez JSON-LD."""
+    if not re.search(r'itemtype=["\']https?://schema\.org/Product["\']', html, re.I):
+        return None
+    price = _num(_md(html, "price") or _md(html, "lowPrice"))
+    if not price:
+        return None
+    name = _md(html, "name")
+    avail = _md(html, "availability") or ""
+    if not avail:
+        a = re.search(r'itemprop=["\']availability["\'][^>]*href=["\']([^"\']+)', html, re.I)
+        avail = a.group(1) if a else ""
+    in_stock = any(k in avail for k in ("InStock", "InStoreOnly", "LimitedAvailability", "OnlineOnly")) if avail else None
+    img = re.search(r'<img\b[^>]*itemprop=["\']image["\'][^>]*\bsrc=["\']([^"\']+)', html, re.I) or \
+        re.search(r'itemprop=["\']image["\'][^>]*content=["\']([^"\']+)', html, re.I)
+    gtin = _md(html, "gtin13") or _md(html, "gtin")
+    import html as _h
+    return ScrapeResult(price=price, original_price=None, in_stock=in_stock,
+                        name=_h.unescape(name) if name else None, image=img.group(1) if img else None,
+                        ean=gtin, category=None)
+
+
+def parse_generic(html: str) -> ScrapeResult | None:
+    """Obecný parser libovolného obchodu: JSON-LD → microdata → meta tagy."""
+    for d in _iter_jsonld(html):
+        t = d.get("@type")
+        if t == "Product" or (isinstance(t, list) and "Product" in t):
+            r = parse_product(html)
+            if r:
+                return r
+            break
+    return parse_microdata(html) or parse_product(html)
