@@ -164,7 +164,8 @@ def confirm(request: Request, token: str, db=Depends(get_db)):
         raise HTTPException(404)
     w.confirmed = True
     db.commit()
-    return tpl.TemplateResponse(request, "message.html", {"title": "Hlídání ceny potvrzeno 🔔",
+    return tpl.TemplateResponse(request, "message.html", {"title": "Hlídání ceny potvrzeno 🔔", "art": "hlidani",
+                                "art_alt": "Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny",
                                 "text": f"Dáme vědět, až {w.product.name} klesne na {czk(w.target_price)}."})
 
 

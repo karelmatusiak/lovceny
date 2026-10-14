@@ -46,7 +46,8 @@
 
 <section id="hlidani" style="padding-top:0"><div class="wrap"><div class="watch">
   <div><div class="eyebrow">🔔 Hlídání ceny</div><h2>Dáme vědět, až cena klesne</h2>
-    <p class="sub">Zadej cílovou cenu a e-mail. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, napíšeme ti. Potvrzení přes e-mail, odhlášení jedním klikem.</p></div>
+    <p class="sub">Zadej cílovou cenu a e-mail. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, napíšeme ti. Potvrzení přes e-mail, odhlášení jedním klikem.</p>
+    <picture class="watch-art"><source type="image/webp" srcset="/static/img/hlidani-720.webp"><img src="/static/img/hlidani-720.jpg" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
   <form class="card watch-form" method="post" action="/produkt/{{ p.id }}/hlidat">
     <div class="row2">
       <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (best.price if best else ''))|int if (v.suggested_target or best) else '' }}"><span>Kč</span></div></div>

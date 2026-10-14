@@ -132,3 +132,20 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}
   .deal-save{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
   .teaser-grid{grid-template-columns:1fr}
 }
+
+/* ilustrace */
+.hero-art,.section-art,.page-art,.watch-art,.empty-art,.msg-art{display:block}
+.hero-art img,.section-art img,.page-art img,.watch-art img,.empty-art img,.msg-art img{display:block;width:100%;height:auto;border-radius:24px}
+.hero-art{max-width:760px;margin:36px auto 0}
+.section-art{max-width:420px;margin:8px auto 24px}
+.deals-hero-grid{display:grid;grid-template-columns:1fr 340px;gap:32px;align-items:center}
+.page-art{max-width:340px}
+.watch-art{max-width:360px;margin-top:20px}
+.empty-art{max-width:360px;margin:8px auto 16px}
+.msg-art{max-width:320px;margin:0 auto 16px}
+@media (max-width:760px){
+  .deals-hero-grid{grid-template-columns:1fr}
+  .page-art{max-width:260px;margin:0 auto;order:2}
+  .hero-art{margin-top:28px}
+  .watch-art{display:none}
+}

@@ -4,6 +4,7 @@
 <section style="padding-top:16px"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-pridat="{{ pridat }}">
   <h1 class="cmp-title">⚖️ Porovnání cen</h1>
   {% if items|length < 2 %}
+  <picture class="empty-art"><source type="image/webp" srcset="/static/img/porovnani-720.webp"><img src="/static/img/porovnani-720.jpg" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
   <div class="notice warn cmp-empty">
     {% if items %}Do porovnání máš zatím jen <b>{{ items[0].p.name }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Porovnat</b> u karty nebo v detailu.
     {% else %}Porovnání je prázdné. U produktů klikni na <b>⚖️ Porovnat</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
