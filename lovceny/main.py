@@ -170,12 +170,13 @@ def confirm(request: Request, token: str, db=Depends(get_db)):
 
 @app.get("/hlidani/zrusit/{token}", response_class=HTMLResponse)
 def unsubscribe(request: Request, token: str, db=Depends(get_db)):
+    """Odhlášení jedním klikem: hlídání i e-mail rovnou smažeme. Opakované kliknutí nic nerozbije."""
     w = db.scalar(select(Watch).where(Watch.token == token))
-    if not w:
-        raise HTTPException(404)
-    w.active = False
-    db.commit()
-    return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "text": "Hlídání ceny je vypnuté."})
+    if w:
+        db.delete(w)
+        db.commit()
+    return tpl.TemplateResponse(request, "message.html", {
+        "title": "Odhlášeno", "text": "Hlídání ceny je zrušené a tvůj e-mail jsme u něj smazali."})
 
 
 @app.get("/obchody", response_class=HTMLResponse)
@@ -183,11 +184,36 @@ def shops(request: Request):
     return tpl.TemplateResponse(request, "shops.html", {})
 
 
-@app.get("/healthz")
-def health(db=Depends(get_db)):
+_health_cache: dict = {}
+
+
+@app.api_route("/healthz", methods=["GET", "HEAD"])
+def health(db: int = 0):
+    """Lehký endpoint pro pingy/uptime monitory: bez dotazu do DB (nebudí Neon, nepálí jeho compute).
+    /healthz?db=1 → diagnostika DB (SELECT 1 + počty, počty cachované 10 min)."""
     from .db import engine
-    return {"ok": True, "db": engine.url.get_backend_name(), "db_host": (engine.url.host or "")[:12],
-            "products": db.scalar(select(func.count(Product.id)))}
+    out = {"ok": True, "db": engine.url.get_backend_name()}
+    if not db:
+        return out
+    import time
+    from sqlalchemy import text
+    t0 = time.monotonic()
+    try:
+        with SessionLocal() as s:
+            s.execute(text("SELECT 1"))
+            out["db_ok"] = True
+            out["db_ms"] = round((time.monotonic() - t0) * 1000)
+            c = _health_cache
+            if not c or time.monotonic() - c["t"] > 600:
+                c.update(t=time.monotonic(), products=s.scalar(select(func.count(Product.id))),
+                         watches=s.scalar(select(func.count(Watch.id))))
+            out.update(products=c["products"], watches=c["watches"], counts_age_s=round(time.monotonic() - c["t"]))
+    except Exception as e:  # noqa: BLE001
+        out.update(ok=False, db_ok=False, error=type(e).__name__)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(out, status_code=503)
+    out["db_host"] = (engine.url.host or "")[:12]
+    return out
 
 
 # Staré odkazy z e-mailů (/pes/…) – trvalé přesměrování na /hlidani/…

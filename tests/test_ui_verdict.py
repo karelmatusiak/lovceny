@@ -69,7 +69,9 @@ def test_watch_routes_renamed_and_legacy_redirects():
     r = c.get("/hlidani/potvrdit/tok-123")
     assert r.status_code == 200 and "Hlídání ceny potvrzeno" in r.text
     assert c.get("/pes/zrusit/tok-123", follow_redirects=False).headers["location"] == "/hlidani/zrusit/tok-123"
-    assert "vypnuté" in c.get("/hlidani/zrusit/tok-123").text
+    assert "zrušené" in c.get("/hlidani/zrusit/tok-123").text
+    assert "zrušené" in c.get("/hlidani/zrusit/tok-123").text  # opakované kliknutí nic nerozbije
+    assert c.get("/hlidani/potvrdit/tok-123").status_code == 404  # e-mail smazán
     assert c.get("/pes/neco/tok-123", follow_redirects=False).status_code == 404
     db.close()
 
@@ -84,7 +86,7 @@ def test_watch_email_uses_new_routes(caplog):
     with caplog.at_level("WARNING"):
         create_watch(db, p, "x@y.cz", 500, False)
     log = caplog.text
-    assert "/hlidani/potvrdit/" in log and "/hlidani/zrusit/" in log and "/pes/" not in log and "psa" not in log
+    assert "/hlidani/potvrdit/" in log and "/hlidani/zrusit/" in log and "/pes/" not in log and not re.search(r"\bps(a|ovi)\b", log)
     db.close()
 
 

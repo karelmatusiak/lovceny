@@ -134,33 +134,75 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
 
 
 def create_watch(db: Session, product: Product, email: str, target: float, only_in_stock: bool) -> Watch:
+    from .emails import confirm_email
     w = Watch(product=product, email=email.strip().lower(), target_price=target, only_in_stock=only_in_stock,
               token=secrets.token_urlsafe(24))
     db.add(w)
     db.commit()
-    get_sender().send(w.email, f"Potvrď hlídání ceny: {product.name}",
-                      f"Potvrzení: /hlidani/potvrdit/{w.token}\nCílová cena: {czk(target)}\n"
-                      f"Odhlášení jedním klikem: /hlidani/zrusit/{w.token}")
+    m = confirm_email(w)
+    get_sender().send(w.email, m.subject, m.text, m.html)
     return w
 
 
+REALERT_DROP = 0.03  # znovu upozorníme, jen když cena klesne o další ≥ 3 % pod naposledy oznámenou
+
+
 def check_watches(db: Session) -> int:
+    """Volá se po každém stažení cen (fetch_prices.py). Pošle upozornění, když nejnižší cena ≤ cíl.
+    Bez duplicit: stejný pokles se oznámí jednou (Watch.notified_price). Znovu jen při dalším poklesu
+    o ≥ 3 %, nebo když cena mezitím vystoupala nad cíl a pak znovu spadla. Neúspěšné odeslání se nezapíše."""
+    from .emails import alert_email
     sent = 0
-    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+    sender = get_sender()
     for w in db.scalars(select(Watch).where(Watch.active.is_(True), Watch.confirmed.is_(True))).all():
-        if w.notified_at and w.notified_at.replace(tzinfo=w.notified_at.tzinfo or timezone.utc) > cutoff:
-            continue
         cands = [o for o in w.product.offers if o.price is not None and o.status == "ok"
                  and (not w.only_in_stock or o.in_stock)]
-        hit = min(cands, key=lambda o: o.price, default=None)
-        if hit and float(hit.price) <= float(w.target_price):
-            shop = get_shop(hit.shop)
-            get_sender().send(w.email, f"Cena klesla na {czk(hit.price)} v obchodě {shop.name if shop else hit.shop}",
-                              f"{w.product.name}\n{hit.url}\nOdhlásit: /hlidani/zrusit/{w.token}")
+        hit = min(cands, key=lambda o: float(o.price), default=None)
+        if not hit:
+            continue
+        price, target = float(hit.price), float(w.target_price)
+        if price > target:
+            if w.notified_price is not None:
+                w.notified_price = None  # cena se vrátila nad cíl → příští pokles zase oznámíme
+            continue
+        if w.notified_price is not None and price > float(w.notified_price) * (1 - REALERT_DROP):
+            continue  # tenhle pokles už jsme oznámili
+        shop = get_shop(hit.shop)
+        m = alert_email(w, hit, shop.name if shop else hit.shop, shop.affiliate_link(hit.url) if shop else hit.url)
+        if sender.send(w.email, m.subject, m.text, m.html):
             w.notified_at = datetime.now(timezone.utc)
+            w.notified_price = price
             sent += 1
+            db.commit()  # průběžně – při pádu uprostřed nepošleme nic dvakrát
     db.commit()
     return sent
+
+
+WATCH_MAX_AGE_DAYS = 730      # 24 měsíců (slib v zásadách ochrany osobních údajů)
+UNCONFIRMED_MAX_AGE_DAYS = 7
+
+
+def cleanup_watches(db: Session, now: datetime | None = None) -> dict:
+    """Smaže nepotvrzená hlídání starší 7 dnů, zrušená (neaktivní) hlídání a hlídání, u nichž od vytvoření
+    i od posledního upozornění uplynulo víc než 24 měsíců."""
+    now = now or datetime.now(timezone.utc)
+    aware = lambda d: d if d is None or d.tzinfo else d.replace(tzinfo=timezone.utc)  # noqa: E731
+    stats = {"unconfirmed": 0, "inactive": 0, "expired": 0}
+    for w in db.scalars(select(Watch)).all():
+        created, notified = aware(w.created_at), aware(w.notified_at)
+        last = max(d for d in (created, notified) if d is not None) if (created or notified) else now
+        if not w.active:
+            key = "inactive"
+        elif not w.confirmed and created and created < now - timedelta(days=UNCONFIRMED_MAX_AGE_DAYS):
+            key = "unconfirmed"
+        elif last < now - timedelta(days=WATCH_MAX_AGE_DAYS):
+            key = "expired"
+        else:
+            continue
+        db.delete(w)
+        stats[key] += 1
+    db.commit()
+    return stats
 
 
 # ---------- vyhledávání podle názvu ----------

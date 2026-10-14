@@ -19,5 +19,10 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
           DATART_FEED_URL: ${{ secrets.DATART_FEED_URL }}
-          EMAIL_BACKEND: log
+          # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.
+          EMAIL_BACKEND: ${{ secrets.EMAIL_BACKEND || 'log' }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME: Lovceny
+          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
         run: python fetch_prices.py

@@ -12,8 +12,17 @@ services:
         value: 3.12.7
       - key: DATABASE_URL
         sync: false   # vložit ručně (Neon connection string)
+      # E-maily (potvrzení hlídání): Brevo free tier. Bez BREVO_API_KEY/EMAIL_FROM se jen logují.
       - key: EMAIL_BACKEND
-        value: log
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false   # ověřený odesílatel v Brevu, např. upozorneni@lovceny.cz
+      - key: EMAIL_FROM_NAME
+        value: Lovceny
+      - key: PUBLIC_URL
+        value: https://lovceny.onrender.com   # po napojení domény změnit na https://lovceny.cz
       - key: ALZA_AFFILIATE_ID
         sync: false
       - key: DATART_AFFILIATE_ID

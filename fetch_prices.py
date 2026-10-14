@@ -17,7 +17,8 @@ from lovceny.db import SessionLocal, init_db
 from lovceny.models import Offer
 from lovceny.shops import SHOPS
 from lovceny.shops import feed as feedmod
-from lovceny.service import update_offer, apply_feed, check_watches
+from lovceny.service import update_offer, apply_feed, check_watches, cleanup_watches
+from lovceny.notify import get_sender
 
 log = logging.getLogger("fetch")
 
@@ -69,8 +70,15 @@ def main(argv=None):
         report[f"{o.shop}:{st}"] += 1
         log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
 
-    sent = check_watches(db)
-    log.info("Hlídání cen: odesláno %d upozornění", sent)
+    # 3) hlídání cen – po každém stažení; bez duplicit (viz check_watches)
+    log.info("E-maily přes: %s", get_sender().name)
+    try:
+        sent = check_watches(db)
+        log.info("Hlídání cen: odesláno %d upozornění", sent)
+    except Exception as e:  # noqa: BLE001 – upozornění nesmí shodit souhrn stahování
+        db.rollback()
+        log.error("Hlídání cen selhalo: %s", e)
+    log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
     log.info("SOUHRN: %s", dict(report))
     db.close()
     return 1 if report and all(k.endswith(("error", "blocked")) for k in report) else 0

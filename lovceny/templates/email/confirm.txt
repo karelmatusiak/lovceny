@@ -1,0 +1,13 @@
+Potvrď hlídání ceny
+
+Chceš, abychom ti napsali, až {{ p.name }} klesne na {{ w.target_price|czk }}{% if w.only_in_stock %} (jen když bude skladem){% endif %}?
+
+Potvrdit hlídání: {{ confirm_url }}
+
+Bez potvrzení hlídání nezapneme. Pokud jsi o nic nežádal(a), e-mail ignoruj – údaje do 7 dnů smažeme.
+Historie ceny: {{ product_url }}
+
+--
+Lovceny – poctivý hlídač cen
+Odhlásit hlídání: {{ unsub_url }}
+Ochrana osobních údajů: {{ base }}/ochrana-osobnich-udaju

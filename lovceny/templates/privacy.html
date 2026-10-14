@@ -23,7 +23,8 @@
   <ul>
     <li><b>Účel:</b> poslat potvrzovací e-mail (double opt-in) a později upozornění, až cena klesne na cíl.</li>
     <li><b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR) – udělený potvrzením odkazu v e-mailu. Bez potvrzení hlídání neaktivujeme. Odhlásit se lze kdykoli odkazem v e-mailu nebo na stránce zrušení.</li>
-    <li><b>Doba uložení:</b> do odhlášení / zrušení hlídání, nejdéle 24 měsíců od posledního upozornění nebo vytvoření (nepotvrzená hlídání můžeme smazat dříve).</li>
+    <li><b>Doba uložení:</b> do odhlášení – odkazem v e-mailu hlídání i e-mail okamžitě smažeme. Nepotvrzená hlídání mažeme po 7 dnech. Hlídání mažeme automaticky, když od vytvoření i od posledního upozornění uplynulo více než 24 měsíců (úklid běží s každým stažením cen).</li>
+    <li><b>Odesílání:</b> e-maily (potvrzení a „cena klesla“) odesíláme přes službu Brevo (viz bod 3). Každý e-mail obsahuje odkaz na odhlášení jedním klikem.</li>
   </ul>
 
   <h3>2.2 AI hledání (Google Gemini)</h3>
@@ -45,7 +46,8 @@
     <li><b>Render</b> – hosting aplikace, region Frankfurt (EU).</li>
     <li><b>Neon</b> – PostgreSQL databáze, region Frankfurt (EU).</li>
     <li><b>Google</b> – Gemini API (jen při AI hledání; viz výše).</li>
-    <li>Odesílání e-mailů je v MVP zatím jen logované; až napojíme poskytovatele (např. Resend / Brevo), doplníme ho sem.</li>
+    <li><b>Brevo</b> (Francie, EU) – odesílání e-mailů pro hlídání ceny; zpracovává e-mailovou adresu a obsah e-mailu (název produktu, cena, odkazy). Brevo vede o odeslaných e-mailech technický záznam (doručení, případně otevření/kliknutí podle jeho výchozího nastavení).</li>
+    <li><b>GitHub</b> (GitHub Actions) – automatické stahování cen a rozesílání upozornění; během běhu se e-mailová adresa načte z databáze a předá Brevu, v GitHubu se neukládá.</li>
   </ul>
 
   <h2>4. Cookies a úložiště v prohlížeči</h2>

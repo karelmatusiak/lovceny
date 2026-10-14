@@ -25,3 +25,17 @@ class Base(DeclarativeBase):
 def init_db():
     from . import models  # noqa: F401
     Base.metadata.create_all(engine)
+    _migrate()
+
+
+# Jednoduché doplnění sloupců do existujících tabulek (create_all je nepřidá). Idempotentní.
+_ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)")]
+
+
+def _migrate():
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    for table, col, ddl in _ADD_COLUMNS:
+        if table in insp.get_table_names() and col not in {c["name"] for c in insp.get_columns(table)}:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))

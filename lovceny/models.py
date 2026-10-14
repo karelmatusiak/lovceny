@@ -67,5 +67,7 @@ class Watch(Base):
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # cena, o které jsme naposledy psali; None = zatím nic / cena se mezitím vrátila nad cíl
+    notified_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     product: Mapped[Product] = relationship(back_populates="watches")

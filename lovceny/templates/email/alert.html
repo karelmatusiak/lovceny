@@ -1,0 +1,8 @@
+{% extends "_layout.html" %}{% block content %}
+<h1 style="font-size:22px;margin:0 0 12px">Cena klesla! 🎉</h1>
+<p style="margin:0 0 8px"><b>{{ p.name }}</b></p>
+<p style="margin:0 0 16px">Teď stojí <b style="font-size:22px;color:#0B6E4F">{{ o.price|czk }}</b> v obchodě {{ shop_name }}. Tvoje cílová cena byla {{ w.target_price|czk }}.</p>
+<p style="margin:20px 0"><a href="{{ shop_url }}" style="background:#0B6E4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Do obchodu {{ shop_name }}</a></p>
+<p style="margin:0 0 12px;font-size:14px;color:#5B6B63">Ceny se mění rychle – zkontroluj aktuální cenu v obchodě. Znovu napíšeme, jen pokud cena klesne ještě níž, nebo když nejdřív zdraží a pak znovu klesne pod cíl.</p>
+<p style="margin:0;font-size:14px"><a href="{{ product_url }}" style="color:#0B6E4F">Historie ceny a verdikt</a></p>
+{% endblock %}

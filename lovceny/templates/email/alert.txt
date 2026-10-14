@@ -1,0 +1,14 @@
+Cena klesla!
+
+{{ p.name }}
+Teď stojí {{ o.price|czk }} v obchodě {{ shop_name }}. Tvoje cílová cena byla {{ w.target_price|czk }}.
+
+Do obchodu: {{ shop_url }}
+Historie ceny a verdikt: {{ product_url }}
+
+Ceny se mění rychle – zkontroluj aktuální cenu v obchodě. Znovu napíšeme, jen pokud cena klesne ještě níž, nebo když nejdřív zdraží a pak znovu klesne pod cíl.
+
+--
+Lovceny – poctivý hlídač cen
+Odhlásit hlídání: {{ unsub_url }}
+Ochrana osobních údajů: {{ base }}/ochrana-osobnich-udaju

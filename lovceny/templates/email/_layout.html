@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ subject }}</title></head>
+<body style="margin:0;padding:0;background:#F4F7F5;font-family:Arial,Helvetica,sans-serif;color:#13251C">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F7F5"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;border:1px solid #E1E8E4">
+<tr><td style="padding:24px 28px 8px"><a href="{{ base }}/"><img src="{{ logo }}" width="131" height="46" alt="lovceny" style="display:block;border:0"></a></td></tr>
+<tr><td style="padding:8px 28px 24px;font-size:16px;line-height:1.55">
+{% block content %}{% endblock %}
+</td></tr>
+<tr><td style="padding:16px 28px 24px;border-top:1px solid #E1E8E4;font-size:12px;line-height:1.5;color:#5B6B63">
+Tento e-mail ti posíláme, protože sis na Lovceny nastavil(a) hlídání ceny.
+<a href="{{ unsub_url }}" style="color:#5B6B63">Odhlásit hlídání jedním klikem</a> ·
+<a href="{{ base }}/ochrana-osobnich-udaju" style="color:#5B6B63">Ochrana osobních údajů</a>
+</td></tr></table></td></tr></table>
+</body></html>
