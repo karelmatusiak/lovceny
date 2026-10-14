@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Rozšíření Lovceny do prohlížeče (Chrome, Firefox) – ověř slevu přímo v e-shopu{% endblock %}
+{% block description %}Rozšíření Lovceny ukáže přímo na stránce produktu v e-shopu verdikt, nejnižší cenu za 30 dní a nejlevnější nabídku jinde. Bez sledování, jen pro podporované obchody.{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap">
+  <div class="prose">
+    <div class="eyebrow">Rozšíření do prohlížeče</div>
+    <h1>Lovceny přímo v e-shopu</h1>
+    <p class="sub">Na stránce produktu v podporovaném obchodě se v rohu ukáže malý odznak: verdikt, nejnižší cena za 30 dní (pokud produkt sledujeme) a nejlevnější nabídka jinde. Žádné sledování, žádná reklama.</p>
+  </div>
+  <div class="ext-grid">
+    <figure class="card ext-demo" aria-label="Ukázka odznaku rozšíření">
+      <div class="ext-badge" aria-hidden="true">
+        <div class="ext-bh"><img src="{{ static('brand/ikona.svg') }}" alt="" width="22" height="22"><b>Lovceny</b><span>×</span></div>
+        <div class="ext-bv">⚠️ Za 30 dní bylo levněji</div>
+        <div class="ext-br">Nejnižší cena za 30 dní: 24&nbsp;990&nbsp;Kč (2. 10. 2026)</div>
+        <div class="ext-be">Jinde levněji: <b>24&nbsp;490&nbsp;Kč</b> (Mironet)</div>
+        <div class="ext-bl">Podrobnosti na Lovceny →</div>
+      </div>
+      <figcaption>Ukázka odznaku (ilustrační ceny). Odznak jde zavřít křížkem.</figcaption>
+    </figure>
+    <div class="card ext-status">
+      <h2 class="h3">Stav: čeká na schválení v obchodech s rozšířeními</h2>
+      <p>Než rozšíření schválí Chrome Web Store a Firefox Add-ons, můžeš si ho nainstalovat ručně (verze {{ version }}):</p>
+      <p class="ext-dl"><a class="btn btn-primary" href="/rozsireni/lovceny-chrome.zip" download>Stáhnout pro Chrome / Edge</a> <a class="btn btn-ghost" href="/rozsireni/lovceny-firefox.zip" download>Stáhnout pro Firefox</a></p>
+    </div>
+  </div>
+
+  <div class="ext-steps">
+    <article class="card ext-step" id="chrome">
+      <h2 class="h3">Chrome, Edge, Brave (načíst rozbalené)</h2>
+      <ol>
+        <li>Stáhni <a href="/rozsireni/lovceny-chrome.zip">lovceny-chrome.zip</a> a rozbal ho do složky, kterou nesmažeš.</li>
+        <li>Otevři <code>chrome://extensions</code> (v Edge <code>edge://extensions</code>).</li>
+        <li>Vpravo nahoře zapni <b>Režim pro vývojáře</b>.</li>
+        <li>Klikni na <b>Načíst rozbalené</b> a vyber rozbalenou složku.</li>
+        <li>Otevři produkt v podporovaném obchodě – vpravo dole se ukáže odznak Lovceny.</li>
+      </ol>
+    </article>
+    <article class="card ext-step" id="firefox">
+      <h2 class="h3">Firefox (dočasně, do restartu)</h2>
+      <ol>
+        <li>Stáhni <a href="/rozsireni/lovceny-firefox.zip">lovceny-firefox.zip</a> (Firefox 140 a novější).</li>
+        <li>Otevři <code>about:debugging#/runtime/this-firefox</code>.</li>
+        <li>Klikni na <b>Načíst dočasný doplněk…</b> a vyber stažený zip.</li>
+        <li>Firefox takto načtený doplněk po restartu odebere. Trvalá instalace bude možná po schválení na addons.mozilla.org.</li>
+      </ol>
+    </article>
+  </div>
+
+  <div class="prose">
+    <h2 id="obchody">Kde rozšíření funguje</h2>
+    <p>Jen v obchodech, které Lovceny sledují: {{ shops|join(', ') }}. Na jiných webech rozšíření neběží a nemá k nim přístup.</p>
+    <h2 id="soukromi">Soukromí</h2>
+    <ul>
+      <li>Na stránce produktu pošle na Lovceny jen <b>adresu produktu, název a cenu</b> (ze strukturovaných dat stránky). Nic dalšího ze stránky nečte.</li>
+      <li>Žádná analytika, identifikátory ani cookies. Dotazy z rozšíření neukládáme do databáze ani do statistiky.</li>
+      <li>Oprávnění: přístup jen k podporovaným obchodům a k Lovceny, plus „activeTab“ – po kliknutí na ikonu rozšíření otevře ověření aktuální stránky.</li>
+      <li>Podrobně v <a href="/ochrana-osobnich-udaju#rozsireni">zásadách ochrany osobních údajů</a>.</li>
+    </ul>
+    <p>Bez instalace to jde taky: <a href="/over-slevu">Ověř slevu</a> – vlož odkaz z e-shopu.</p>
+  </div>
+</div></section>
+{% endblock %}
