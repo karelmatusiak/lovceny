@@ -3,17 +3,22 @@
 Poctivý hlídač cen elektroniky a domácích spotřebičů (mobily, TV a audio, foto, gaming, chytrá domácnost, velké i malé spotřebiče – pračky, lednice, myčky, vysavače, kávovary): vložíš odkaz z e-shopu, dostaneš historii ceny a verdikt
 **Kupuj / Počkej / Falešná sleva**, a můžeš si nastavit **hlídání ceny** 🔔.
 
-Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite), Chart.js.
+Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite). Graf historie na detailu je inline SVG ze serveru (bez JS knihovny); Chart.js zůstává jen na stránce porovnání.
 
 ## Funkce MVP
 - **Hledání** (`/hledat?q=`): odkaz z podporovaného obchodu → založí sledovaný produkt; text → hledá ve sledovaných produktech (název/EAN).
-- **Stránka produktu**: ceny podle obchodů (řazeno jen podle ceny), graf 30/90/365 dní s minimem a mediánem, verdikt.
+- **Stránka produktu**: ceny podle obchodů (řazeno jen podle ceny), verdikt a **historie ceny** (`lovceny/chart.py`): inline SVG vykreslené na serveru, přepínač 30 dní / 90 dní / celá historie bez JS (radio + CSS), aktuální cena, minimum (zvýrazněné), průměr, štítek verdiktu Kupuj/Počkej v grafu a krátké vysvětlení. Užší varianta SVG pro mobil. Při 0–1 záznamu srozumitelná hláška místo grafu.
 - **Verdikt** (`lovceny/verdict.py`): Kupuj = do 3 % nad 90denním minimem; Falešná sleva = „původní“ cena > 105 % minima za 30 dní před akcí, nebo skok o ≥ 12 % během posledních 3 týdnů, který „sleva“ jen vrátila; jinak Počkej. Pod 7 dny dat → „Málo dat“.
 - **Hlídání ceny**: e-mail + cílová cena v tabulce `watches`, double opt-in (`/hlidani/potvrdit/<token>`; staré `/pes/…` přesměrovávají), odhlášení jedním klikem (záznam se rovnou smaže). E-maily posílá **Brevo** (`EMAIL_BACKEND=brevo`, viz níže), jinak jen log.
 - **Upozornění „cena klesla“**: `check_watches()` běží po každém stažení cen (`fetch_prices.py` v GitHub Actions). Stejný pokles se oznámí jen jednou (`watches.notified_price`); znovu jen při dalším poklesu o ≥ 3 % nebo po návratu ceny nad cíl. Neodeslaný e-mail se zkusí při dalším běhu.
 - **Úklid** (`cleanup_watches()`, po každém stažení): nepotvrzená hlídání po 7 dnech, hlídání bez aktivity 24 měsíců (od vytvoření i posledního upozornění).
 - **Stahovač** `fetch_prices.py`: čte JSON-LD `schema.org/Product` (fallback meta tagy), respektuje robots.txt, min. 6 s mezi požadavky na doménu, identifikuje se jako `LovcenyBot`. Ochranu proti botům **neobchází**: při 403/429/JS challenge označí nabídku `blocked`.
-- **Demo data**: `seed.py` přidá skutečné produkty z Planea a vygenerovanou historii s `price_points.is_demo = true` (v UI označeno). Smazání: `python seed.py --purge-demo`.
+- **Katalog** (`seed_catalog.json`, 96 produktů ve 12 kategoriích – telefony, TV, notebooky, sluchátka, pračky, lednice, kávovary, vysavače, konzole, hodinky, foťáky, chytrá domácnost) z obchodů, které čtení dovolují (Mironet, Softcom, Svět počítačů, AB-COM, 4Home, Vestavné spotřebiče). `seed.py` je idempotentní (klíč = URL nabídky). **Spuštění na produkci:** GitHub → Actions → *Naplnit databázi (katalog produktů)* → *Run workflow* (volby např. `--no-demo`, `--dry-run`, `--category pracky`). Používá secret `DATABASE_URL`. Ceny pak udržuje `fetch.yml`.
+- **Sledovat tento produkt**: výsledek živého hledání otevře náhled `/nahled?url=` (data z cache hledání, nic se znovu nestahuje) s tlačítkem *Sledovat tento produkt* (`POST /sledovat`). Už sledovaná URL = přesměrování (dedup). Nové produkty: max. 10/h na IP (ukládá se jen hash IP na 24 h) a 300/den celkem.
+- **Kategorie a SEO**: `/kategorie`, `/kategorie/<slug>` (+ `/nejlevnejsi`, `/ve-sleve`) s unikátním titulkem a popisem; JSON-LD `Product` + `AggregateOffer`, `BreadcrumbList`, `ItemList`; `sitemap.xml`, `robots.txt`; kanonické URL a OpenGraph podle `PUBLIC_URL` (výchozí `https://lovceny.onrender.com`, po napojení domény nastavit `https://lovceny.cz`). Hledání, porovnání a náhled jsou `noindex`. Zařazení do kategorie: `lovceny/categories.py` (`classify`, i pro nově přidané produkty).
+- **Upozornění v prohlížeči (Web Push)**: alternativa k e-mailu u Hlídat cenu. Service worker `/sw.js`, odběr `POST /api/push/odebirat` (jen endpointy známých push služeb), odhlášení tlačítkem, z oznámení („Přestat hlídat“) nebo `/hlidani/push/zrusit/<token>`. Posílá `fetch_prices.py` po stažení cen (`lovceny/push.py`, stejná pravidla proti duplicitám jako e-mail; zaniklé odběry 404/410 maže). Bez `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` je funkce skrytá. Klíče: base64url (veřejný = nekomprimovaný bod P-256, soukromý = 32 B), `VAPID_SUBJECT` = `mailto:…`.
+- **Výkon a přístupnost**: brotli/gzip (`brotli-asgi`), statické soubory s `?v=<hash>` a `Cache-Control: immutable` na rok, JS `defer`, rozměry obrázků, systémová písma (žádné webfonty k preloadu), skip link, viditelný fokus, landmarky, popisky formulářů, tap targety ≥ 44 px.
+- **Demo data**: `seed.py` přidá i skutečné produkty z Planea a vygenerovanou historii s `price_points.is_demo = true` (v UI označeno). Smazání: `python seed.py --purge-demo`.
 
 ## Obchody (test 14. 10. 2026 z vývojového serveru)
 | Obchod | Zdroj | Stav |
@@ -76,9 +81,9 @@ Tabulky se vytvoří automaticky (`create_all`). Pro další vývoj doporučujem
 ## Nasazení zdarma
 1. **GitHub**: vytvořte soukromý repozitář a pushněte (`git remote add origin … && git push -u origin main`).
 2. **Neon** (neon.tech): nový projekt, region Frankfurt, databáze `lovceny`. Zkopírujte *connection string* (`postgresql://…?sslmode=require`).
-   Lokálně jednou spusťte `DATABASE_URL=<neon> python seed.py` (nebo `--no-demo`).
-3. **Render** (render.com): *New → Blueprint* → vyberte repozitář (načte `render.yaml`). Vyplňte `DATABASE_URL` (Neon), `BREVO_API_KEY`, `EMAIL_FROM`, volitelně `GEMINI_API_KEY`. Free instance po 15 min nečinnosti usíná, první načtení trvá ~1 min (viz „Aby Render neusínal“).
-4. **GitHub Actions secrets** (Settings → Secrets and variables → Actions): `DATABASE_URL` (Neon), `EMAIL_BACKEND` = `brevo`, `BREVO_API_KEY`, `EMAIL_FROM`; volitelně `ALZA_FEED_URL`, `DATART_FEED_URL`. Volitelná *variable* `PUBLIC_URL` (výchozí `https://lovceny.onrender.com`). Workflow `.github/workflows/fetch.yml` běží 3× denně (5:17, 11:17, 17:17 UTC), ručně přes *Run workflow*; po stažení posílá upozornění a uklízí stará hlídání.
+   Naplnění: GitHub → Actions → *Naplnit databázi (katalog produktů)* → *Run workflow* (idempotentní, lze spustit opakovaně).
+3. **Render** (render.com): *New → Blueprint* → vyberte repozitář (načte `render.yaml`). Vyplňte `DATABASE_URL` (Neon), `BREVO_API_KEY`, `EMAIL_FROM`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (+ `VAPID_SUBJECT`), volitelně `GEMINI_API_KEY`. Free instance po 15 min nečinnosti usíná, první načtení trvá ~1 min (viz „Aby Render neusínal“).
+4. **GitHub Actions secrets** (Settings → Secrets and variables → Actions): `DATABASE_URL` (Neon), `EMAIL_BACKEND` = `brevo`, `BREVO_API_KEY`, `EMAIL_FROM`; pro upozornění v prohlížeči `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (stejné hodnoty jako v Renderu); volitelně `ALZA_FEED_URL`, `DATART_FEED_URL`. Volitelná *variable* `PUBLIC_URL` (výchozí `https://lovceny.onrender.com`). Workflow `.github/workflows/fetch.yml` běží 3× denně (5:17, 11:17, 17:17 UTC), ručně přes *Run workflow*; po stažení posílá upozornění a uklízí stará hlídání.
 5. Doména: v Renderu *Custom domain* `lovceny.cz` + DNS CNAME u registrátora.
 
 ### E-maily přes Brevo (free tier)

@@ -18,7 +18,7 @@
     <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
     <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Falešná sleva</span></div>
   </div>
-  <picture class="hero-art"><source type="image/webp" srcset="/static/img/hero-720.webp 720w, /static/img/hero-1200.webp 1200w" sizes="(max-width:560px) 92vw, 760px"><img src="/static/img/hero-1200.jpg" srcset="/static/img/hero-720.jpg 720w, /static/img/hero-1200.jpg 1200w" sizes="(max-width:560px) 92vw, 760px" width="1200" height="674" alt="Ilustrace: lupa nad grafem klesající ceny, kolem ní mobil, sluchátka, notebook, chytré hodinky, pračka a kávovar" fetchpriority="high" decoding="async"></picture>
+  <picture class="hero-art"><source type="image/webp" srcset="{{ static('img/hero-720.webp') }} 720w, {{ static('img/hero-1200.webp') }} 1200w" sizes="(max-width:560px) 92vw, 760px"><img src="{{ static('img/hero-1200.jpg') }}" srcset="{{ static('img/hero-720.jpg') }} 720w, {{ static('img/hero-1200.jpg') }} 1200w" sizes="(max-width:560px) 92vw, 760px" width="1200" height="674" alt="Ilustrace: lupa nad grafem klesající ceny, kolem ní mobil, sluchátka, notebook, chytré hodinky, pračka a kávovar" fetchpriority="high" decoding="async"></picture>
 </div></header>
 
 {% if deals %}
@@ -49,7 +49,7 @@
 
 <section id="jak"><div class="wrap center">
   <div class="eyebrow">Jak to funguje</div><h2>Tři kroky, žádná instalace</h2>
-  <picture class="section-art"><source type="image/webp" srcset="/static/img/porovnani-720.webp"><img src="/static/img/porovnani-720.jpg" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" loading="lazy" decoding="async"></picture>
+  <picture class="section-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" loading="lazy" decoding="async"></picture>
   <div class="steps" style="text-align:left">
     <div class="step"><div class="num">1</div><h3>Vlož</h3><p>Zkopíruj odkaz na produkt z e-shopu nebo napiš jeho název.</p></div>
     <div class="step"><div class="num">2</div><h3>Porovnej</h3><p>Uvidíš ceny v obchodech, historii a jasný verdikt.</p></div>

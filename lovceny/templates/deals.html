@@ -7,14 +7,14 @@
   <div class="eyebrow">Poctivý žebříček</div>
   <h1>Skutečné slevy</h1>
   <p class="lead deals-lead">Produkty, jejichž aktuální cena je u minima za 90 dní (verdikt <b>Kupuj</b>). Řazeno podle úspory oproti obvyklé ceně (medián 90 dní) – ne podle toho, co obchod napsal na cedulku.</p>
-  </div><picture class="page-art"><source type="image/webp" srcset="/static/img/slevy-720.webp"><img src="/static/img/slevy-720.jpg" width="720" height="480" alt="Ilustrace: přeškrtnutá přifouknutá cenovka vedle poctivé cenovky a štít se zatržítkem" fetchpriority="high" decoding="async"></picture>
+  </div><picture class="page-art"><source type="image/webp" srcset="{{ static('img/slevy-720.webp') }}"><img src="{{ static('img/slevy-720.jpg') }}" width="720" height="480" alt="Ilustrace: přeškrtnutá přifouknutá cenovka vedle poctivé cenovky a štít se zatržítkem" fetchpriority="high" decoding="async"></picture>
 </div></section>
 
 <section style="padding-top:8px"><div class="wrap">
   {% if buys %}
-  <div class="deals-list" role="list">
+  <div class="deals-list">
   {% for r in buys %}
-    <article class="card deal-row" role="listitem">
+    <article class="card deal-row">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}<img src="{{ r.product.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
         <div class="deal-info">
@@ -51,9 +51,9 @@
   <h2>⚠️ Pozor na falešné slevy</h2>
   <p class="sub">Verdikt <b>Falešná sleva</b>: „původní“ cena je přifouknutá, nebo cena těsně před akcí skokově vyrostla. Obchod tvrdí slevu, historie říká něco jiného.</p>
   {% if fakes %}
-  <div class="deals-list" role="list">
+  <div class="deals-list">
   {% for r in fakes %}
-    <article class="card deal-row deal-fake" role="listitem">
+    <article class="card deal-row deal-fake">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}<img src="{{ r.product.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
         <div class="deal-info">

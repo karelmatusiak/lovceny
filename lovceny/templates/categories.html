@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Kategorie elektroniky a spotřebičů – ceny a historie | Lovceny{% endblock %}
+{% block description %}Telefony, televize, notebooky, sluchátka, pračky, lednice, kávovary, vysavače, konzole, hodinky, foťáky a chytrá domácnost. Poctivé ceny s historií.{% endblock %}
+{% block body %}
+<section class="cat-hero"><div class="wrap">
+  <div class="eyebrow">Kategorie</div>
+  <h1 class="page-h1">Co hlídáme</h1>
+  <p class="lead cat-lead">Vyber kategorii a uvidíš nejnižší ceny z českých obchodů, historii ceny a verdikt Kupuj/Počkej.</p>
+</div></section>
+<section style="padding-top:8px"><div class="wrap">
+  <ul class="cat-cards">{% for c in CATEGORIES %}
+    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ c.icon }}</span>
+      <span><b>{{ c.name }}</b><small>{% set n = counts.get(c.slug, 0) %}{{ n }} {% if n == 1 %}produkt{% elif 1 < n < 5 %}produkty{% else %}produktů{% endif %}</small></span></a></li>{% endfor %}
+  </ul>
+</div></section>
+{% endblock %}

@@ -4,11 +4,11 @@
 <section style="padding-top:16px"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-pridat="{{ pridat }}">
   <h1 class="cmp-title">⚖️ Porovnání cen</h1>
   {% if items|length < 2 %}
-  <picture class="empty-art"><source type="image/webp" srcset="/static/img/porovnani-720.webp"><img src="/static/img/porovnani-720.jpg" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
+  <picture class="empty-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
   <div class="notice warn cmp-empty">
     {% if items %}Do porovnání máš zatím jen <b>{{ items[0].p.name }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Porovnat</b> u karty nebo v detailu.
     {% else %}Porovnání je prázdné. U produktů klikni na <b>⚖️ Porovnat</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
-    <a href="/">Najít produkty →</a>
+    <a class="btn btn-ghost" href="/">Najít produkty →</a>
   </div>
   {% endif %}
   {% if items %}
@@ -19,7 +19,7 @@
       {% for it in items %}{% set p = it.p %}
       <article class="card cmp-col" style="border-top:5px solid {{ it.color }}">
         <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ p.name }} z porovnání">✕ Odebrat</button>
-        <div class="cmp-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+        <div class="cmp-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" width="60" height="60" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}📦{% endif %}</div>
         <h2 class="cmp-name"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small> v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}</small>{% else %}cena bude doplněna{% endif %}</dd></div>

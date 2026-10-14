@@ -1,5 +1,8 @@
 {% extends "base.html" %}{% from "_macros.html" import badge, cmp_button %}
-{% block title %}{{ p.name }} – Lovceny{% endblock %}
+{% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% endif %}, historie a verdikt | Lovceny{% endblock %}
+{% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
+{% block og_type %}product{% endblock %}
+{% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ p.image_url }}">{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block body %}
 <section style="padding-top:12px"><div class="wrap">
   {% if msg %}<div class="notice warn">{{ msg }}</div>{% endif %}
@@ -7,7 +10,7 @@
   <div class="card product" style="margin-top:12px">
     <div class="p-info">
       <div class="p-head">
-        <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="">{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" width="60" height="60" fetchpriority="high" decoding="async" referrerpolicy="no-referrer">{% else %}📦{% endif %}</div>
         <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{{ p.category or '' }}{% if p.ean %} · EAN {{ p.ean }}{% endif %}</div></div>
       </div>
       <div class="p-verdict-row">{{ badge(v, big=true) }}{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}</div>
@@ -16,25 +19,41 @@
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
-      <div class="stats">
-        <div class="stat"><small>Minimum 90 dní</small><strong>{{ v.min90|czk }}</strong></div>
-        <div class="stat"><small>Medián 90 dní</small><strong>{{ v.median90|czk }}</strong></div>
-        <div class="stat"><small>Maximum 90 dní</small><strong>{{ v.max90|czk }}</strong></div>
-      </div>
+      {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
     </div>
     <div class="p-chart">
-      <div class="chart-top"><h3>Historie ceny</h3>
-        <div class="seg" id="seg"><button data-d="30">30 dní</button><button data-d="90" class="on">90 dní</button><button data-d="365">365 dní</button></div></div>
-      {% if chart_json and '"data"' in chart_json %}<div style="position:relative;height:300px"><canvas id="chart"></canvas></div>
-      {% else %}<p class="muted" style="padding:40px 0">Historie zatím není k dispozici.</p>{% endif %}
+      <div class="chart-top"><h2 class="h3" id="hist-h">Historie ceny</h2></div>
+      {% if chart_ranges[2].n == 0 %}
+      <div class="chart-empty"><p><b>Historie zatím není k dispozici.</b> Cenu začneme zapisovat při nejbližším stahování (3× denně).</p></div>
+      {% else %}
+      <div class="chart-box" role="group" aria-labelledby="hist-h">
+        {% set def_key = '90' if chart_ranges[1].n >= 2 else 'all' %}
+        {% for r in chart_ranges %}<input class="ct-radio sr-only" type="radio" name="ct" id="ct-{{ r.key }}" value="{{ r.key }}"{% if r.key == def_key %} checked{% endif %}>{% endfor %}
+        <div class="seg ct-seg">{% for r in chart_ranges %}<label for="ct-{{ r.key }}">{{ r.label }}</label>{% endfor %}</div>
+        {% for r in chart_ranges %}
+        <div class="ct-panel" id="cp-{{ r.key }}">
+          <dl class="ct-stats">
+            <div class="cs-cur"><dt>Aktuálně</dt><dd>{{ r.current|czk }}</dd></div>
+            <div class="cs-min"><dt>Minimum</dt><dd>{{ r.min|czk }}{% if r.min_date %}<small>{{ r.min_date.day }}. {{ r.min_date.month }}. {{ r.min_date.year }}</small>{% endif %}</dd></div>
+            <div class="cs-avg"><dt>Průměr</dt><dd>{{ r.avg|czk }}</dd></div>
+          </dl>
+          {% if r.n >= 2 %}<div class="ct-svg ct-wide">{{ r.svg|safe }}</div><div class="ct-svg ct-narrow">{{ r.svg_m|safe }}</div>
+          {% elif r.n == 1 %}<div class="chart-empty"><p>Za toto období máme zatím jen <b>jeden záznam</b> ({{ r.current|czk }}). Graf ukážeme od druhého dne sledování.</p></div>
+          {% else %}<div class="chart-empty"><p>Za toto období zatím nemáme žádné ceny.</p></div>{% endif %}
+          {% if r.has_demo %}<p class="ct-demo">Obsahuje ukázková (vygenerovaná) data.</p>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <p class="ct-note v-{{ v.code }}"><span aria-hidden="true">{{ v.icon }}</span> {{ chart_note }}</p>
       <div class="offers">
         {% for o in offers %}{% set s = get_shop(o.shop) %}
         <div class="offer">
           <div><b style="color:{{ s.color }}">●</b> {{ s.name }}
-            <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:var(--amber)">Není skladem</span>{% endif %}
-            {% elif o.status=='pending' %}<span style="color:var(--amber)">Cena bude doplněna{% if s.source=='feed' %} z feedu obchodu{% endif %}</span>
-            {% elif o.status=='blocked' %}<span style="color:var(--red)">Obchod blokuje automatické čtení</span>
-            {% else %}<span style="color:var(--red)">Chyba načtení</span>{% endif %}</div></div>
+            <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:#8A5200">Není skladem</span>{% endif %}
+            {% elif o.status=='pending' %}<span style="color:#8A5200">Cena bude doplněna{% if s.source=='feed' %} z feedu obchodu{% endif %}</span>
+            {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>
+            {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
           <a href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu →</a>
         </div>{% endfor %}
@@ -46,8 +65,8 @@
 
 <section id="hlidani" style="padding-top:0"><div class="wrap"><div class="watch">
   <div><div class="eyebrow">🔔 Hlídání ceny</div><h2>Dáme vědět, až cena klesne</h2>
-    <p class="sub">Zadej cílovou cenu a e-mail. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, napíšeme ti. Potvrzení přes e-mail, odhlášení jedním klikem.</p>
-    <picture class="watch-art"><source type="image/webp" srcset="/static/img/hlidani-720.webp"><img src="/static/img/hlidani-720.jpg" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
+    <p class="sub">Zadej cílovou cenu{% if push_key %} a vyber, jak ti dáme vědět: e-mailem, nebo oznámením v prohlížeči{% else %} a e-mail{% endif %}. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, ozveme se. Odhlášení jedním klikem.</p>
+    <picture class="watch-art"><source type="image/webp" srcset="{{ static('img/hlidani-720.webp') }}"><img src="{{ static('img/hlidani-720.jpg') }}" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
   <form class="card watch-form" method="post" action="/produkt/{{ p.id }}/hlidat">
     <div class="row2">
       <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (best.price if best else ''))|int if (v.suggested_target or best) else '' }}"><span>Kč</span></div></div>
@@ -57,38 +76,20 @@
     <button class="btn btn-primary" type="submit">🔔 Hlídat cenu</button>
     {% if ok %}<div class="ok" style="display:block">Hotovo! Poslali jsme ti potvrzovací e-mail (v MVP jen do logu).</div>{% endif %}
     <p class="small">Žádný spam. E-mail použijeme jen pro toto hlídání ceny.</p>
+    {% if push_key %}
+    <div class="push-box" id="push-box" data-vapid="{{ push_key }}" data-pid="{{ p.id }}">
+      <div class="or"><span>nebo bez e-mailu</span></div>
+      <div class="push-ui" hidden>
+        <p class="push-lead"><b>Upozornění v prohlížeči.</b> Pošleme oznámení do tohoto zařízení, jakmile cena klesne na cílovou cenu výše. Nepotřebujeme e-mail.</p>
+        <button type="button" class="btn btn-push" id="push-on"><span aria-hidden="true">🔔</span> Zapnout upozornění v prohlížeči</button>
+        <button type="button" class="btn btn-push-off" id="push-off" hidden>Vypnout upozornění v prohlížeči</button>
+        <p class="push-msg" id="push-msg" role="status" aria-live="polite"></p>
+      </div>
+      <p class="push-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje (na iPhonu je nutné přidat Lovceny na plochu). Použij prosím e-mail.</p>
+      <noscript><p class="small">Upozornění v prohlížeči vyžadují JavaScript. E-mail funguje i bez něj.</p></noscript>
+    </div>
+    {% endif %}
   </form>
 </div></div></section>
 {% endblock %}
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script>
-const C = {{ chart_json|safe }};
-const el = document.getElementById('chart');
-if (el && window.Chart) {
-  let chart;
-  function draw(days){
-    const cut = new Date(Date.now() - days*864e5).toISOString().slice(0,10);
-    const labels = [...new Set(C.datasets.flatMap(d => d.data.map(p => p.x)))].filter(x => x >= cut).sort();
-    const ds = C.datasets.map(d => {
-      const m = Object.fromEntries(d.data.map(p => [p.x, p.y]));
-      const demo = Object.fromEntries(d.data.map(p => [p.x, p.demo]));
-      return {label: d.label, data: labels.map(l => m[l] ?? null), borderColor: d.color, backgroundColor: d.color,
-        spanGaps: true, tension: .25, pointRadius: labels.map(l => demo[l] === false ? 3 : 0), borderWidth: 2.5,
-        segment: {borderDash: ctx => demo[labels[ctx.p1DataIndex]] ? [5,4] : undefined}};
-    });
-    if (C.min) ds.push({label: 'Minimum 90 dní', data: labels.map(() => C.min), borderColor: '#169B5B', borderDash: [2,3], pointRadius: 0, borderWidth: 1.5});
-    if (C.median) ds.push({label: 'Medián 90 dní', data: labels.map(() => C.median), borderColor: '#93A29A', borderDash: [6,4], pointRadius: 0, borderWidth: 1.5});
-    if (chart) chart.destroy();
-    chart = new Chart(el, {type: 'line', data: {labels, datasets: ds}, options: {maintainAspectRatio: false, animation: false,
-      interaction: {mode: 'index', intersect: false},
-      plugins: {legend: {position: 'bottom', labels: {boxWidth: 14, boxHeight: 3}},
-        tooltip: {callbacks: {label: c => c.raw == null ? null : `${c.dataset.label}: ${Math.round(c.raw).toLocaleString('cs-CZ')} Kč`}}},
-      scales: {y: {ticks: {callback: v => v.toLocaleString('cs-CZ') + ' Kč'}}, x: {ticks: {maxTicksLimit: 8}}}}});
-  }
-  document.querySelectorAll('#seg button').forEach(b => b.onclick = () => {
-    document.querySelectorAll('#seg button').forEach(x => x.classList.remove('on')); b.classList.add('on'); draw(+b.dataset.d); });
-  draw(90);
-}
-</script>
-{% endblock %}
+{% block scripts %}{% if push_key %}<script src="{{ static('push.js') }}" defer></script>{% endif %}{% endblock %}
