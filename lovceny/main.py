@@ -75,8 +75,8 @@ def search(request: Request, q: str = "", db=Depends(get_db)):
     return tpl.TemplateResponse(request, "search.html", {"q": q, "results": results, "error": None})
 
 
-@app.get("/produkt/{pid}-{slug}", response_class=HTMLResponse)
-@app.get("/produkt/{pid}", response_class=HTMLResponse)
+@app.get("/produkt/{pid:int}-{slug}", response_class=HTMLResponse)
+@app.get("/produkt/{pid:int}", response_class=HTMLResponse)
 def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str = "", db=Depends(get_db)):
     p = db.get(Product, pid)
     if not p:
