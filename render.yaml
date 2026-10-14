@@ -39,3 +39,8 @@ services:
         sync: false
       - key: GEMINI_DAILY_CAP
         value: "900"
+      # Admin /admin (statistiky). Bez tokenu je admin vypnutý (404).
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: IMG_CACHE_MAX_MB
+        value: "150"
