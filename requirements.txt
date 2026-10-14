@@ -8,3 +8,4 @@ httpx>=0.27
 pytest>=8
 pywebpush>=2.0
 brotli-asgi>=1.4
+Pillow>=10.4

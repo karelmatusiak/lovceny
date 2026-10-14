@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Admin – statistiky | Lovceny{% endblock %}
+{% block body %}
+<section style="padding-top:16px"><div class="wrap admin">
+  <div class="eyebrow">Admin</div><h1 class="page-h1">Statistiky návštěvnosti</h1>
+  <p class="sub">Anonymní data bez cookies a osobních údajů. Unikátní návštěvníci = denní otisky (sůl se každý den mění a po 24 h mažeme).</p>
+  <nav class="adm-seg" aria-label="Období">{% for d in (7, 30, 90) %}<a href="/admin?dni={{ d }}"{% if d == dni %} aria-current="page"{% endif %}>{{ d }} dní</a>{% endfor %}<a href="/stav">Stav obchodů →</a></nav>
+  <div class="adm-kpis">
+    <div class="card kpi"><span>Zobrazení</span><b>{{ r.total_views }}</b><small>za {{ dni }} dní</small></div>
+    <div class="card kpi"><span>Návštěvníci dnes</span><b>{{ r.today_uniques }}</b><small>unikátní (dnešní otisk)</small></div>
+    <div class="card kpi"><span>Součet denních unikátů</span><b>{{ r.sum_uniques }}</b><small>za {{ dni }} dní</small></div>
+    <div class="card kpi"><span>Hledání bez výsledků</span><b>{{ r.zero_searches|length }}</b><small>různých dotazů</small></div>
+  </div>
+  {% set mx = (r.series|map(attribute='views')|max) or 1 %}
+  <div class="card adm-card">
+    <h2 class="h3">Zobrazení po dnech</h2>
+    <div class="adm-chart" role="img" aria-label="Graf zobrazení po dnech">{% for s in r.series %}<span class="adm-bar" style="--h:{{ (s.views / mx * 100)|round|int }}%" title="{{ s.day }}: {{ s.views }} zobrazení{% if s.uniques is not none %}, {{ s.uniques }} unikátních{% endif %}"></span>{% endfor %}</div>
+    <div class="st-axis" aria-hidden="true"><span>{{ r.series[0].day }}</span><span>{{ r.series[-1].day }}</span></div>
+  </div>
+  <div class="adm-grid">
+    <div class="card adm-card"><h2 class="h3">Nejnavštěvovanější stránky</h2>
+      {% if r.top_pages %}<table class="tbl"><tr><th>Stránka</th><th class="num">Zobrazení</th></tr>{% for p, n in r.top_pages %}<tr><td><a href="{{ p }}">{{ p }}</a></td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Nejoblíbenější produkty</h2>
+      {% if r.top_products %}<table class="tbl"><tr><th>Produkt</th><th class="num">Zobrazení</th></tr>{% for p, n in r.top_products %}<tr><td><a href="/produkt/{{ p.id }}-{{ p.slug }}">{{ p.name }}</a></td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Nejčastější hledání</h2>
+      {% if r.top_searches %}<table class="tbl"><tr><th>Dotaz</th><th class="num">Počet</th><th class="num">Výsledků</th></tr>{% for q, n, mxr in r.top_searches %}<tr><td>{{ q }}</td><td class="num">{{ n }}</td><td class="num">{{ mxr if mxr is not none else '–' }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Hledání bez výsledků</h2>
+      <p class="muted small">Nic v databázi ani v živém hledání – kandidáti na nové obchody/produkty.</p>
+      {% if r.zero_searches %}<table class="tbl"><tr><th>Dotaz</th><th class="num">Počet</th></tr>{% for q, n in r.zero_searches %}<tr><td>{{ q }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Žádná.</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Odkud lidé přišli</h2>
+      {% if r.top_refs %}<table class="tbl"><tr><th>Doména</th><th class="num">Zobrazení</th></tr>{% for d, n in r.top_refs %}<tr><td>{{ d }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic (přímé návštěvy se nepočítají).</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Zprávy z kontaktního formuláře</h2>
+      {% if msgs %}<ul class="adm-msgs">{% for m in msgs %}<li><div class="muted small">{{ m.created_at|prague('%-d. %-m. %Y %H:%M') }} · {{ m.topic }}{% if m.name %} · {{ m.name }}{% endif %}{% if m.reply_to %} · <a href="mailto:{{ m.reply_to }}">{{ m.reply_to }}</a>{% endif %}</div><p>{{ m.message }}</p></li>{% endfor %}</ul>{% else %}<p class="muted">Žádné zprávy.</p>{% endif %}</div>
+  </div>
+</div></section>
+{% endblock %}

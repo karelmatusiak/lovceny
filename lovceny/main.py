@@ -16,13 +16,15 @@ from .models import Product, Offer, PricePoint, Watch, PushSubscription
 from .categories import CATEGORIES, BY_SLUG
 from . import push as pushmod
 from . import seo
-from .web import static_url, canonical, public_url, CacheHeadersMiddleware, add_compression
+from .web import static_url, canonical, public_url, CacheHeadersMiddleware, add_compression, AnalyticsMiddleware
 from .shops import SHOPS, get_shop
 from .service import add_by_url, create_watch, search_db, offers_for_query, smart_offers
 from .verdict import compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk
+from . import images
+from . import analytics
 
 logging.basicConfig(level=logging.INFO)
 BASE = Path(__file__).parent
@@ -36,6 +38,21 @@ tpl.env.globals["canonical"] = canonical
 tpl.env.globals["public_url"] = public_url
 tpl.env.globals["CATEGORIES"] = CATEGORIES
 tpl.env.filters["tojson_ld"] = seo.jsonld
+tpl.env.globals["img_attrs"] = images.srcset
+tpl.env.filters["fromjson"] = json.loads
+
+
+def _prague(d, fmt="%-d. %-m. %H:%M"):
+    """Čas pro lidi v Česku (DB ukládá UTC)."""
+    if not d:
+        return ""
+    from zoneinfo import ZoneInfo
+    d = d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    return d.astimezone(ZoneInfo("Europe/Prague")).strftime(fmt)
+
+
+tpl.env.filters["prague"] = _prague
+app.add_middleware(AnalyticsMiddleware)
 app.add_middleware(CacheHeadersMiddleware)
 add_compression(app)
 
@@ -93,11 +110,13 @@ def search(request: Request, q: str = "", zive: int = 0, db=Depends(get_db)):
     if re.match(r"^(https?://|www\.)", q, re.I):
         url = q if q.lower().startswith("http") else "https://" + q
         prod, msg = add_by_url(db, url)
+        request.state.an = {"kind": "search", "query": q, "results": 0 if prod is None else 1}
         if prod is None:
             return tpl.TemplateResponse(request, "search.html", {"q": q, "results": [], "error": msg, "noindex": True}, status_code=422)
         r = f"/produkt/{prod.id}-{prod.slug}"
         return RedirectResponse(r + (f"?msg={msg}" if msg else ""), 303)
     results = [(p, *product_summary(p)) for p in search_db(db, q)]
+    request.state.an = {"kind": "search", "query": q, "results": len(results)}
     # Málo shod v DB → živé hledání v obchodech. Bez JS (?zive=1) se načte rovnou, jinak přes fetch.
     want_live = len(results) < LIVE_THRESHOLD
     ctx = {"q": q, "results": results, "error": None, "want_live": want_live, "noindex": True}
@@ -118,6 +137,8 @@ def _live_ctx(db, q: str) -> dict:
 def search_live(request: Request, q: str = "", db=Depends(get_db)):
     q = q.strip()[:100]
     ctx = {"q": q, **(_live_ctx(db, q) if q else {"offers": [], "statuses": [], "live_done": True})}
+    if q:
+        request.state.an = {"kind": "live", "query": q, "results": len(ctx.get("offers") or []), "path": "/hledat"}
     return tpl.TemplateResponse(request, "_live.html", ctx)
 
 
@@ -202,12 +223,15 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     cat = BY_SLUG.get(p.category_slug or "")
     crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(p.name, f"/produkt/{p.id}-{p.slug}")]
     has_demo = any(pt.is_demo for pt in pts)
+    request.state.an = {"product_id": p.id, "path": f"/produkt/{p.id}"}
     return tpl.TemplateResponse(request, "product.html", {
         "p": p, "best": best, "v": v, "offers": offers, "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "cat": cat, "crumbs": crumbs,
         "canonical_path": f"/produkt/{p.id}-{p.slug}",
         "ld": [seo.product_ld(p, offers, v), seo.breadcrumb_ld(crumbs)],
-        "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop})
+        "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
+        "share_url": canonical(f"/produkt/{p.id}-{p.slug}"),
+        "share_text": f"{p.name}" + (f" – teď od {czk(best.price)}" if best else "") + f" ({v.headline}) na Lovceny"})
 
 
 @app.post("/produkt/{pid}/hlidat")
@@ -329,10 +353,40 @@ def compare(request: Request, ids: str = "", pridat: str = "", db=Depends(get_db
 
 
 # ---------- Web Push ----------
+PRECACHE_STATIC = ["style.css", "app.css", "compare.js", "pwa.js", "brand/logo.svg", "brand/ikona.svg",
+                   "brand/icon-192.png", "brand/favicon-32.png"]
+
+
 @app.get("/sw.js")
 def service_worker():
-    return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript",
-                        headers={"Service-Worker-Allowed": "/"})
+    import hashlib
+    urls = [static_url(f) for f in PRECACHE_STATIC]
+    body = tpl.env.get_template("sw.js").render(version="", precache=urls)
+    version = hashlib.sha256((body + "".join(urls)).encode()).hexdigest()[:10]
+    return Response(tpl.env.get_template("sw.js").render(version=version, precache=urls), media_type="text/javascript",
+                    headers={"Service-Worker-Allowed": "/"})
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    icons = [{"src": static_url("brand/icon-192.png"), "sizes": "192x192", "type": "image/png", "purpose": "any"},
+             {"src": static_url("brand/icon-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "any"},
+             {"src": static_url("brand/icon-maskable-192.png"), "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+             {"src": static_url("brand/icon-maskable-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]
+    data = {"name": "Lovceny – poctivý hlídač cen elektroniky", "short_name": "Lovceny", "id": "/",
+            "description": "Historie cen elektroniky a spotřebičů z českých e-shopů, verdikt Kupuj / Počkej a hlídání ceny.",
+            "lang": "cs", "dir": "ltr", "start_url": "/?zdroj=pwa", "scope": "/", "display": "standalone",
+            "orientation": "portrait-primary", "theme_color": "#0B6E4F", "background_color": "#FBF8F3",
+            "categories": ["shopping", "utilities"], "icons": icons,
+            "shortcuts": [{"name": "Skutečné slevy", "url": "/slevy", "icons": [icons[0]]},
+                          {"name": "Kategorie", "url": "/kategorie", "icons": [icons[0]]}]}
+    return Response(json.dumps(data, ensure_ascii=False), media_type="application/manifest+json",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/offline", response_class=HTMLResponse)
+def offline(request: Request):
+    return tpl.TemplateResponse(request, "offline.html", {"noindex": True})
 
 
 @app.post("/api/push/odebirat")
@@ -435,3 +489,145 @@ def sitemap(db=Depends(get_db)):
 @app.get("/robots.txt")
 def robots_txt():
     return Response(seo.robots_txt(), media_type="text/plain")
+
+
+# ---------- Obrázky produktů: proxy + zmenšení do WebP ----------
+@app.get("/img/{w:int}")
+def image_proxy(w: int, u: str = ""):
+    """Zmenšený WebP obrázek z povoleného obchodu. Chyba → přesměrování na originál (pokud je povolený)."""
+    if w not in images.WIDTHS or not images.is_allowed(u):
+        raise HTTPException(404)
+    try:
+        data = images.get(u, w)
+    except images.ImageError as e:
+        logging.getLogger("lovceny.images").info("obrázek %s (%d): %s → originál", u[:120], w, e)
+        return RedirectResponse(u, 302, headers={"Cache-Control": "public, max-age=600"})
+    import hashlib
+    return Response(data, media_type="image/webp", headers={
+        "Cache-Control": "public, max-age=31536000, immutable", "ETag": '"' + hashlib.md5(data).hexdigest() + '"',
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'"})
+
+
+# ---------- Stav obchodů (monitoring blokací) ----------
+@app.get("/stav", response_class=HTMLResponse)
+def status_page(request: Request, db=Depends(get_db)):
+    from . import monitor
+    hist = monitor.history(db, days=14)
+    health = monitor.evaluate(db, list(hist["last"].values()))
+    rows = []
+    for s in SHOPS.values():
+        h = health["shops"].get(s.slug)
+        last = hist["last"].get(s.slug)
+        if not h and not last:
+            continue
+        cells = []
+        for d in hist["days"]:
+            ok, att = hist["agg"][s.slug][d] if s.slug in hist["agg"] else (0, 0)
+            cells.append({"day": d, "ok": ok, "att": att, "rate": (ok / att) if att else None})
+        lo = datetime.fromisoformat(h["last_ok"]) if h and h["last_ok"] else None
+        rows.append({"shop": s, "h": h, "last": last, "cells": cells, "last_ok": lo})
+    rows.sort(key=lambda r: (r["h"]["ok"] if r["h"] else True, r["shop"].name))
+    last_run = max((r["last"].run_at for r in rows if r["last"]), default=None)
+    return tpl.TemplateResponse(request, "status.html", {
+        "rows": rows, "days": hist["days"], "last_run": last_run, "noindex": True,
+        "stale_days": monitor.STALE_DAYS, "min_attempts": monitor.MIN_ATTEMPTS,
+        "crumbs": [("Lovceny", "/"), ("Stav obchodů", "/stav")]})
+
+
+# ---------- Admin (analytika, zprávy) ----------
+def require_admin(request: Request):
+    import base64
+    import hmac
+    import os
+    token = os.environ.get("ADMIN_TOKEN", "")
+    if len(token) < 16:  # nenastavený / slabý token → admin neexistuje
+        raise HTTPException(404)
+    auth = request.headers.get("authorization", "")
+    given = ""
+    if auth.lower().startswith("basic "):
+        try:
+            given = base64.b64decode(auth[6:]).decode("utf-8", "replace").partition(":")[2]
+        except ValueError:
+            given = ""
+    elif auth.lower().startswith("bearer "):
+        given = auth[7:].strip()
+    if not hmac.compare_digest(given.encode(), token.encode()):
+        raise HTTPException(401, "Přihlášení vyžadováno", headers={"WWW-Authenticate": 'Basic realm="Lovceny admin", charset="UTF-8"'})
+    return True
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin(request: Request, dni: int = 30, _=Depends(require_admin), db=Depends(get_db)):
+    from .models import ContactMessage
+    dni = dni if dni in (7, 30, 90) else 30
+    rep = analytics.report(db, days=dni)
+    msgs = db.scalars(select(ContactMessage).order_by(ContactMessage.created_at.desc()).limit(50)).all()
+    return tpl.TemplateResponse(request, "admin.html", {"r": rep, "msgs": msgs, "dni": dni, "noindex": True},
+                                headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
+
+
+# ---------- O nás, FAQ, kontakt ----------
+FAQ = [
+    ("Platí vám obchody za lepší umístění?",
+     "Ne. Pořadí nabídek je vždy jen podle ceny (nejlevnější nahoře). Placené pozice ani „doporučené“ obchody nemáme a mít nebudeme."),
+    ("Jak vzniká verdikt Kupuj / Počkej / Falešná sleva?",
+     "Porovnáme dnešní cenu s historií: Kupuj, když je cena do 3 % nad minimem za 90 dní. Falešná sleva, když obchod ukazuje „původní“ cenu, za kterou se v posledních 30 dnech neprodávalo, nebo cenu krátce před akcí zvedl. Jinak Počkej. Při méně než 7 dnech dat píšeme „Málo dat“."),
+    ("Odkud berete ceny?",
+     "Z veřejných stránek produktů v obchodech, které automatické čtení dovolují (respektujeme robots.txt a čteme šetrně, nejvýš jednou za pár hodin), a z oficiálních feedů obchodů. Ochranu proti botům nikdy neobcházíme – obchod, který čtení blokuje, prostě nesledujeme."),
+    ("Jak často se ceny aktualizují?",
+     "Třikrát denně. Stav jednotlivých obchodů a čerstvost jejich cen je veřejně na stránce Stav obchodů."),
+    ("Je Lovceny zdarma?",
+     "Ano, pro tebe zdarma a bez registrace. Hlídání ceny e-mailem nebo upozorněním v prohlížeči je také zdarma."),
+    ("Jak budete vydělávat?",
+     "Časem přes affiliate odkazy: když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme."),
+    ("Sledujete mě? Potřebujete cookie lištu?",
+     "Nesledujeme. Nepoužíváme cookies ani analytiku třetích stran, jen vlastní anonymní statistiku návštěvnosti bez osobních údajů. Proto žádnou cookie lištu nepotřebujeme."),
+    ("Můžu si Lovceny dát na plochu telefonu?",
+     "Ano. V Chrome/Edge na Androidu zvol „Přidat na plochu“ / „Nainstalovat aplikaci“. Na iPhonu v Safari klepni na Sdílet a pak „Přidat na plochu“ – teprve takto přidaný web může na iPhonu posílat upozornění na pokles ceny."),
+]
+CONTACT_TOPICS = {"chyba": "Nahlásit chybu v ceně", "obchod": "Návrh obchodu ke sledování", "spoluprace": "Spolupráce / obchod",
+                  "soukromi": "Osobní údaje (GDPR)", "jine": "Něco jiného"}
+_contact_rl: dict[str, list[float]] = {}
+
+
+def _faq_ld():
+    return {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in FAQ]}
+
+
+@app.get("/o-nas", response_class=HTMLResponse)
+def about(request: Request, odeslano: int = 0, chyba: str = ""):
+    crumbs = [("Lovceny", "/"), ("O nás", "/o-nas")]
+    return tpl.TemplateResponse(request, "about.html", {
+        "faq": FAQ, "topics": CONTACT_TOPICS, "sent": odeslano, "err": chyba[:200], "crumbs": crumbs,
+        "ld": [_faq_ld(), seo.breadcrumb_ld(crumbs)]})
+
+
+@app.post("/kontakt")
+def contact(request: Request, message: str = Form(""), name: str = Form(""), reply_to: str = Form(""),
+            topic: str = Form("jine"), website: str = Form(""), db=Depends(get_db)):
+    """Kontaktní formulář → DB (čte se v /admin). Honeypot `website`, limit 5/h na IP (jen v paměti, IP neukládáme)."""
+    import hashlib
+    import time
+    from .models import ContactMessage
+    if website:  # bot vyplnil skryté pole – tváříme se, že je hotovo
+        return RedirectResponse("/o-nas?odeslano=1#kontakt", 303)
+    message, name, reply_to = message.strip(), name.strip()[:100], reply_to.strip()[:320]
+    if not 10 <= len(message) <= 3000:
+        return RedirectResponse("/o-nas?chyba=" + quote("Napiš prosím zprávu (10 až 3000 znaků).") + "#kontakt", 303)
+    if reply_to and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", reply_to):
+        return RedirectResponse("/o-nas?chyba=" + quote("E-mail pro odpověď nevypadá správně (nebo ho nech prázdný).") + "#kontakt", 303)
+    key = hashlib.sha256(("kontakt:" + _client_ip(request)).encode()).hexdigest()
+    now_m = time.monotonic()
+    hits = [t for t in _contact_rl.get(key, []) if now_m - t < 3600]
+    day_total = db.scalar(select(func.count(ContactMessage.id)).where(
+        ContactMessage.created_at >= datetime.now(timezone.utc) - timedelta(days=1)))
+    if len(hits) >= 5 or day_total >= 100:
+        return RedirectResponse("/o-nas?chyba=" + quote("Zpráv je teď moc, zkus to prosím za hodinu.") + "#kontakt", 303)
+    _contact_rl[key] = hits + [now_m]
+    db.add(ContactMessage(name=name or None, reply_to=reply_to or None,
+                          topic=topic if topic in CONTACT_TOPICS else "jine", message=message))
+    from .models import ContactMessage as CM
+    db.query(CM).filter(CM.created_at < datetime.now(timezone.utc) - timedelta(days=365)).delete()
+    db.commit()
+    return RedirectResponse("/o-nas?odeslano=1#kontakt", 303)

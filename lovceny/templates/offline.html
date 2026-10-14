@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Jsi offline – Lovceny{% endblock %}
+{% block body %}<section><div class="wrap center offline">
+  <img src="{{ static('brand/icon-192.png') }}" alt="" width="96" height="96">
+  <h1 class="page-h1 msg-h1">Jsi offline</h1>
+  <p class="sub">Bez připojení k internetu ti nemůžeme ukázat aktuální ceny – a staré ceny schválně neukazujeme, aby tě nespletly. Jakmile budeš zase online, stránka se načte.</p>
+  <p style="margin-top:24px"><button type="button" class="btn btn-primary btn-sm" onclick="location.reload()">Zkusit znovu</button></p>
+  <script>addEventListener("online", () => location.reload());</script>
+</div></section>{% endblock %}

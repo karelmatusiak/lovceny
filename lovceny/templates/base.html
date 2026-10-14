@@ -6,6 +6,8 @@
 <meta name="description" content="{% block description %}Poctivý hlídač cen elektroniky a spotřebičů. Řekneme na rovinu: kupovat, nebo počkat.{% endblock %}">
 <link rel="icon" href="{{ static('brand/favicon.ico') }}" sizes="any"><link rel="icon" href="{{ static('brand/ikona.svg') }}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{{ static('brand/apple-touch-icon.png') }}"><meta name="theme-color" content="#0B6E4F">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lovceny"><meta name="apple-mobile-web-app-status-bar-style" content="default">
 {%- set canon = canonical(canonical_path if canonical_path is defined else (request.url.path if request else '/')) -%}
 {% if noindex is defined and noindex %}<meta name="robots" content="noindex, follow">{% else %}<link rel="canonical" href="{{ canon }}">{% endif %}
 <meta property="og:site_name" content="Lovceny"><meta property="og:locale" content="cs_CZ">
@@ -22,7 +24,7 @@
 <header class="site-head"><div class="wrap">
   <nav aria-label="Hlavní navigace">
     <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="159" height="72"></a>
-    <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/#jak">Jak to funguje</a><a href="/obchody">Hlídané obchody</a><a href="/#nezavislost">Proč nám věřit</a></div>
+    <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/#jak">Jak to funguje</a><a href="/obchody">Hlídané obchody</a><a href="/o-nas">O nás</a></div>
     <a class="btn btn-ghost" href="/#hledat"><span aria-hidden="true">🔔</span> Hlídat cenu</a>
   </nav>
 </div></header>
@@ -35,9 +37,9 @@
     <div><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="132" height="60" loading="lazy"></a>
       <p style="margin-top:14px;max-width:300px">Poctivý hlídač cen elektroniky a domácích spotřebičů. Bez placených pozic, bez reklam ve výsledcích.</p></div>
     <div><h2 class="foot-h">Kategorie</h2><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
-    <div><h2 class="foot-h">Produkt</h2><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li></ul></div>
-    <div><h2 class="foot-h">Transparentnost</h2><ul><li><a href="/#metodika">Metodika verdiktu</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/#vydelavame">Jak vyděláváme</a></li></ul></div>
-    <div><h2 class="foot-h">Kontakt a právní</h2><ul><li><a href="mailto:ahoj@lovceny.cz">ahoj@lovceny.cz</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li></ul></div>
+    <div><h2 class="foot-h">Produkt</h2><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li><li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li><li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">📲</span> Přidat na plochu</button></li></ul></div>
+    <div><h2 class="foot-h">Transparentnost</h2><ul><li><a href="/#metodika">Metodika verdiktu</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
+    <div><h2 class="foot-h">Kontakt a právní</h2><ul><li><a href="/o-nas">O nás</a></li><li><a href="/o-nas#kontakt">Kontaktní formulář</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li></ul></div>
   </div>
   <div class="legal"><span>© 2026 Lovceny.cz · MVP. Některé odkazy mohou být affiliate, na pořadí ani verdikt to nemá vliv.</span><span>Lovceny není spojen s uvedenými obchody.</span></div>
 </div></footer>
@@ -46,6 +48,19 @@
   <span id="cmp-hint" class="cmp-hint"></span>
   <button type="button" id="cmp-clear" class="cmp-clear">Zrušit výběr</button>
 </div>
-<script src="{{ static('compare.js') }}" defer></script>
+<div id="pwa-install" class="pwa-install" role="region" aria-labelledby="pwa-t" hidden>
+  <img src="{{ static('brand/ikona.svg') }}" alt="" width="48" height="48">
+  <div class="pwa-body">
+    <p class="pwa-title" id="pwa-t" tabindex="-1"><b>Přidej si Lovceny na plochu</b></p>
+    <p class="pwa-text">Otevřeš hlídané ceny jedním klepnutím jako aplikaci – bez instalace z obchodu a bez registrace.</p>
+    <ol class="pwa-ios" hidden>
+      <li>Dole v Safari klepni na <b>Sdílet</b> <svg class="ios-share" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 11v9h14v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>.</li>
+      <li>Sjeď níž a zvol <b>Přidat na plochu</b>.</li>
+      <li>Otevři Lovceny z ikony na ploše – tam fungují i upozornění.</li>
+    </ol>
+    <div class="pwa-act"><button type="button" class="btn btn-primary btn-sm pwa-yes">Přidat na plochu</button><button type="button" class="btn-link pwa-no">Teď ne</button></div>
+  </div>
+</div>
+<script src="{{ static('compare.js') }}" defer></script><script src="{{ static('pwa.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body></html>

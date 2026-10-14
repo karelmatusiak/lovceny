@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge, cmp_button %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, share %}
 {% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
@@ -10,10 +10,10 @@
   <div class="card product" style="margin-top:12px">
     <div class="p-info">
       <div class="p-head">
-        <div class="p-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" width="60" height="60" fetchpriority="high" decoding="async" referrerpolicy="no-referrer">{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, priority=true) }}{% else %}📦{% endif %}</div>
         <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{{ p.category or '' }}{% if p.ean %} · EAN {{ p.ean }}{% endif %}</div></div>
       </div>
-      <div class="p-verdict-row">{{ badge(v, big=true) }}{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}</div>
+      <div class="p-verdict-row">{{ badge(v, big=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, p.name) }}</div></div>
       <div class="price-row">
         <span class="price">{% if best %}{{ best.price|czk }}{% else %}–{% endif %}</span>
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
@@ -85,11 +85,15 @@
         <button type="button" class="btn btn-push-off" id="push-off" hidden>Vypnout upozornění v prohlížeči</button>
         <p class="push-msg" id="push-msg" role="status" aria-live="polite"></p>
       </div>
-      <p class="push-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje (na iPhonu je nutné přidat Lovceny na plochu). Použij prosím e-mail.</p>
+      <p class="push-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje. Použij prosím e-mail.</p>
+      <div class="push-ios" hidden>
+        <p class="small"><b>Na iPhonu fungují upozornění jen z plochy.</b> Přidej si Lovceny na plochu (Safari → Sdílet → Přidat na plochu), otevři je odtud a upozornění zapni tady. Nebo použij e-mail.</p>
+        <button type="button" class="btn btn-ghost btn-sm" data-pwa-open hidden><span aria-hidden="true">📲</span> Jak přidat na plochu</button>
+      </div>
       <noscript><p class="small">Upozornění v prohlížeči vyžadují JavaScript. E-mail funguje i bez něj.</p></noscript>
     </div>
     {% endif %}
   </form>
 </div></div></section>
 {% endblock %}
-{% block scripts %}{% if push_key %}<script src="{{ static('push.js') }}" defer></script>{% endif %}{% endblock %}
+{% block scripts %}<script src="{{ static('share.js') }}" defer></script>{% if push_key %}<script src="{{ static('push.js') }}" defer></script>{% endif %}{% endblock %}

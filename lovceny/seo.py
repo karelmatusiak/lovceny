@@ -57,7 +57,7 @@ def itemlist_ld(rows, path: str) -> dict:
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
-STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/ochrana-osobnich-udaju", "/cookies"]
+STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies"]
 
 
 def sitemap_xml(db) -> str:
@@ -84,4 +84,7 @@ def robots_txt() -> str:
         "Disallow: /porovnani",
         "Disallow: /hlidani/",
         "Disallow: /api/",
+        "Disallow: /admin",
+        "Disallow: /img/",
+        "Disallow: /offline",
         f"Sitemap: {public_url()}/sitemap.xml", ""])

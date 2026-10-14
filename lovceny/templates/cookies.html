@@ -6,7 +6,7 @@
 <section class="legal-page"><div class="wrap prose">
   <div class="eyebrow">Právní informace</div>
   <h1>Cookies a úložiště prohlížeče</h1>
-  <p class="sub">Platnost od 14.&nbsp;10.&nbsp;2026. Audit kódu MVP: žádné sledovací cookies, žádná analytika třetích stran.</p>
+  <p class="sub">Platnost od 14.&nbsp;10.&nbsp;2026. Audit kódu: žádné cookies, žádná analytika třetích stran, žádné skripty sociálních sítí.</p>
 
   <h2>Cookies</h2>
   <p>Aplikace Lovceny.cz <b>nenastavuje cookies</b> (ani technické session cookies z naší strany). Nepoužíváme Google Analytics, reklamní pixely ani podobné nástroje. Proto <b>nezobrazujeme cookie lištu / banner souhlasu</b> – není k čemu dávat souhlas.</p>
@@ -17,10 +17,14 @@
   <ul>
     <li><code>lovceny_porovnani</code> – seznam až 4 číselných ID produktů, které sis vybral k porovnání.</li>
     <li><code>lovceny-push</code> – jen pokud zapneš upozornění v prohlížeči: ID produktů, cílová cena a odhlašovací kód, aby šlo upozornění zase vypnout.</li>
+    <li><code>lovceny-pwa</code> – počet tvých návštěv a kdy jsi zavřel výzvu „Přidat na plochu“ (abychom ji neukazovali pořád dokola).</li>
   </ul>
-  <p>Pro upozornění v prohlížeči se registruje <b>service worker</b> (<code>/sw.js</code>). Nic necachuje a nesleduje, jen zobrazí doručené oznámení „cena klesla“. Zaregistruje se teprve po kliknutí na „Zapnout upozornění v prohlížeči“.</p>
+  <p>Web registruje <b>service worker</b> (<code>/sw.js</code>), aby šel přidat na plochu jako aplikace, fungoval při výpadku sítě (ukáže stránku „Jsi offline“) a doručoval upozornění „cena klesla“. Do mezipaměti (Cache Storage) ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů. <b>Stránky s cenami, hledání ani odpovědi API neukládá</b> – ceny se vždy načítají čerstvé. Nic nesleduje.</p>
   <p>Data zůstávají jen v zařízení. Na server se neodesílají automaticky; při otevření <code>/porovnani?ids=…</code> si stránku načteš podle URL (tu můžeš i sdílet). Smazáním dat webu v prohlížeči nebo tlačítkem „Zrušit výběr“ výběr vymažeš.</p>
   <p>Toto úložiště je nezbytné pro výběr k porovnání (technicky nutné pro funkci, kterou jsi sám spustil). Nejde o cookie třetí strany ani o sledování napříč weby.</p>
+
+  <h2>Statistika návštěvnosti</h2>
+  <p>Návštěvnost počítáme <b>bez cookies</b> a bez ukládání čehokoli do tvého prohlížeče – na serveru, s denně měněným anonymním otiskem, který po 24 hodinách mažeme. Respektujeme Do Not Track i Global Privacy Control. Podrobnosti v <a href="/ochrana-osobnich-udaju">Ochraně osobních údajů</a> (bod 2.5). Proto <b>nepotřebujeme cookie lištu</b>.</p>
 
   <h2>Další informace</h2>
   <p>Osobní údaje (e-mail u hlídání ceny, AI dotazy) popisuje <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>

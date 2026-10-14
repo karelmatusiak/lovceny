@@ -21,7 +21,10 @@ BLOCK_MARKERS = ("bobcmn", "cf-chl", "challenge-platform", "Please enable JS", "
 
 
 class Blocked(Exception):
-    pass
+    """kind: http (403/429/503) | captcha (JS challenge / captcha stránka) | robots (robots.txt nepovoluje)."""
+    def __init__(self, msg: str, kind: str = "http", status: int | None = None):
+        super().__init__(msg)
+        self.kind, self.status = kind, status
 
 
 @dataclass
@@ -58,7 +61,7 @@ class PoliteClient:
 
     def get(self, url: str) -> str:
         if not self.allowed(url):
-            raise Blocked("robots.txt nepovoluje")
+            raise Blocked("robots.txt nepovoluje", kind="robots")
         host = urlparse(url).netloc
         wait = self._last.get(host, 0) + MIN_DELAY_S - time.monotonic()
         if wait > 0:
@@ -66,11 +69,15 @@ class PoliteClient:
         r = self.client.get(url)
         self._last[host] = time.monotonic()
         if r.status_code in (403, 429, 503):
-            raise Blocked(f"HTTP {r.status_code}")
+            body = r.text[:5000]
+            if any(m.lower() in body.lower() for m in BLOCK_MARKERS):
+                raise Blocked(f"HTTP {r.status_code} + ochrana proti botům", kind="captcha", status=r.status_code)
+            raise Blocked(f"HTTP {r.status_code}", kind="http", status=r.status_code)
         r.raise_for_status()
         head = r.text[:3000]
         if len(r.text) < 20000 and any(m in head for m in BLOCK_MARKERS):
-            raise Blocked("ochrana proti botům (JS challenge)")
+            raise Blocked("ochrana proti botům (JS challenge)", kind="captcha", status=r.status_code)
+        self.last_status = r.status_code
         return r.text
 
 

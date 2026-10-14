@@ -11,8 +11,10 @@
   const save = o => { try { localStorage.setItem(store, JSON.stringify(o)); } catch (_) {} };
   const say = (t, bad) => { msg.textContent = t; msg.className = 'push-msg' + (bad ? ' bad' : ' good'); };
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && key;
+  const pwa = window.lovcenyPwa || {};
   if (!supported) {
-    box.querySelector('.push-unsupported').hidden = false;
+    // iPhone/iPad: Web Push jen v aplikaci přidané na plochu (iOS 16.4+) → návod místo „nepodporuje“
+    box.querySelector(pwa.ios && !pwa.standalone ? '.push-ios' : '.push-unsupported').hidden = false;
     return;
   }
   box.querySelector('.push-ui').hidden = false;

@@ -4,6 +4,10 @@ on:
     - cron: "17 5,11,17 * * *"   # 3× denně (UTC)
   workflow_dispatch: {}
 concurrency: { group: fetch-prices, cancel-in-progress: false }
+# Vestavěný GITHUB_TOKEN smí jen číst kód a zakládat/zavírat issues (monitoring blokací obchodů).
+permissions:
+  contents: read
+  issues: write
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -29,4 +33,9 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
           PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
-        run: python fetch_prices.py
+        run: python fetch_prices.py --health-out health.json
+      - name: Hlídání obchodů (GitHub issue při blokaci / starých cenách)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python shop_health_issues.py health.json

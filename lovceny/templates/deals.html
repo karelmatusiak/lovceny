@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge, cmp_button %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button %}
 {% block title %}Skutečné slevy – Lovceny{% endblock %}
 {% block description %}Poctivý žebříček produktů u 90denního minima a seznam falešných slev. Bez placených pozic.{% endblock %}
 {% block og_title %}Skutečné slevy – Lovceny{% endblock %}
@@ -16,7 +16,7 @@
   {% for r in buys %}
     <article class="card deal-row">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-        <div class="p-img">{% if r.product.image_url %}<img src="{{ r.product.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
         <div class="deal-info">
           <div class="p-name sm">{{ r.product.name }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
@@ -55,7 +55,7 @@
   {% for r in fakes %}
     <article class="card deal-row deal-fake">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-        <div class="p-img">{% if r.product.image_url %}<img src="{{ r.product.image_url }}" alt="" loading="lazy">{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
         <div class="deal-info">
           <div class="p-name sm">{{ r.product.name }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>

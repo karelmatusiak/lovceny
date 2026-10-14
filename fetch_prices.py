@@ -29,11 +29,14 @@ def main(argv=None):
     ap.add_argument("--feed", action="append", default=[], help="shop=URL_nebo_soubor")
     ap.add_argument("--min-age-hours", type=float, default=2, help="přeskočit nedávno kontrolované nabídky")
     ap.add_argument("--limit", type=int, default=500)
+    ap.add_argument("--health-out", help="zapsat vyhodnocení zdraví obchodů (JSON) – čte ho shop_health_issues.py")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     init_db()
     db = SessionLocal()
     report = Counter()
+    from lovceny import monitor
+    stats = monitor.FetchStats()
 
     # 1) feedy (oficiální zdroj – Alza, Datart…)
     feeds = dict(f.split("=", 1) for f in a.feed)
@@ -47,10 +50,12 @@ def main(argv=None):
             st = apply_feed(db, slug, feedmod.load(src))
             log.info("feed %s: %s", slug, st)
             report[f"{slug}:feed_ok"] += st["matched"]
+            stats.add(slug, "ok", 200)
         except Exception as e:
             db.rollback()
             log.error("feed %s selhal: %s", slug, e)
             report[f"{slug}:feed_error"] += 1
+            stats.add(slug, "errors", getattr(getattr(e, "response", None), "status_code", None), str(e))
     for s in SHOPS.values():
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
             log.info("%s: feed URL není nastaven (%s) – nabídky zůstávají 'cena bude doplněna'", s.name, s.feed_url_env)
@@ -64,11 +69,26 @@ def main(argv=None):
         lc = o.last_checked
         if lc and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) > cutoff:
             report[f"{o.shop}:skipped_recent"] += 1
+            stats.add(o.shop, "skipped")
             continue
-        st = update_offer(db, o)
+        st = update_offer(db, o, stats=stats)
         db.commit()
         report[f"{o.shop}:{st}"] += 1
         log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
+
+    # 2b) monitoring blokací: statistiky běhu do DB + vyhodnocení (→ GitHub issue ve workflow)
+    try:
+        rows = stats.save(db)
+        health = monitor.evaluate(db, rows)
+        bad = {k: [r["code"] for r in v["reasons"]] for k, v in health["shops"].items() if not v["ok"]}
+        log.info("Zdraví obchodů: %s", bad or "vše v pořádku")
+        if a.health_out:
+            import json
+            with open(a.health_out, "w", encoding="utf-8") as f:
+                json.dump(health, f, ensure_ascii=False, indent=1)
+    except Exception as e:  # noqa: BLE001 – monitoring nesmí shodit stahování
+        db.rollback()
+        log.error("Monitoring obchodů selhal: %s", e)
 
     # 3) hlídání cen – po každém stažení; bez duplicit (viz check_watches)
     log.info("E-maily přes: %s", get_sender().name)

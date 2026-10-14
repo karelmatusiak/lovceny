@@ -99,3 +99,66 @@ class TrackRequest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ip_hash: Mapped[str] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+
+
+class ShopRunStat(Base):
+    """Výsledek jednoho běhu stahovače pro jeden obchod (monitoring blokací, /stav)."""
+    __tablename__ = "shop_run_stats"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(40), index=True)
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    shop: Mapped[str] = mapped_column(String(40), index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    ok: Mapped[int] = mapped_column(Integer, default=0)
+    blocked: Mapped[int] = mapped_column(Integer, default=0)   # HTTP 403/429/503
+    captcha: Mapped[int] = mapped_column(Integer, default=0)   # JS challenge / captcha stránka
+    robots: Mapped[int] = mapped_column(Integer, default=0)    # robots.txt nepovoluje
+    errors: Mapped[int] = mapped_column(Integer, default=0)    # síť, 404, cena nenalezena…
+    skipped: Mapped[int] = mapped_column(Integer, default=0)   # nedávno kontrolované
+    statuses: Mapped[str | None] = mapped_column(Text)         # JSON {"200": 5, "403": 2}
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+    @property
+    def failures(self) -> int:
+        return self.blocked + self.captcha + self.robots + self.errors
+
+
+class AnalyticsEvent(Base):
+    """Anonymní analytika bez cookies: cesta, doména odkazujícího webu, normalizovaný dotaz.
+    visitor = hash(denní sůl + IP + UA); po 24 h ho mažeme (NULL) a sůl zahazujeme."""
+    __tablename__ = "analytics_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    day: Mapped[str] = mapped_column(String(10), index=True)          # YYYY-MM-DD (Europe/Prague)
+    kind: Mapped[str] = mapped_column(String(10), default="view")     # view | search | live
+    path: Mapped[str] = mapped_column(String(200))
+    ref_domain: Mapped[str | None] = mapped_column(String(100))
+    query: Mapped[str | None] = mapped_column(String(80))
+    results: Mapped[int | None] = mapped_column(Integer)
+    product_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    visitor: Mapped[str | None] = mapped_column(String(32))
+
+
+class AnalyticsDaily(Base):
+    """Denní souhrn (počítá se z událostí před smazáním otisků)."""
+    __tablename__ = "analytics_daily"
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    uniques: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AnalyticsSalt(Base):
+    __tablename__ = "analytics_salts"
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    salt: Mapped[str] = mapped_column(String(64))
+
+
+class ContactMessage(Base):
+    """Zpráva z kontaktního formuláře /o-nas (čte se v /admin)."""
+    __tablename__ = "contact_messages"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    name: Mapped[str | None] = mapped_column(String(100))
+    reply_to: Mapped[str | None] = mapped_column(String(320))
+    topic: Mapped[str] = mapped_column(String(40), default="jine")
+    message: Mapped[str] = mapped_column(Text)

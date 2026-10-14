@@ -40,29 +40,39 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
                       captured_at=offer.last_checked, is_demo=False, source=source))
 
 
-def update_offer(db: Session, offer: Offer) -> str:
-    """Stáhne aktuální cenu jedné nabídky. Vrací stav."""
+def update_offer(db: Session, offer: Offer, stats=None) -> str:
+    """Stáhne aktuální cenu jedné nabídky. Vrací stav. stats = monitor.FetchStats (volitelně)."""
+    st, kind, code, err = _update_offer(db, offer)
+    if stats is not None and st != "feed":
+        stats.add(offer.shop, kind, code, err)
+    return st
+
+
+def _update_offer(db: Session, offer: Offer):
+    """→ (stav, druh výsledku pro monitoring, HTTP status, chyba)."""
     shop = get_shop(offer.shop)
     if shop is None or not shop.can_scrape:
         if shop and shop.source == "feed":
-            return "feed"  # řeší import feedu
+            return "feed", None, None, None  # řeší import feedu
         offer.status = "blocked"
         offer.last_error = shop.note if shop else "neznámý obchod"
-        return "blocked"
+        return "blocked", "blocked", None, offer.last_error
     try:
         html = client().get(offer.url)
         res = (shop.page_parser or parse_product)(html)
     except Blocked as e:
         offer.status, offer.last_error = "blocked", str(e)
         offer.last_checked = datetime.now(timezone.utc)
-        return "blocked"
+        kind = {"captcha": "captcha", "robots": "robots"}.get(getattr(e, "kind", ""), "blocked")
+        return "blocked", kind, getattr(e, "status", None), str(e)
     except Exception as e:  # síť, 404…
         offer.status, offer.last_error = "error", f"{type(e).__name__}: {e}"[:500]
         offer.last_checked = datetime.now(timezone.utc)
-        return "error"
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        return "error", "error", code, offer.last_error
     if res is None:
         offer.status, offer.last_error = "error", "cena na stránce nenalezena (JSON-LD/meta)"
-        return "error"
+        return "error", "error", 200, offer.last_error
     p = offer.product
     if res.name and (p.name == _name_from_url(offer.url)):
         p.name, p.slug = res.name, slugify(res.name)
@@ -73,7 +83,7 @@ def update_offer(db: Session, offer: Offer) -> str:
         from .categories import classify
         p.category_slug = classify(p.name, p.category)
     record_price(db, offer, res.price, res.original_price, res.in_stock, "scrape")
-    return "ok"
+    return "ok", "ok", 200, None
 
 
 def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product | None, str]:

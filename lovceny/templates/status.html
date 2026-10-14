@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Stav obchodů – jak se daří stahovat ceny | Lovceny{% endblock %}
+{% block description %}Veřejný přehled, jak se nám daří číst ceny z jednotlivých obchodů: úspěšnost za 14 dní, blokace a čerstvost cen.{% endblock %}
+{% block body %}
+<section style="padding-top:16px"><div class="wrap">
+  <div class="eyebrow">Transparentnost</div><h1 class="page-h1">Stav obchodů</h1>
+  <p class="sub">Ceny stahujeme 3× denně. Tady je vidět, jak se to u jednotlivých obchodů daří. Ochranu proti botům neobcházíme – když nás obchod blokuje, uvidíš to tady.</p>
+  {% if last_run %}<p class="muted st-meta">Poslední běh stahovače: <time datetime="{{ last_run.isoformat() }}">{{ last_run|prague('%-d. %-m. %Y v %H:%M') }}</time></p>{% endif %}
+  {% if not rows %}
+  <div class="card st-empty"><p><b>Zatím nemáme žádná data.</b> Přehled se naplní po prvním běhu stahovače.</p></div>
+  {% else %}
+  <div class="st-list">
+  {% for r in rows %}{% set h = r.h %}{% set l = r.last %}
+    <article class="card st-card">
+      <div class="st-head">
+        <h2 class="h3"><span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}</h2>
+        {% if not h %}<span class="st st-wait">bez sledovaných nabídek</span>
+        {% elif h.ok %}<span class="st st-ok"><span aria-hidden="true">✓</span> v pořádku</span>
+        {% else %}<span class="st st-bad"><span aria-hidden="true">!</span> {% for x in h.reasons %}{{ {'failing': 'blokuje / selhává', 'stale': 'staré ceny'}[x.code] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+      </div>
+      {% if h and h.reasons %}<ul class="st-reasons">{% for x in h.reasons %}<li>{{ x.text }}</li>{% endfor %}</ul>{% endif %}
+      <dl class="st-facts">
+        <div><dt>Poslední běh</dt><dd>{% if l %}{{ l.ok }} z {{ l.attempts }} OK{% if l.skipped %} <small>({{ l.skipped }} přeskočeno)</small>{% endif %}{% else %}–{% endif %}</dd></div>
+        <div><dt>Blokace / captcha</dt><dd>{% if l %}{{ l.blocked }} / {{ l.captcha }}{% else %}–{% endif %}</dd></div>
+        <div><dt>Poslední čerstvá cena</dt><dd>{% if r.last_ok %}<time datetime="{{ r.last_ok.isoformat() }}">{{ r.last_ok|prague }}</time>{% else %}nikdy{% endif %}</dd></div>
+        <div><dt>Nabídek</dt><dd>{{ h.offers if h else 0 }}</dd></div>
+      </dl>
+      <div class="st-bars" role="img" aria-label="Úspěšnost za 14 dní: {% for c in r.cells %}{{ c.day.day }}. {{ c.day.month }}. {% if c.rate is none %}bez běhu{% else %}{{ (c.rate*100)|round|int }} %{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}">
+        {% for c in r.cells %}<span class="st-bar {% if c.rate is none %}b-none{% elif c.rate >= 0.8 %}b-ok{% elif c.rate >= 0.5 %}b-mid{% else %}b-bad{% endif %}" title="{{ c.day.day }}. {{ c.day.month }}.: {% if c.rate is none %}bez běhu{% else %}{{ c.ok }}/{{ c.att }} OK{% endif %}"></span>{% endfor %}
+      </div>
+      <div class="st-axis" aria-hidden="true"><span>před 14 dny</span><span>dnes</span></div>
+      {% if l and l.statuses %}<p class="st-codes">HTTP kódy v posledním běhu: {% for k, v in (l.statuses|fromjson).items() %}<code>{{ k }}</code>&nbsp;{{ v }}×{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+    </article>
+  {% endfor %}
+  </div>
+  {% endif %}
+  <div class="card st-legend">
+    <h2 class="h3">Jak to vyhodnocujeme</h2>
+    <ul>
+      <li><b>Blokuje / selhává</b> – v posledním běhu selhala víc než polovina požadavků (nejméně {{ min_attempts }}): HTTP 403/429/503, ochrana proti botům, captcha nebo zákaz v robots.txt.</li>
+      <li><b>Staré ceny</b> – poslední úspěšně stažená cena je starší než {{ stale_days }} dny.</li>
+      <li>Časy jsou v českém čase. Sloupce ukazují podíl úspěšných požadavků za den (zelená ≥ 80 %, oranžová ≥ 50 %, červená méně, šedá = bez běhu).</li>
+    </ul>
+    <p class="muted">Seznam obchodů a zdroje cen: <a href="/obchody">Hlídané obchody</a>.</p>
+  </div>
+</div></section>
+{% endblock %}

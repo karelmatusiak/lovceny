@@ -71,3 +71,54 @@ def add_compression(app):
     except ImportError:  # pragma: no cover
         from starlette.middleware.gzip import GZipMiddleware
         app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+class AnalyticsMiddleware:
+    """Vlastní anonymní analytika (lovceny/analytics.py). Zápis až po odeslání odpovědi, ve vlákně,
+    chyba nikdy nerozbije stránku. Zaznamenává jen GET HTML stránky s 200 (a dotazy živého hledání)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        from . import analytics
+        from starlette.datastructures import Headers
+        headers = Headers(scope=scope)
+        path = scope.get("path", "")
+        live = path == "/hledat/zive"
+        if not (live or analytics.should_track(path, scope.get("method", ""), headers)) or \
+                (live and (analytics.opted_out(headers) or analytics.is_bot(headers.get("user-agent", "")))):
+            return await self.app(scope, receive, send)
+        info = {"status": 0, "html": False}
+
+        async def _send(msg):
+            if msg["type"] == "http.response.start":
+                info["status"] = msg.get("status", 0)
+                ct = dict((k.lower(), v) for k, v in msg.get("headers", [])).get(b"content-type", b"")
+                info["html"] = ct.startswith(b"text/html")
+            await send(msg)
+        await self.app(scope, receive, _send)
+        an = (scope.get("state") or {}).get("an") or {}
+        if info["status"] not in (200, 422) or not info["html"] or (live and not an):
+            return
+        if info["status"] == 422 and an.get("kind") != "search":
+            return
+        fwd = headers.get("x-forwarded-for", "")
+        client = scope.get("client") or ("", 0)
+        ip = fwd.split(",")[0].strip() if fwd else client[0]
+        kw = {"path": an.get("path") or path, "kind": an.get("kind", "view"), "ip": ip or "",
+              "ua": headers.get("user-agent", ""), "referer": headers.get("referer", ""), "host": headers.get("host", ""),
+              "query": an.get("query"), "results": an.get("results"), "product_id": an.get("product_id")}
+
+        def _write():
+            from .db import SessionLocal
+            try:
+                with SessionLocal() as db:
+                    analytics.record(db, **kw)
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger("lovceny.analytics").warning("analytika: %s", type(e).__name__)
+        import anyio
+        await anyio.to_thread.run_sync(_write)

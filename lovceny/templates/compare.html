@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge %}
 {% block title %}Porovnání cen – Lovceny{% endblock %}
 {% block body %}
 <section style="padding-top:16px"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-pridat="{{ pridat }}">
@@ -19,12 +19,14 @@
       {% for it in items %}{% set p = it.p %}
       <article class="card cmp-col" style="border-top:5px solid {{ it.color }}">
         <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ p.name }} z porovnání">✕ Odebrat</button>
-        <div class="cmp-img">{% if p.image_url %}<img src="{{ p.image_url }}" alt="" width="60" height="60" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}📦{% endif %}</div>
+        <div class="cmp-img">{% if p.image_url %}{{ shop_img(p.image_url, 140) }}{% else %}📦{% endif %}</div>
         <h2 class="cmp-name"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small> v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}</small>{% else %}cena bude doplněna{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v) }}</dd></div>
-          <div class="cmp-mm"><div><dt>Minimum 90 dní</dt><dd>{{ it.v.min90|czk }}</dd></div><div><dt>Maximum 90 dní</dt><dd>{{ it.v.max90|czk }}</dd></div></div>
+        </dl>
+        <dl class="cmp-dl cmp-mm"><div><dt>Minimum 90 dní</dt><dd>{{ it.v.min90|czk }}</dd></div><div><dt>Maximum 90 dní</dt><dd>{{ it.v.max90|czk }}</dd></div></dl>
+        <dl class="cmp-dl">
           <div><dt>Obchody</dt><dd><ul class="cmp-shops">
             {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="nofollow sponsored noopener">{{ s.name if s else o.shop }}</a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
           </ul></dd></div>
