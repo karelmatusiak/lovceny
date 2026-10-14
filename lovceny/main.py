@@ -139,5 +139,7 @@ def shops(request: Request):
 
 
 @app.get("/healthz")
-def health():
-    return {"ok": True}
+def health(db=Depends(get_db)):
+    from .db import engine
+    return {"ok": True, "db": engine.url.get_backend_name(), "db_host": (engine.url.host or "")[:12],
+            "products": db.scalar(select(func.count(Product.id)))}
