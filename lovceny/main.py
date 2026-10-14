@@ -40,6 +40,9 @@ tpl.env.globals["CATEGORIES"] = CATEGORIES
 tpl.env.filters["tojson_ld"] = seo.jsonld
 tpl.env.globals["img_attrs"] = images.srcset
 tpl.env.filters["fromjson"] = json.loads
+from . import seasons  # noqa: E402
+tpl.env.globals["season_tip"] = seasons.category_tip
+tpl.env.filters["pretty_name"] = lambda q: __import__("lovceny.verify", fromlist=["x"]).pretty_name(q)
 
 
 def affiliate_on() -> bool:
@@ -101,7 +104,8 @@ def home(request: Request, db=Depends(get_db)):
 
 @app.get("/slevy", response_class=HTMLResponse)
 def deals_page(request: Request, db=Depends(get_db)):
-    return tpl.TemplateResponse(request, "deals.html", real_deals(db))
+    return tpl.TemplateResponse(request, "deals.html", {**real_deals(db), "push_key": pushmod.public_key() if pushmod.enabled() else "",
+                                                        "email_on": False})
 
 
 @app.get("/ochrana-osobnich-udaju", response_class=HTMLResponse)
@@ -698,3 +702,277 @@ def terms_page(request: Request):
 for _old, _new in {"/metodika": "/jak-radime", "/bot": "/pro-obchody", "/pro-e-shopy": "/pro-obchody",
                    "/podminky-uzivani": "/podminky"}.items():
     app.add_api_route(_old, (lambda n: (lambda: RedirectResponse(n, 301)))(_new), methods=["GET"], include_in_schema=False)
+
+
+# ---------- v6: Kdy nakupovat ----------
+@app.get("/kdy-nakupovat", response_class=HTMLResponse)
+def when_to_buy(request: Request, db=Depends(get_db)):
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Europe/Prague"))
+    ps = seasons.periods(now.year)
+    by_month = {m: [p for p in ps if m in p.months] for m in range(1, 13)}
+    crumbs = [("Lovceny", "/"), ("Kdy nakupovat", "/kdy-nakupovat")]
+    return tpl.TemplateResponse(request, "kdy_nakupovat.html", {
+        "periods": ps, "by_month": by_month, "months": seasons.MONTHS, "this_month": now.month,
+        "insights": seasons.insights(db), "tips": seasons.CATEGORY_TIPS, "cat_by": BY_SLUG, "t": seasons,
+        "crumbs": crumbs, "ld": [seo.breadcrumb_ld(crumbs)]})
+
+
+# ---------- v6: Ověř slevu ----------
+from . import verify as verifymod  # noqa: E402
+
+
+def _verify_share_text(r) -> str:
+    n = (r.name or r.query or "produkt")[:80]
+    if r.check and r.check.enough and r.check.flag:
+        return f"{n}: za 30 dní bylo levněji ({czk(r.check.min30)}) – ověřeno na Lovceny"
+    if r.price:
+        return f"{n} za {czk(r.price)} – ověření slevy na Lovceny"
+    return f"{n} – ověření slevy na Lovceny"
+
+
+@app.get("/over-slevu", response_class=HTMLResponse)
+def verify_page(request: Request, url: str = "", jinde: int = 0, db=Depends(get_db)):
+    from urllib.parse import urlparse as _up
+    url_in = url.strip()[:2000]
+    ctx = {"r": None, "url_in": url_in, "error": "", "limited": False, "live_done": False,
+           "crumbs": [("Lovceny", "/"), ("Ověř slevu", "/over-slevu")]}
+    if not url_in:
+        return tpl.TemplateResponse(request, "over_slevu.html", ctx)
+    ctx["noindex"] = True
+    try:
+        clean = verifymod.clean_url(url_in)
+    except verifymod.BadUrl as e:
+        ctx["error"] = str(e)
+        return tpl.TemplateResponse(request, "over_slevu.html", ctx, status_code=422)
+    key_hit = verifymod.cached(verifymod.cache_key(clean, live=False))
+    if key_hit is None and not verifymod.rate_ok(_client_ip(request)):
+        ctx["limited"] = True
+        return tpl.TemplateResponse(request, "over_slevu.html", ctx, status_code=429)
+    r, _ = verifymod.verify_cached(db, clean, live=False)
+    if jinde:
+        verifymod._elsewhere(db, r)
+        ctx["live_done"] = True
+    ctx.update(r=r, url_in=r.url, host=(_up(r.url).hostname or ""),
+               share_url=canonical("/over-slevu", "url=" + quote(r.url, safe="")), share_text=_verify_share_text(r))
+    request.state.an = {"kind": "view", "path": "/over-slevu"}
+    return tpl.TemplateResponse(request, "over_slevu.html", ctx, headers={"X-Robots-Tag": "noindex"})
+
+
+@app.get("/over-slevu/jinde", response_class=HTMLResponse)
+def verify_elsewhere(request: Request, url: str = "", db=Depends(get_db)):
+    """Fragment „Nabídky v dalších obchodech“ (živé hledání má vlastní cache 10 min)."""
+    try:
+        r, _ = verifymod.verify_cached(db, url, live=False)
+    except verifymod.BadUrl:
+        raise HTTPException(422)
+    if not r.elsewhere and r.query:
+        verifymod._elsewhere(db, r)
+    return tpl.TemplateResponse(request, "_over_jinde.html", {"r": r}, headers={"X-Robots-Tag": "noindex"})
+
+
+# ---------- v6: veřejné API pro rozšíření prohlížeče ----------
+EXT_ORIGIN_RE = re.compile(r"^(chrome-extension|moz-extension)://[a-z0-9-]{8,64}$")
+API_PER_IP_HOUR = 60
+API_CACHE_S = 900
+
+
+def _ext_origin(request: Request) -> str:
+    """CORS jen pro rozšíření. EXTENSION_ORIGINS (čárkami) = přesný seznam po zveřejnění v obchodech."""
+    import os
+    o = request.headers.get("origin", "")
+    allowed = [x.strip() for x in os.environ.get("EXTENSION_ORIGINS", "").split(",") if x.strip()]
+    if allowed:
+        return o if o in allowed else ""
+    return o if EXT_ORIGIN_RE.match(o) else ""
+
+
+def _api_headers(request: Request, cache: bool = True) -> dict:
+    h = {"Vary": "Origin", "X-Robots-Tag": "noindex",
+         "Cache-Control": f"private, max-age={API_CACHE_S}" if cache else "no-store"}
+    o = _ext_origin(request)
+    if o:
+        h.update({"Access-Control-Allow-Origin": o, "Access-Control-Allow-Methods": "GET",
+                  "Access-Control-Max-Age": "86400"})
+    return h
+
+
+def verify_json(r) -> dict:
+    lp = r.lowest_elsewhere
+    v = r.verdict
+    c = r.check
+    out = {
+        "ok": True, "status": r.status, "message": r.message, "url": r.url,
+        "shop": {"slug": r.shop.slug, "name": r.shop.name, "supported": r.shop.status == "ok"} if r.shop else None,
+        "name": r.name, "price": r.price, "original_price": r.original_price,
+        "tracked": None, "check30": None,
+        "lowest_elsewhere": {"shop": lp.shop, "shop_name": SHOPS[lp.shop].name if lp.shop in SHOPS else lp.shop,
+                             "name": lp.name, "price": lp.price, "url": lp.url} if lp else None,
+        "elsewhere_count": len(r.elsewhere),
+        "lovceny_url": canonical("/over-slevu", "url=" + quote(r.url, safe="")),
+    }
+    if r.product is not None and v is not None:
+        out["tracked"] = {"id": r.product.id, "url": canonical(f"/produkt/{r.product.id}-{r.product.slug}"),
+                          "verdict": {"code": v.code, "label": v.headline, "reason": v.reason}}
+    if c is not None and c.enough:
+        out["check30"] = {"min30": c.min30, "date": c.min30_date.isoformat(), "flag": c.flag, "days": c.days,
+                          "label": "Za 30 dní bylo levněji" if c.flag else ""}
+    return out
+
+
+@app.options("/api/v1/overit")
+def api_verify_preflight(request: Request):
+    return Response(status_code=204, headers=_api_headers(request))
+
+
+@app.get("/api/v1/overit")
+def api_verify(request: Request, url: str = "", name: str = "", price: float = 0, original: float = 0,
+               db=Depends(get_db)):
+    """Veřejné JSON API pro rozšíření: verdikt, kontrola 30 dní, nejnižší cena jinde.
+    Rozšíření posílá název a cenu z otevřené stránky (pak stránku obchodu vůbec nestahujeme)."""
+    try:
+        clean = verifymod.clean_url(url)
+    except verifymod.BadUrl as e:
+        return JSONResponse({"ok": False, "error": str(e)}, 422, headers=_api_headers(request, cache=False))
+    kw = {"live": True, "hint_name": name.strip()[:200] or None,
+          "hint_price": price if 0 < price < 10_000_000 else None,
+          "hint_original": original if 0 < original < 10_000_000 else None}
+    if verifymod.cached(verifymod.cache_key(clean, **kw)) is None and \
+            not verifymod.rate_ok(_client_ip(request), per_hour=API_PER_IP_HOUR, scope="api"):
+        return JSONResponse({"ok": False, "error": "Příliš mnoho dotazů, zkus to za chvíli."}, 429,
+                            headers={**_api_headers(request, cache=False), "Retry-After": "600"})
+    r, hit = verifymod.verify_cached(db, clean, **kw)
+    return JSONResponse({**verify_json(r), "cached": hit}, headers=_api_headers(request))
+
+
+# ---------- v6: Rozšíření do prohlížeče ----------
+_ext_zip: dict[str, bytes] = {}
+
+
+def _ext_build():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("lovceny_ext_build", BASE.parent / "extension" / "build.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@app.get("/rozsireni", response_class=HTMLResponse)
+def extension_page(request: Request):
+    b = _ext_build()
+    shops = sorted({SHOPS[s].name for s in SHOPS if SHOPS[s].status == "ok"}, key=str.lower)
+    crumbs = [("Lovceny", "/"), ("Rozšíření do prohlížeče", "/rozsireni")]
+    return tpl.TemplateResponse(request, "rozsireni.html", {"shops": shops, "version": b.VERSION, "crumbs": crumbs,
+                                                             "ld": [seo.breadcrumb_ld(crumbs)]})
+
+
+@app.get("/rozsireni/lovceny-{target}.zip")
+def extension_zip(target: str):
+    """Zip rozšíření sestavený z repozitáře (stejný jako `python extension/build.py`)."""
+    if target not in ("chrome", "firefox"):
+        raise HTTPException(404)
+    if target not in _ext_zip:
+        b = _ext_build()
+        _ext_zip[target] = b.zip_bytes(target, api=public_url())
+    return Response(_ext_zip[target], media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="lovceny-{target}.zip"', "Cache-Control": "public, max-age=3600",
+        "X-Robots-Tag": "noindex"})
+
+
+# ---------- v6: Týdenní přehled slev ----------
+from . import digest as digestmod  # noqa: E402
+
+
+def _digest_ctx(request: Request, **kw) -> dict:
+    return {"push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(), **kw}
+
+
+@app.get("/prehled", response_class=HTMLResponse)
+def digest_archive(request: Request, email: str = "", db=Depends(get_db)):
+    from .models import WeeklyDigest
+    rows = db.scalars(select(WeeklyDigest).order_by(WeeklyDigest.year.desc(), WeeklyDigest.week.desc()).limit(104)).all()
+    crumbs = [("Lovceny", "/"), ("Týdenní přehled slev", "/prehled")]
+    weeks = [(d, digestmod.slug(d), digestmod.week_range(d.year, d.week), len(digestmod.items_of(d))) for d in rows]
+    return tpl.TemplateResponse(request, "prehled.html", _digest_ctx(
+        request, weeks=weeks, crumbs=crumbs, ld=[seo.breadcrumb_ld(crumbs)], email_msg=email[:40]))
+
+
+@app.get("/prehled/{year:int}-{week:int}", response_class=HTMLResponse)
+def digest_week(request: Request, year: int, week: int, db=Depends(get_db)):
+    from .models import WeeklyDigest
+    d = db.scalar(select(WeeklyDigest).where(WeeklyDigest.year == year, WeeklyDigest.week == week))
+    if d is None:
+        raise HTTPException(404)
+    sl = digestmod.slug(d)
+    prev = db.scalar(select(WeeklyDigest).where((WeeklyDigest.year * 100 + WeeklyDigest.week) < year * 100 + week)
+                     .order_by(WeeklyDigest.year.desc(), WeeklyDigest.week.desc()).limit(1))
+    nxt = db.scalar(select(WeeklyDigest).where((WeeklyDigest.year * 100 + WeeklyDigest.week) > year * 100 + week)
+                    .order_by(WeeklyDigest.year, WeeklyDigest.week).limit(1))
+    crumbs = [("Lovceny", "/"), ("Týdenní přehled slev", "/prehled"), (f"{week}. týden {year}", f"/prehled/{sl}")]
+    items = digestmod.items_of(d)
+    return tpl.TemplateResponse(request, "prehled_tyden.html", _digest_ctx(
+        request, d=d, items=items, range=digestmod.week_range(year, week), crumbs=crumbs, canonical_path=f"/prehled/{sl}",
+        prev=prev and digestmod.slug(prev), nxt=nxt and digestmod.slug(nxt), ld=[seo.breadcrumb_ld(crumbs)]))
+
+
+@app.post("/api/push/tema")
+def push_topic_subscribe(payload: dict = Body(...), db=Depends(get_db)):
+    if not pushmod.enabled():
+        raise HTTPException(404, "Upozornění v prohlížeči nejsou zapnutá.")
+    try:
+        s = pushmod.subscribe_topic(db, str(payload.get("topic") or ""), payload.get("subscription") or {})
+    except pushmod.PushError as e:
+        raise HTTPException(422, str(e))
+    return {"ok": True, "token": s.token}
+
+
+@app.post("/api/push/tema/zrusit")
+def push_topic_unsubscribe(payload: dict = Body(...), db=Depends(get_db)):
+    n = pushmod.unsubscribe_topic(db, token=str(payload.get("token") or ""), endpoint=str(payload.get("endpoint") or ""))
+    return {"ok": True, "deleted": n}
+
+
+@app.get("/prehled/odhlasit/{token}", response_class=HTMLResponse)
+def digest_push_unsub_link(request: Request, token: str, db=Depends(get_db)):
+    pushmod.unsubscribe_topic(db, token=token)
+    return tpl.TemplateResponse(request, "message.html", {
+        "title": "Týdenní přehled vypnut", "noindex": True,
+        "text": "Týdenní přehled slev už do tohoto prohlížeče posílat nebudeme a odběr jsme smazali."})
+
+
+@app.post("/prehled/email")
+def digest_email_subscribe(request: Request, email: str = Form(""), website: str = Form(""), db=Depends(get_db)):
+    if not digestmod.email_enabled():
+        raise HTTPException(404)
+    if website:
+        return RedirectResponse("/prehled?email=odeslano#email", 303)
+    email = email.strip().lower()[:320]
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return RedirectResponse("/prehled?email=chyba#email", 303)
+    if not verifymod.rate_ok(_client_ip(request), per_hour=5, scope="prehled-email"):
+        return RedirectResponse("/prehled?email=limit#email", 303)
+    digestmod.email_subscribe(db, email)
+    return RedirectResponse("/prehled?email=odeslano#email", 303)
+
+
+@app.get("/prehled/email/potvrdit/{token}", response_class=HTMLResponse)
+def digest_email_confirm(request: Request, token: str, db=Depends(get_db)):
+    from .models import DigestEmail
+    e = db.scalar(select(DigestEmail).where(DigestEmail.token == token))
+    if not e:
+        raise HTTPException(404)
+    e.confirmed = True
+    db.commit()
+    return tpl.TemplateResponse(request, "message.html", {"title": "Odběr potvrzen", "noindex": True,
+                                "text": "Týdenní přehled slev ti budeme posílat každý pátek. Odhlásit se můžeš odkazem v každém e-mailu."})
+
+
+@app.get("/prehled/email/zrusit/{token}", response_class=HTMLResponse)
+def digest_email_unsub(request: Request, token: str, db=Depends(get_db)):
+    from .models import DigestEmail
+    e = db.scalar(select(DigestEmail).where(DigestEmail.token == token))
+    if e:
+        db.delete(e)
+        db.commit()
+    return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "noindex": True,
+                                "text": "Týdenní přehled ti už posílat nebudeme a tvůj e-mail jsme smazali."})

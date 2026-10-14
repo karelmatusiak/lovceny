@@ -8,8 +8,8 @@
 {% block content %}{% endblock %}
 </td></tr>
 <tr><td style="padding:16px 28px 24px;border-top:1px solid #E1E8E4;font-size:12px;line-height:1.5;color:#5B6B63">
-Tento e-mail ti posíláme, protože sis na Lovceny nastavil(a) hlídání ceny.
-<a href="{{ unsub_url }}" style="color:#5B6B63">Odhlásit hlídání jedním klikem</a> ·
+{% block footer %}Tento e-mail ti posíláme, protože sis na Lovceny nastavil(a) hlídání ceny.
+<a href="{{ unsub_url }}" style="color:#5B6B63">Odhlásit hlídání jedním klikem</a>{% endblock %} ·
 <a href="{{ base }}/ochrana-osobnich-udaju" style="color:#5B6B63">Ochrana osobních údajů</a>
 </td></tr></table></td></tr></table>
 </body></html>

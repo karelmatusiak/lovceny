@@ -1,0 +1,12 @@
+Potvrď odběr Týdenního přehledu slev
+
+Každý pátek ti pošleme krátký přehled skutečných slev týdne – produkty, jejichž cena je u 90denního minima a pod obvyklou cenou.
+
+Potvrdit odběr: {{ confirm_url }}
+
+Bez potvrzení nic posílat nebudeme. Pokud jsi o nic nežádal(a), e-mail ignoruj – adresu do 7 dnů smažeme.
+
+--
+Lovceny – poctivý hlídač cen
+Smazat adresu: {{ unsub_url }}
+Ochrana osobních údajů: {{ base }}/ochrana-osobnich-udaju

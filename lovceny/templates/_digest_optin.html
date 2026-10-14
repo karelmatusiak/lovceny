@@ -1,0 +1,17 @@
+{# Přepínač odběru Týdenního přehledu slev (Web Push). Bez JS / klíčů / podpory prohlížeče se ukáže vysvětlení. #}
+<div class="card dg-optin" id="prehled-optin" data-vapid="{{ push_key }}">
+  <div class="dg-optin-ico" aria-hidden="true">🔔</div>
+  <div class="dg-optin-main">
+    <h2 class="h3" id="dg-h">Týdenní přehled slev</h2>
+    <p>Každý pátek kolem 17:17 jedno upozornění v prohlížeči s nejlepšími skutečnými slevami týdne. Nic jiného ti posílat nebudeme.</p>
+    {% if push_key %}
+    <div class="dg-ui" hidden>
+      <button type="button" class="dg-toggle" id="dg-toggle" role="switch" aria-checked="false" aria-labelledby="dg-h dg-state"><span class="dg-knob" aria-hidden="true"></span><span id="dg-state">Vypnuto</span></button>
+      <p class="push-msg" id="dg-msg" role="status" aria-live="polite"></p>
+    </div>
+    <p class="dg-unsupported ov-muted" hidden>Tento prohlížeč upozornění nepodporuje.{% if email_on %} Můžeš si přehled nechat posílat e-mailem.{% endif %}</p>
+    <p class="dg-ios ov-muted" hidden>Na iPhonu fungují upozornění jen z webu přidaného na plochu (Sdílet → Přidat na plochu, iOS 16.4+).</p>
+    <noscript><p class="ov-muted">Zapnutí upozornění potřebuje JavaScript.</p></noscript>
+    {% else %}<p class="ov-muted">Upozornění v prohlížeči teď nejsou zapnutá.</p>{% endif %}
+  </div>
+</div>

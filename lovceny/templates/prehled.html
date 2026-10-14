@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Týdenní přehled slev – archiv | Lovceny{% endblock %}
+{% block description %}Každý pátek přehled skutečných slev elektroniky a spotřebičů: produkty u 90denního minima, seřazené podle úspory oproti obvyklé ceně. Archiv všech týdnů.{% endblock %}
+{% block body %}
+<section class="legal-page"><div class="wrap">
+  <div class="prose">
+    <div class="eyebrow">Týdenní přehled slev</div>
+    <h1>Skutečné slevy týdne</h1>
+    <p class="sub">Každý pátek v 17:17 uložíme přehled produktů, jejichž cena je u 90denního minima a pod obvyklou cenou – stejnou metodikou jako <a href="/slevy">Skutečné slevy</a>. Přehled se později nemění, takže je vidět, jak to v daném týdnu bylo.</p>
+  </div>
+  {% include "_digest_optin.html" %}
+  {% if email_on %}
+  <div class="card dg-email" id="email">
+    <h2 class="h3">Přehled e-mailem</h2>
+    {% if email_msg == 'odeslano' %}<p class="notice info" role="status">Poslali jsme ti e-mail s potvrzovacím odkazem. Bez potvrzení nic posílat nebudeme.</p>
+    {% elif email_msg == 'chyba' %}<p class="notice warn" role="alert">E-mail nevypadá správně.</p>
+    {% elif email_msg == 'limit' %}<p class="notice warn" role="alert">Zkus to prosím za hodinu.</p>{% endif %}
+    <form method="post" action="/prehled/email" class="dg-email-form">
+      <label for="dg-email">E-mail</label><input id="dg-email" type="email" name="email" required autocomplete="email" maxlength="320">
+      <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+      <button class="btn btn-primary" type="submit">Odebírat</button>
+    </form>
+    <p class="ov-muted">Jednou týdně, odhlášení jedním klikem v každém e-mailu. Viz <a href="/ochrana-osobnich-udaju#prehled">ochrana osobních údajů</a>.</p>
+  </div>
+  {% endif %}
+  <h2 class="kdy-h2">Archiv</h2>
+  {% if weeks %}
+  <ul class="dg-archive">{% for d, sl, rng, n in weeks %}
+    <li><a class="card dg-week" href="/prehled/{{ sl }}"><b>{{ d.week }}. týden {{ d.year }}</b><span>{{ rng[0].day }}. {{ rng[0].month }}. – {{ rng[1].day }}. {{ rng[1].month }}.</span><span class="dg-n">{{ n }} {{ 'sleva' if n == 1 else ('slevy' if 2 <= n <= 4 else 'slev') }}</span></a></li>{% endfor %}
+  </ul>
+  {% else %}<p class="ov-muted">První přehled vyjde v pátek v 17:17. Do té doby: <a href="/slevy">Skutečné slevy dnes</a>.</p>{% endif %}
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="{{ static('digest.js') }}" defer></script>{% endblock %}

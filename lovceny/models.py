@@ -162,3 +162,43 @@ class ContactMessage(Base):
     reply_to: Mapped[str | None] = mapped_column(String(320))
     topic: Mapped[str] = mapped_column(String(40), default="jine")
     message: Mapped[str] = mapped_column(Text)
+
+
+class PushTopicSubscription(Base):
+    """Web Push odběr tématu (zatím jen „tydenni“ = Týdenní přehled slev). Oddělené od hlídání cen produktů."""
+    __tablename__ = "push_topic_subscriptions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    topic: Mapped[str] = mapped_column(String(30), index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    token: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_push_topic_endpoint", "topic", "endpoint"),)
+
+
+class WeeklyDigest(Base):
+    """Snímek Týdenního přehledu slev (/prehled/<rok>-<týden>). Položky jako JSON, aby stránka zůstala stejná."""
+    __tablename__ = "weekly_digests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    year: Mapped[int] = mapped_column(Integer)
+    week: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    items: Mapped[str] = mapped_column(Text, default="[]")
+    push_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    push_sent: Mapped[int] = mapped_column(Integer, default=0)
+    email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_sent: Mapped[int] = mapped_column(Integer, default=0)
+    __table_args__ = (Index("ux_digest_week", "year", "week", unique=True),)
+
+
+class DigestEmail(Base):
+    """E-mailová verze Týdenního přehledu (double opt-in). Aktivní jen s nastaveným EMAIL_BACKEND."""
+    __tablename__ = "digest_emails"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

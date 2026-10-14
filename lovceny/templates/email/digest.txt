@@ -1,0 +1,15 @@
+Týdenní přehled slev – {{ d.week }}. týden ({{ start.day }}. {{ start.month }}. – {{ end.day }}. {{ end.month }}. {{ end.year }})
+
+Produkty, jejichž cena je teď u 90denního minima, seřazené podle úspory oproti obvyklé ceně (medián 90 dní).
+
+{% for it in items %}
+- {{ it.name }}: {{ it.price|czk }} ({{ it.shop_name }}), obvykle {{ it.median90|czk }}, −{{ '%.0f'|format(it.savings_pct) }} %
+  {{ base }}/produkt/{{ it.product_id }}-{{ it.slug }}
+{% endfor %}
+
+Celý přehled: {{ page_url }}
+Ceny se mohou změnit, rozhodující je cena v e-shopu.
+
+--
+Lovceny – poctivý hlídač cen
+Odhlásit přehled: {{ unsub_url }}

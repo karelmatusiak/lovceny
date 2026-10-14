@@ -1,0 +1,37 @@
+name: Týdenní přehled slev
+# Každý pátek 17:17 pražského času. GitHub cron je v UTC → dva časy (letní 15:17, zimní 16:17 UTC);
+# skript pošle přehled jen v pátek 17–18 h Praha a nejvýš jednou za týden (idempotentní).
+on:
+  schedule:
+    - cron: "17 15,16 * * 5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Poslat hned (bez kontroly času)"
+        type: boolean
+        default: false
+concurrency: { group: weekly-digest, cancel-in-progress: false }
+permissions:
+  contents: read
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Přehled + upozornění
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
+          # E-mailová verze je vypnutá, dokud není secret EMAIL_BACKEND (např. brevo)
+          EMAIL_BACKEND: ${{ secrets.EMAIL_BACKEND || 'log' }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME: Lovceny
+          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
+        run: python weekly_digest.py ${{ inputs.force && '--force' || '' }}

@@ -44,3 +44,19 @@ def alert_email(watch, offer, shop_name: str, shop_url: str) -> Email:
                    o=offer, shop_name=shop_name, shop_url=shop_url,
                    unsub_url=f"{base}/hlidani/zrusit/{watch.token}",
                    product_url=f"{base}/produkt/{watch.product.id}-{watch.product.slug}")
+
+
+def digest_confirm_email(sub) -> Email:
+    base = public_url()
+    return _render("digest_confirm", "Potvrď odběr Týdenního přehledu slev", sub=sub,
+                   confirm_url=f"{base}/prehled/email/potvrdit/{sub.token}",
+                   unsub_url=f"{base}/prehled/email/zrusit/{sub.token}")
+
+
+def digest_email(d, items: list[dict], sub) -> Email:
+    base = public_url()
+    from .digest import slug, week_range
+    a, b = week_range(d.year, d.week)
+    return _render("digest", f"Týdenní přehled slev {d.week}. týden: {len(items)} skutečných slev", d=d, items=items,
+                   start=a, end=b, page_url=f"{base}/prehled/{slug(d)}?utm_source=email",
+                   unsub_url=f"{base}/prehled/email/zrusit/{sub.token}")

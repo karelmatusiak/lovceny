@@ -62,7 +62,17 @@
   <h3>2.7 Technické logy hostingu</h3>
   <p>Hosting (Render) a databáze (Neon) mohou krátkodobě zaznamenat IP adresu, User-Agent a čas požadavku v provozních logách – nezbytné pro bezpečnost a provoz služby (oprávněný zájem).</p>
 
-  <h3>2.8 Co nezpracováváme</h3>
+  <h3 id="over-slevu">2.8 Ověř slevu</h3>
+  <p>Když na stránce <a href="/over-slevu">Ověř slevu</a> vložíš odkaz na produkt, použijeme ho jen k ověření: u obchodu, který automatické čtení dovoluje, jednou načteme stránku produktu a podle názvu prohledáme další obchody. <b>Vložený odkaz neukládáme do databáze</b> (ve statistice návštěvnosti je jen cesta <code>/over-slevu</code> bez parametrů). Výsledek držíme nejvýš 15 minut v paměti serveru, aby se stejný odkaz nemusel načítat znovu. Proti zahlcení obchodů počítáme dotazy podle jednosměrného otisku IP adresy – jen v paměti, nejdéle hodinu. Odkaz na výsledek obsahuje adresu produktu; komu ho pošleš, je na tobě.</p>
+
+  <h3 id="rozsireni">2.9 Rozšíření do prohlížeče</h3>
+  <p><a href="/rozsireni">Rozšíření Lovceny</a> běží jen na stránkách obchodů, které sledujeme. Na stránce produktu přečte ze strukturovaných dat jen <b>adresu produktu, jeho název a cenu</b> a pošle je na naše API, aby mohlo ukázat výsledek. Nepoužívá analytiku, identifikátory ani cookies (požadavky jdou bez cookies), nečte jiné weby ani historii prohlížení. Dotazy z rozšíření neukládáme do databáze ani do statistiky; výsledek držíme nejvýš 15 minut v paměti serveru a počet dotazů omezujeme podle otisku IP adresy v paměti (nejdéle hodinu). <b>Právní základ:</b> oprávněný zájem / plnění služby, kterou sis nainstaloval(a). Rozšíření odinstaluješ ve správě rozšíření prohlížeče.</p>
+
+  <h3 id="prehled">2.10 Týdenní přehled slev</h3>
+  <p>Týdenní přehled je <b>samostatný odběr</b>, oddělený od hlídání cen. Upozornění v prohlížeči: po tvém povolení uložíme adresu odběru push služby prohlížeče, jeho šifrovací klíče, téma „Týdenní přehled“, datum vytvoření a posledního odeslání a odhlašovací kód – žádný e-mail ani IP adresu. Posíláme jednou týdně (v pátek). Odhlásit se můžeš přepínačem na stránce <a href="/prehled">Týdenní přehled slev</a> nebo tlačítkem „Odhlásit přehled“ přímo v oznámení; zaniklé odběry mažeme při dalším odesílání. V localStorage si pamatujeme odhlašovací kód (klíč <code>lovceny-prehled</code>).</p>
+  <p><b>E-mailová verze</b> je připravená, ale zatím <b>vypnutá</b>. Až ji zapneme, bude potřeba zvlášť zadat e-mail a potvrdit ho odkazem (double opt-in); uložíme e-mail, kód pro odhlášení, stav potvrzení a datum posledního odeslání. Nepotvrzené adresy mažeme po 7 dnech, odhlášením (odkaz v každém e-mailu) adresu hned smažeme. <b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR, § 7 zákona č. 480/2004 Sb.). E-maily by odesílalo Brevo (viz bod 3).</p>
+
+  <h3>2.11 Co nezpracováváme</h3>
   <p>Nemáme uživatelské účty, neprovádíme profilování pro reklamu, nepoužíváme žádné cookies ani analytiku třetích stran (žádný Google Analytics, Meta Pixel apod.). Tlačítko Sdílet nenačítá žádné skripty sociálních sítí – jen otevře odkaz, když na něj klikneš.</p>
 
   <h2>3. Kde data leží (zpracovatelé)</h2>
@@ -73,11 +83,11 @@
     <li><b>Google</b> – Gemini API (jen při AI hledání; viz výše).</li>
     <li><b>Brevo</b> (Francie, EU) – odesílání e-mailů pro hlídání ceny; zpracovává e-mailovou adresu a obsah e-mailu (název produktu, cena, odkazy). Brevo vede o odeslaných e-mailech technický záznam (doručení, případně otevření/kliknutí podle jeho výchozího nastavení).</li>
     <li><b>Push služby prohlížečů</b> (Google Firebase Cloud Messaging, Mozilla Push Service, Apple Push Notification service, Windows Push Notification Services) – doručují zašifrovaná upozornění v prohlížeči, pokud je zapneš. Kterou službu použije, určuje tvůj prohlížeč.</li>
-    <li><b>GitHub</b> (GitHub Actions) – automatické stahování cen a rozesílání upozornění; během běhu se e-mailová adresa načte z databáze a předá Brevu, v GitHubu se neukládá.</li>
+    <li><b>GitHub</b> (GitHub Actions) – automatické stahování cen a rozesílání upozornění (včetně Týdenního přehledu slev); během běhu se e-mailová adresa načte z databáze a předá Brevu, v GitHubu se neukládá.</li>
   </ul>
 
   <h2>4. Cookies a úložiště v prohlížeči</h2>
-  <p>Podrobnosti jsou na stránce <a href="/cookies">Cookies</a>. Stručně: <b>nepoužíváme cookies</b> pro sledování. V <b>localStorage</b> prohlížeče si ukládáme jen seznam ID produktů k porovnání (klíč <code>lovceny_porovnani</code>) a u zapnutých upozornění v prohlížeči ID produktu, cílovou cenu a odhlašovací kód (klíč <code>lovceny-push</code>) a stav výzvy „Přidat na plochu“ (klíč <code>lovceny-pwa</code>: počet návštěv a kdy jsi výzvu zavřel) – zůstává u tebe v zařízení, na server se neposílá. Service worker si ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů pro rychlejší načítání; ceny ani stránky ne. Není potřeba cookie lišta.</p>
+  <p>Podrobnosti jsou na stránce <a href="/cookies">Cookies</a>. Stručně: <b>nepoužíváme cookies</b> pro sledování. V <b>localStorage</b> prohlížeče si ukládáme jen seznam ID produktů k porovnání (klíč <code>lovceny_porovnani</code>) a u zapnutých upozornění v prohlížeči ID produktu, cílovou cenu a odhlašovací kód (klíč <code>lovceny-push</code>) a stav výzvy „Přidat na plochu“ (klíč <code>lovceny-pwa</code>: počet návštěv a kdy jsi výzvu zavřel), a u zapnutého Týdenního přehledu jeho odhlašovací kód (klíč <code>lovceny-prehled</code>) – zůstává u tebe v zařízení, na server se neposílá. Service worker si ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů pro rychlejší načítání; ceny ani stránky ne. Není potřeba cookie lišta.</p>
 
   <h2>5. Affiliate odkazy</h2>
   <p>U některých obchodů (např. Alza, Datart) můžeme k odkazu přidat affiliate parametr. Na pořadí výsledků ani na verdikt to nemá vliv. Viz <a href="/#vydelavame">Jak vyděláváme</a>.</p>

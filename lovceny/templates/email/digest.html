@@ -1,0 +1,17 @@
+{% extends "_layout.html" %}{% block content %}
+<h1 style="font-size:22px;margin:0 0 6px">Týdenní přehled slev</h1>
+<p style="margin:0 0 16px;color:#5B6B63;font-size:14px">{{ d.week }}. týden · {{ start.day }}. {{ start.month }}. – {{ end.day }}. {{ end.month }}. {{ end.year }}</p>
+<p style="margin:0 0 16px">Produkty, jejichž cena je teď u 90denního minima, seřazené podle úspory oproti obvyklé ceně (medián 90 dní).</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+{% for it in items %}
+<tr><td style="padding:10px 0;border-top:1px solid #E1E8E4">
+<a href="{{ base }}/produkt/{{ it.product_id }}-{{ it.slug }}?utm_source=email" style="color:#13251C;font-weight:bold;text-decoration:none">{{ it.name }}</a><br>
+<span style="font-size:14px;color:#5B6B63">{{ it.shop_name }} · obvykle {{ it.median90|czk }}</span>
+</td><td align="right" style="padding:10px 0 10px 12px;border-top:1px solid #E1E8E4;white-space:nowrap">
+<b>{{ it.price|czk }}</b><br><span style="font-size:13px;color:#0B6E4F">−{{ '%.0f'|format(it.savings_pct) }} %</span></td></tr>
+{% endfor %}
+</table>
+<p style="margin:20px 0 0"><a href="{{ page_url }}" style="background:#0B6E4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:10px;display:inline-block">Celý přehled na Lovceny</a></p>
+<p style="margin:14px 0 0;font-size:13px;color:#5B6B63">Ceny se mohou změnit, rozhodující je cena v e-shopu. Pořadí jen podle úspory, nikdo za něj neplatí.</p>
+{% endblock %}
+{% block footer %}Odebíráš Týdenní přehled slev z Lovceny. <a href="{{ unsub_url }}" style="color:#5B6B63">Odhlásit jedním klikem</a>{% endblock %}

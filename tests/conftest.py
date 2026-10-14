@@ -19,8 +19,13 @@ def _no_live_network(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)  # testy nikdy nevolají skutečné Gemini
     ai.client.clear()
     ai.client.calls_today = 0
+    from lovceny import verify, seasons
+    verify.clear_cache()
+    seasons.clear_cache()
     yield
     search.clear_cache()
+    verify.clear_cache()
+    seasons.clear_cache()
 
 
 @pytest.fixture

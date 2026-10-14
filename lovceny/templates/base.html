@@ -24,8 +24,8 @@
 <header class="site-head"><div class="wrap">
   <nav aria-label="Hlavní navigace">
     <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="159" height="72"></a>
-    <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/#jak">Jak to funguje</a><a href="/obchody">Hlídané obchody</a><a href="/o-nas">O nás</a></div>
-    <a class="btn btn-ghost" href="/#hledat"><span aria-hidden="true">🔔</span> Hlídat cenu</a>
+    <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/over-slevu" class="nav-verify">Ověř slevu</a><a href="/kdy-nakupovat">Kdy nakupovat</a><a href="/o-nas">O nás</a></div>
+    <div class="nav-cta"><a class="btn btn-verify" href="/over-slevu"><span aria-hidden="true">🔎</span> Ověř slevu</a><a class="btn btn-ghost nav-watch" href="/#hledat"><span aria-hidden="true">🔔</span> Hlídat cenu</a></div>
   </nav>
 </div></header>
 <main id="obsah" tabindex="-1">
@@ -37,7 +37,7 @@
     <div><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="132" height="60" loading="lazy"></a>
       <p style="margin-top:14px;max-width:300px">Poctivý hlídač cen elektroniky a domácích spotřebičů. Bez placených pozic, bez reklam ve výsledcích.</p></div>
     <div><h2 class="foot-h">Kategorie</h2><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
-    <div><h2 class="foot-h">Produkt</h2><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li><li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li><li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">📲</span> Přidat na plochu</button></li></ul></div>
+    <div><h2 class="foot-h">Produkt</h2><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/over-slevu">Ověř slevu</a></li><li><a href="/kdy-nakupovat">Kdy nakupovat</a></li><li><a href="/prehled">Týdenní přehled slev</a></li><li><a href="/rozsireni">Rozšíření do prohlížeče</a></li><li><a href="/#hledat">Verdikt</a></li><li><a href="/#jak">Hlídání ceny</a></li><li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li><li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">📲</span> Přidat na plochu</button></li></ul></div>
     <div><h2 class="foot-h">Transparentnost</h2><ul><li><a href="/jak-radime">Jak řadíme a hodnotíme</a></li><li><a href="/pro-obchody">Pro e-shopy</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
     <div><h2 class="foot-h">Kontakt a právní</h2><ul><li><a href="/o-nas">O nás</a></li><li><a href="/o-nas#kontakt">Kontaktní formulář</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a></li><li><a href="/cookies">Cookies</a></li><li><a href="/podminky">Podmínky užívání</a></li></ul></div>
   </div>

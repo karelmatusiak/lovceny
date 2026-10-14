@@ -84,6 +84,23 @@ robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy
 Obchody k oslovení kvůli feedu/affiliate: `../obchody-k-osloveni.md`.
 | Alza, Datart | hledáme v importovaném feedu v DB |
 
+## v6 – Kdy nakupovat, Ověř slevu, rozšíření, týdenní přehled
+
+- **/kdy-nakupovat** (`lovceny/seasons.py`): kalendář typických slevových období (jasně označený jako *obecný vzorec*) a tip u každé kategorie i produktu. Sekce *Naše data* se ukáže jen při dostatku vlastních měření (≥ 5 produktů s historií, ≥ 6 různých měsíců, ≥ 3 produkty a ≥ 7 dní na produkt v měsíci, rozdíl ≥ 2 %); demo data se nepočítají. Jinak poctivě „zatím málo dat“.
+- **/over-slevu** (`lovceny/verify.py`): vložený odkaz se stáhne jen u obchodu z registru se stavem `ok` (robots.txt, max 3 MB, 10 s, přesměrování jen v rámci domén obchodu, kontrola veřejné IP u každého skoku – ochrana proti SSRF). U feedových/zakázaných/neznámých obchodů se nic nestahuje, jen se hledá podle názvu z adresy. Kontrola 30 dní (§ 12a ZOS) z našich měření (min. 7 dní). Limit 20 ověření/h na hash IP, 1000/den celkem, cache 15 min. Výsledek má sdílitelnou adresu.
+- **Rozšíření prohlížeče** (`extension/`, MV3 pro Chrome i Firefox): `python extension/build.py --out dist` vytvoří zipy (stahují se i z `/rozsireni`). Rozšíření pošle na `/api/v1/overit` jen adresu, název a cenu ze strukturovaných dat stránky (bez cookies), server obchod nestahuje. API: CORS jen pro `chrome-extension://` / `moz-extension://`, 60 dotazů/h na hash IP, cache. Texty pro obchody: `extension/STORE.md`, soukromí `extension/PRIVACY.md`. E2E test: `node extension/tests/e2e.js` (headless Chromium, uložená stránka Onlineshopu); v pytestu běží, když je nastaveno `LOVCENY_E2E_NODE_PATH` (node_modules s Playwrightem).
+- **Týdenní přehled** (`lovceny/digest.py`, `weekly_digest.py`, `.github/workflows/digest.yml`): každý pátek 17:17 (Praha) uloží přehled `/prehled/<rok>-<týden>` (archiv `/prehled`) a pošle Web Push odběratelům tématu `tydenni` (přepínač na /prehled a /slevy). Cron běží v 15:17 i 16:17 UTC, skript sám pustí jen tu správnou pražskou hodinu a je idempotentní. E-mailová verze je připravená, ale vypnutá, dokud není nastaven `EMAIL_BACKEND` (jiný než `log`).
+
+Nové proměnné prostředí:
+
+| Proměnná | Význam |
+|---|---|
+| `EXTENSION_ORIGINS` | volitelné: čárkami oddělený přesný seznam originů rozšíření pro CORS (po zveřejnění v obchodech – zúží CORS na skutečná ID) |
+| `LOVCENY_DNS_FAKEIP_OK` | **jen pro vývoj**: povolí „fake-IP“ rozsah 198.18.0.0/15 z lokálního DNS proxy. V produkci nenastavovat. |
+| `EMAIL_BACKEND` (v GitHub Actions) | zapne e-mailový týdenní přehled; bez něj se posílá jen Web Push |
+
+GitHub Actions `digest.yml` potřebuje secrets `DATABASE_URL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `PUBLIC_URL` (a pro e-mail `BREVO_*`). Ruční spuštění s `force` vytvoří přehled kdykoli.
+
 ## Lokální spuštění
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt

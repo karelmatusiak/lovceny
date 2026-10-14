@@ -172,3 +172,41 @@ def cleanup_push(db: Session, now: datetime | None = None) -> int:
             n += 1
     db.commit()
     return n
+
+
+# ---------- odběr témat (Týdenní přehled slev) ----------
+TOPICS = {"tydenni": "Týdenní přehled slev"}
+
+
+def subscribe_topic(db: Session, topic: str, sub: dict):
+    from .models import PushTopicSubscription as T
+    if topic not in TOPICS:
+        raise PushError("Neznámé téma.")
+    endpoint = (sub or {}).get("endpoint", "")
+    keys = (sub or {}).get("keys") or {}
+    p256dh, auth = str(keys.get("p256dh", "")), str(keys.get("auth", ""))
+    if not valid_endpoint(endpoint):
+        raise PushError("Neplatný odběr prohlížeče.")
+    if not (20 <= len(p256dh) <= 200 and 8 <= len(auth) <= 100):
+        raise PushError("Neplatné klíče odběru.")
+    s = db.scalar(select(T).where(T.topic == topic, T.endpoint == endpoint))
+    if s is None:
+        s = T(topic=topic, endpoint=endpoint, token=secrets.token_urlsafe(24))
+        db.add(s)
+    s.p256dh, s.auth = p256dh, auth
+    db.commit()
+    return s
+
+
+def unsubscribe_topic(db: Session, token: str = "", endpoint: str = "", topic: str = "tydenni") -> int:
+    from .models import PushTopicSubscription as T
+    if token:
+        rows = db.scalars(select(T).where(T.token == token)).all()
+    elif endpoint:
+        rows = db.scalars(select(T).where(T.endpoint == endpoint, T.topic == topic)).all()
+    else:
+        return 0
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    return len(rows)

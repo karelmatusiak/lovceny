@@ -55,7 +55,7 @@ self.addEventListener('push', e => {
     body: d.body || '', tag: d.tag || 'lovceny', renotify: true, lang: 'cs',
     icon: '/static/brand/icon-192.png', badge: '/static/brand/favicon-32.png',
     data: {url: d.url || '/', unsubscribe: d.unsubscribe || ''},
-    actions: d.unsubscribe ? [{action: 'open', title: 'Zobrazit cenu'}, {action: 'stop', title: 'Přestat hlídat'}] : []
+    actions: d.unsubscribe ? [{action: 'open', title: d.open_label || 'Zobrazit cenu'}, {action: 'stop', title: d.stop_label || 'Přestat hlídat'}] : []
   }));
 });
 self.addEventListener('notificationclick', e => {

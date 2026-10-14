@@ -18,6 +18,7 @@
     <li><code>lovceny_porovnani</code> – seznam až 4 číselných ID produktů, které sis vybral k porovnání.</li>
     <li><code>lovceny-push</code> – jen pokud zapneš upozornění v prohlížeči: ID produktů, cílová cena a odhlašovací kód, aby šlo upozornění zase vypnout.</li>
     <li><code>lovceny-pwa</code> – počet tvých návštěv a kdy jsi zavřel výzvu „Přidat na plochu“ (abychom ji neukazovali pořád dokola).</li>
+    <li><code>lovceny-prehled</code> – jen když zapneš Týdenní přehled slev: odhlašovací kód odběru, aby šel přepínačem zase vypnout.</li>
   </ul>
   <p>Web registruje <b>service worker</b> (<code>/sw.js</code>), aby šel přidat na plochu jako aplikace, fungoval při výpadku sítě (ukáže stránku „Jsi offline“) a doručoval upozornění „cena klesla“. Do mezipaměti (Cache Storage) ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů. <b>Stránky s cenami, hledání ani odpovědi API neukládá</b> – ceny se vždy načítají čerstvé. Nic nesleduje.</p>
   <p>Data zůstávají jen v zařízení. Na server se neodesílají automaticky; při otevření <code>/porovnani?ids=…</code> si stránku načteš podle URL (tu můžeš i sdílet). Smazáním dat webu v prohlížeči nebo tlačítkem „Zrušit výběr“ výběr vymažeš.</p>
