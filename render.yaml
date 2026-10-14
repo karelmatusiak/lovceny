@@ -23,6 +23,13 @@ services:
         value: Lovceny
       - key: PUBLIC_URL
         value: https://lovceny.onrender.com   # po napojení domény změnit na https://lovceny.cz
+      # Web Push (upozornění v prohlížeči). Bez obou klíčů je funkce skrytá.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:ahoj@lovceny.cz
       - key: ALZA_AFFILIATE_ID
         sync: false
       - key: DATART_AFFILIATE_ID

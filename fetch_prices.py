@@ -78,6 +78,17 @@ def main(argv=None):
     except Exception as e:  # noqa: BLE001 – upozornění nesmí shodit souhrn stahování
         db.rollback()
         log.error("Hlídání cen selhalo: %s", e)
+    # 3b) upozornění v prohlížeči (Web Push) – jen když jsou nastavené VAPID klíče
+    from lovceny import push
+    if push.enabled():
+        try:
+            log.info("Web Push: %s", push.check_push(db))
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.error("Web Push selhal: %s", e)
+        log.info("Úklid push odběrů (24 měsíců): %d", push.cleanup_push(db))
+    else:
+        log.info("Web Push vypnutý (chybí VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)")
     log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
     log.info("SOUHRN: %s", dict(report))
     db.close()

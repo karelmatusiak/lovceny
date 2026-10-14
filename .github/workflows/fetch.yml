@@ -24,5 +24,9 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: Lovceny
+          # Web Push (upozornění v prohlížeči). Bez klíčů se přeskočí.
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
           PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
         run: python fetch_prices.py
