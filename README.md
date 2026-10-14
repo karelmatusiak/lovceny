@@ -3,7 +3,7 @@
 Poctivý hlídač cen elektroniky a domácích spotřebičů (mobily, TV a audio, foto, gaming, chytrá domácnost, velké i malé spotřebiče – pračky, lednice, myčky, vysavače, kávovary): vložíš odkaz z e-shopu, dostaneš historii ceny a verdikt
 **Kupuj / Počkej / ⚠️ Za 30 dní bylo levněji**, a můžeš si nastavit **hlídání ceny** 🔔.
 
-Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite). Graf historie na detailu je inline SVG ze serveru (bez JS knihovny); Chart.js zůstává jen na stránce porovnání.
+Stack: Python 3.12, FastAPI + Jinja2, SQLAlchemy 2 + psycopg 3 (Postgres; lokálně lze i SQLite). Graf historie na detailu je inline SVG ze serveru (bez JS knihovny); Od v7 i Srovnání produktů kreslí graf jako SVG na serveru – žádná JS knihovna z CDN.
 
 ## Funkce MVP
 - **Hledání** (`/hledat?q=`): odkaz z podporovaného obchodu → založí sledovaný produkt; text → hledá ve sledovaných produktech (název/EAN).
@@ -101,6 +101,23 @@ Nové proměnné prostředí:
 
 GitHub Actions `digest.yml` potřebuje secrets `DATABASE_URL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `PUBLIC_URL` (a pro e-mail `BREVO_*`). Ruční spuštění s `force` vytvoří přehled kdykoli.
 
+## v7 – Srovnání produktů, Hlídání podle rozpočtu, Black Friday
+- **Srovnání produktů** (`/porovnat?p=ID-slug,ID-slug[,ID-slug]`, 2–3 produkty; token může být i jen slug nebo jen ID): vedle sebe aktuální nejnižší cena a obchod, ceny ve všech obchodech, verdikt, nejnižší cena za 30 dní (před dneškem; u štítku „Za 30 dní bylo levněji“ stejné číslo jako u štítku), minimum a medián 90 dní, počet dní sledování, EAN a **klíčové parametry vyčtené jen z názvu produktu** (`lovceny/specs.py` – paměť, úložiště, úhlopříčka, panel, Hz, 5G, kg, otáčky, litry, bar, W, cm, barva; co v názvu není, je „–“, na stránce je poznámka „orientačně, ověř u obchodu“). Graf historie = více čar v jednom SVG (`chart.build_multi`, barva + vzor čáry, přepínač 30 / 90 dní / rok bez JS). Tlačítko **⚖️ Přidat do srovnání** na kartách, v detailu, na /slevy a /black-friday; výběr v `localStorage` (`lovceny_porovnani`, `lovceny_porovnani_slugy`), žádné cookies; sticky lišta „Srovnat (n)“. Sdílení přes Web Share / kopírování odkazu. Stránka je vždy `noindex, follow`, není v sitemap a **není** v robots.txt zakázaná (aby crawler noindex viděl). Staré `/porovnani?ids=` → 301 na `/porovnat?p=`.
+- **Hlídání podle rozpočtu** (`lovceny/budget.py`, `/hlidat-rozpocet`, formulář i na každé stránce kategorie): kategorie + volitelné slovo/značka (hledá se v názvu bez diakritiky, všechna slova) + maximální cena (+ „jen skladem“). Kanál Web Push (bez e-mailu); e-mail je připravený (double opt-in, šablony `budget_confirm`, `budget_alert`), ale **vypnutý, dokud není `EMAIL_BACKEND`**. Po každém stažení cen (`fetch_prices.py` → `budget.check_budgets`) se pošle upozornění, když je nejnižší **ověřená** cena (stav ok, ověřeno ≤ 3 dny) ≤ rozpočet. Proti duplicitám tabulka `budget_hits`: produkty v rozpočtu už při založení se uloží jako výchozí stav (ukážeme je hned, nehlásíme), stejný produkt znovu jen při dalším poklesu o ≥ 3 %. Limity: 1 upozornění na hlídání za běh (souhrn „+ N další“), max. 3 denně (pražský den), max. 10 hlídání na prohlížeč / e-mail, zakládání 10/h na IP (jen hash v paměti). Správa bez účtu: `/hlidat-rozpocet/<token>` (shody, změna rozpočtu, zrušení), zrušení jedním klikem `/hlidat-rozpocet/zrusit/<token>` (i z oznámení), seznam „Tvoje hlídání v tomto prohlížeči“ podle push odběru (`POST /api/rozpocet/moje`). Bez JS funguje náhled „Ukázat, co teď do rozpočtu vychází“. Úklid: nepotvrzené e-maily po 7 dnech, hlídání bez upozornění po 12 měsících.
+- **Black Friday** (`lovceny/blackfriday.py`, `/black-friday`): datum se počítá (pátek po 4. čtvrtku v listopadu → 2026 = 27. 11., Cyber Monday 30. 11.), odpočet (server + JS po 30 s), souhrn, sekce **Opravdu nejnižší ceny** (dnešní cena = nejnižší za celou dobu sledování, aspoň 30 dní dat, a zároveň Kupuj), seznam všech aktuálních slev (obchod uvádí slevu ≥ 3 %, nebo Kupuj a ≥ 3 % pod mediánem 90 dní; jen ceny ověřené ≤ 3 dny) s verdiktem, nejnižší cenou za 30 dní, obvyklou cenou; filtr kategorie / obchod (GET, filtrované URL jsou `noindex`); vysvětlení § 12a + FAQ (JSON-LD `FAQPage`, `ItemList`, `BreadcrumbList`), v sitemap. Jen naše data, demo body se nepočítají. **Push přehled** (téma `black-friday`, přepínač na stránce, `static/bf.js`): `fetch_prices.py` → `blackfriday.run_digest` pošle v den BF a CM první běh po 7:00 Praha, jednou (zámek v tabulce `topic_sends`). **Banner na úvodu** se ukazuje automaticky 1. 11. – 1. 12.
+- **DB**: nové tabulky `budget_watches`, `budget_hits`, `topic_sends` – vytvoří je `init_db()` (create_all) při startu; pro ruční/auditované nasazení je idempotentní SQL `migrations/007_v7_rozpocet_black_friday.sql`.
+- Testy: `tests/test_v7_compare.py`, `test_v7_budget.py`, `test_v7_black_friday.py`; axe 0 chyb (desktop + mobil) na všech nových stránkách; snímky `screens/v7-*.png`.
+
+Nové (volitelné) proměnné prostředí v7 – nic není povinné, výchozí hodnoty fungují:
+
+| Proměnná | Význam |
+|---|---|
+| `BF_BANNER_FROM`, `BF_BANNER_TO` | období banneru na úvodu, `MM-DD` nebo `YYYY-MM-DD` (výchozí `11-01` až `12-01`) |
+| `BF_DIGEST_DAYS` | dny Black Friday push přehledu, čárkami: `bf`, `cm` nebo datum (výchozí `bf,cm`) |
+| `BF_DIGEST_HOUR` | od kolika hodin (Praha) se přehled smí poslat (výchozí `7`) |
+
+Workflow se neměnily: hlídání rozpočtu i Black Friday přehled běží v existujícím `fetch.yml` (používá už nastavené `DATABASE_URL`, `VAPID_*`, `EMAIL_BACKEND`, `PUBLIC_URL`).
+
 ## Lokální spuštění
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -144,6 +161,8 @@ lovceny/main.py        FastAPI routy        lovceny/verdict.py   pravidla verdik
 lovceny/models.py      tabulky              lovceny/service.py   přidání URL, zápis cen, feed, hlídání cen
 lovceny/shops/         registry (obchody), scrape (JSON-LD, robots, rate limit), feed (Heureka XML/CSV)
 lovceny/notify.py      e-maily: log / Brevo   lovceny/emails.py + templates/email/  obsah e-mailů
+lovceny/budget.py      hlídání podle rozpočtu  lovceny/blackfriday.py  Black Friday  lovceny/specs.py  parametry z názvu
+migrations/            idempotentní SQL pro ruční nasazení
 lovceny/templates/, static/   UI podle mockupu
 fetch_prices.py, seed.py, sample_feeds/, tests/, render.yaml, .github/workflows/fetch.yml
 ```
