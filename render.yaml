@@ -29,7 +29,7 @@ services:
       - key: VAPID_PRIVATE_KEY
         sync: false
       - key: VAPID_SUBJECT
-        value: mailto:ahoj@lovceny.cz
+        value: mailto:info@lovceny.cz
       - key: ALZA_AFFILIATE_ID
         sync: false
       - key: DATART_AFFILIATE_ID

@@ -3,7 +3,7 @@
 Verze 0.1.0 · balíčky: `python extension/build.py` → `extension/dist/lovceny-chrome-0.1.0.zip`, `lovceny-firefox-0.1.0.zip`
 (stejné zipy stahuje i stránka https://lovceny.onrender.com/rozsireni). Ikony: `lovceny/static/brand/icon-512.png` (128 px se generuje).
 Zásady ochrany soukromí (URL do formulářů): https://lovceny.onrender.com/ochrana-osobnich-udaju#rozsireni
-Kontakt pro recenzenty: kontaktní formulář https://lovceny.onrender.com/o-nas#kontakt (soukromý e-mail neuvádět – po založení použít ahoj@lovceny.cz).
+Kontakt pro recenzenty: kontaktní formulář https://lovceny.onrender.com/o-nas#kontakt nebo info@lovceny.cz (soukromý e-mail neuvádět).
 
 ---
 

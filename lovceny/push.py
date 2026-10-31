@@ -36,7 +36,7 @@ def _private_key() -> str:
 
 
 def subject() -> str:
-    return os.environ.get("VAPID_SUBJECT", "").strip() or "mailto:ahoj@lovceny.cz"
+    return os.environ.get("VAPID_SUBJECT", "").strip() or "mailto:info@lovceny.cz"
 
 
 def enabled() -> bool:

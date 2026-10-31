@@ -53,7 +53,8 @@ def test_pages_and_links():
     p = c.get("/pro-obchody").text
     assert "LovcenyBot" in p and "robots.txt" in p and "7 dní" in p and "tema=obchod-oprava" in p
     t = c.get("/podminky").text
-    assert "bude doplněn po založení živnosti" in t and "@" not in t.split("<main")[1].split("</main>")[0]
+    assert "Karel Matusiak" in t and "IČO 30210453" in t and "info@lovceny.cz" in t
+    assert "bude doplněn po založení živnosti" not in t
     home = c.get("/").text
     for href in ('href="/jak-radime"', 'href="/pro-obchody"', 'href="/podminky"'):
         assert href in home

@@ -83,7 +83,7 @@ def test_legal_pages_linked_and_accurate():
     p = c.get("/ochrana-osobnich-udaju")
     k = c.get("/cookies")
     assert p.status_code == k.status_code == 200
-    for s in ["Karel Matusiak", "ahoj@lovceny.cz", "DOPLNIT", "Gemini", "Frankfurt", "ÚOOÚ", "double opt-in",
+    for s in ["Karel Matusiak", "info@lovceny.cz", "IČO 30210453", "U Hřiště 267/16", "Gemini", "Frankfurt", "ÚOOÚ", "double opt-in",
               "čl. 6 odst. 1 písm. a"]:
         assert s in p.text, s
     assert "lovceny_porovnani" in k.text and "nezobrazujeme cookie lištu" in k.text
