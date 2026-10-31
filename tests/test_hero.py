@@ -117,3 +117,21 @@ def test_home_renders_hero_picks():
     assert "Hero na homepage" in html
     assert "hero-art" not in html
     db.close()
+
+
+def test_hero_pick_img_css_scales_whole_product():
+    """Teď stojí za to: fixed-height box + max-* + object-fit contain (no cover-crop / overflow clip)."""
+    from pathlib import Path
+    css = (Path(__file__).resolve().parents[1] / "lovceny" / "static" / "style.css").read_text()
+    # Locate the base .hero-pick-img rule (not media-query overrides alone)
+    assert ".hero-pick-img{" in css
+    # Must not use the buggy pattern that clips tall shop photos
+    assert "aspect-ratio:1;max-height:" not in css.replace(" ", "")
+    block = css.split(".hero-pick-img{")[1].split("}")[0]
+    assert "height:" in block
+    img = css.split(".hero-pick-img img{")[1].split("}")[0]
+    assert "object-fit:contain" in img.replace(" ", "") or "object-fit: contain" in img
+    assert "max-width:100%" in img.replace(" ", "") or "max-width: 100%" in img
+    assert "max-height:100%" in img.replace(" ", "") or "max-height: 100%" in img
+    # Never cover-crop in hero picks
+    assert "object-fit:cover" not in css.split(".hero-picks")[1].split("@media (min-width:960px)")[0].replace(" ", "")
