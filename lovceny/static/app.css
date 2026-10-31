@@ -680,3 +680,37 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
   .deal-main{grid-template-columns:48px 1fr;gap:10px}
   .deal-prices,.deal-save{grid-column:1/-1}
 }
+
+/* --- UX cleanup: home category tiles, quieter compare, denser product cards --- */
+.hero-alt{margin:10px 0 0;font-size:14px;color:var(--muted,#5B6B63)}
+.hero-alt a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.hero-alt a:hover{color:var(--green,#0B6E4F)}
+.home-cats{padding:28px 0 8px}
+.home-cat-cards{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.home-cat-cards .cat-card{padding:14px 12px;gap:10px}
+.home-cat-cards .cat-card b{font-size:15px;line-height:1.25}
+.home-cat-cards .cat-card small{font-size:12px}
+.home-cat-cards .cat-ico{font-size:22px}
+@media (max-width:640px){
+  .home-cat-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (min-width:641px) and (max-width:900px){
+  .home-cat-cards{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+.pcard .p-img-lg,.pcard .p-img.p-img-lg{width:112px;height:112px;border-radius:16px;background:var(--soft,#F4F7F5);display:grid;place-items:center;flex:none}
+.pcard .p-img-lg img{width:100%;height:100%;max-width:112px;max-height:112px;object-fit:contain;border-radius:12px}
+.pcard .p-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard .p-cat{font-size:12px;line-height:1.3}
+.pcard .pc-shop{font-size:12px;font-weight:600;color:var(--muted,#5B6B63)}
+.pcard .pc-price{font-size:20px;font-weight:800}
+.btn-cmp-quiet{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+  border:0;background:none;color:#5B6B63;padding:2px 0;min-height:0;text-decoration:underline;text-underline-offset:2px}
+.btn-cmp-quiet:hover{color:#0B6E4F}.btn-cmp-quiet.on{color:#0B6E4F;font-weight:700}
+.cat-intro{margin:28px 0 8px;padding:16px 18px;border:1px solid var(--line,#DDE3DF);border-radius:14px;background:#fff}
+.cat-intro summary{cursor:pointer;font-weight:700;font-size:15px}
+.cat-intro[open] summary{margin-bottom:10px}
+.cat-intro p{margin:0 0 10px;font-size:15px;line-height:1.55;color:#22302A}
+.cat-intro-tip{margin-bottom:0!important}
+.about-how-steps{margin:16px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.5}
+.about-how .section-art{margin:12px 0;max-width:420px}
+.nav-cta-btn{white-space:nowrap}

@@ -29,6 +29,13 @@
     <p style="margin-top:14px"><a class="btn btn-ghost" href="/#hledat">Vyhledat produkt</a></p>
   </div>
   {% endif %}
+  {% if cat_intro %}
+  <details class="cat-intro">
+    <summary>Více o kategorii {{ c.name }}</summary>
+    {% for para in cat_intro %}<p>{{ para }}</p>{% endfor %}
+    <p class="cat-intro-tip"><a href="/kdy-nakupovat{% if c.slug %}#{{ c.slug }}{% endif %}">Tip: kdy se vyplatí nakupovat →</a></p>
+  </details>
+  {% endif %}
   <div class="bw-cat" id="hlidat-rozpocet">
     <div class="bw-cat-text"><div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
       <h2 class="h3">Nehledáš konkrétní model? Ohlídáme rozpočet.</h2>

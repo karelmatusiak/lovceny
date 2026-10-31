@@ -180,10 +180,12 @@ def home(request: Request, db=Depends(get_db)):
     from . import blackfriday as bfmod
     from .hero import hero_showcase
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
+    cat_counts = dict(db.execute(select(Product.category_slug, func.count(Product.id)).group_by(Product.category_slug)).all())
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
         "thin_history": price_history_thin(db),
         "hero_picks": hero_showcase(db),
+        "cat_counts": cat_counts,
     })
 
 
@@ -645,11 +647,13 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
     path = f"/kategorie/{slug}" + (f"/{view}" if view else "")
     crumbs = [("Lovceny", "/"), (c.name, f"/kategorie/{slug}")] + ([({"nejlevnejsi": "Nejlevnější", "ve-sleve": "Ve slevě"}[view], path)] if view else [])
     priced = [float(b.price) for _, b, _ in rows if b]
+    from .categories import CATEGORY_INTROS
     return tpl.TemplateResponse(request, "category.html", {
         "c": c, "view": view, "rows": rows, "crumbs": crumbs, "canonical_path": path,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
         "page_title": t.format(**fmt), "page_desc": d.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
         "thin_history": price_history_thin(db),
+        "cat_intro": CATEGORY_INTROS.get(slug) if not view else None,
         "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(rows, path)]})
 
 
@@ -751,7 +755,7 @@ FAQ = [
     ("Je Lovceny zdarma?",
      "Ano, pro tebe zdarma a bez registrace. Hlídání ceny e-mailem nebo upozorněním v prohlížeči je také zdarma."),
     ("Jak budete vydělávat?",
-     "Časem přes affiliate odkazy: když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme."),
+     "Zatím nijak – affiliate odkazy ještě nejsou zapnuté. Až je spustíme, když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme."),
     ("Sledujete mě? Potřebujete cookie lištu?",
      "Nesledujeme. Nepoužíváme cookies ani analytiku třetích stran, jen vlastní anonymní statistiku návštěvnosti bez osobních údajů. Proto žádnou cookie lištu nepotřebujeme."),
     ("Můžu si Lovceny dát na plochu telefonu?",
@@ -763,16 +767,33 @@ CONTACT_TOPICS = {"chyba": "Nahlásit chybu v ceně", "obchod": "Návrh obchodu 
 _contact_rl: dict[str, list[float]] = {}
 
 
+def _faq_items():
+    """FAQ s odpovědí o vydělávání podle AFFILIATE_ON."""
+    items = list(FAQ)
+    earn_on = ("Jak budete vydělávat?",
+               "Některé odkazy jsou affiliate (provizní): když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme.")
+    earn_off = ("Jak budete vydělávat?",
+                "Zatím nijak – affiliate odkazy ještě nejsou zapnuté. Až je spustíme, když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme.")
+    out = []
+    for q, a in items:
+        if q == "Jak budete vydělávat?":
+            out.append(earn_on if affiliate_on() else earn_off)
+        else:
+            out.append((q, a))
+    return out
+
+
 def _faq_ld():
     return {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
-        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in FAQ]}
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in _faq_items()]}
 
 
 @app.get("/o-nas", response_class=HTMLResponse)
 def about(request: Request, odeslano: int = 0, chyba: str = "", tema: str = ""):
     crumbs = [("Lovceny", "/"), ("O nás", "/o-nas")]
+    faq = _faq_items()
     return tpl.TemplateResponse(request, "about.html", {
-        "faq": FAQ, "topics": CONTACT_TOPICS, "topic": tema if tema in CONTACT_TOPICS else "", "sent": odeslano, "err": chyba[:200], "crumbs": crumbs,
+        "faq": faq, "topics": CONTACT_TOPICS, "topic": tema if tema in CONTACT_TOPICS else "", "sent": odeslano, "err": chyba[:200], "crumbs": crumbs,
         "ld": [_faq_ld(), seo.breadcrumb_ld(crumbs)]})
 
 

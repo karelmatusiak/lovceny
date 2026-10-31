@@ -49,10 +49,27 @@
   </div>
 </div></section>
 
+<section id="jak-to-funguje" class="about-how"><div class="wrap">
+  <div class="card about-wide">
+    <div class="eyebrow">Jak to funguje</div>
+    <h2>Od odkazu k hlídání ceny</h2>
+    <picture class="section-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" loading="lazy" decoding="async"></picture>
+    <ol class="about-how-steps">
+      <li><b>Vlož</b> odkaz z e-shopu nebo název produktu.</li>
+      <li><b>Porovnej</b> ceny v obchodech, historii a verdikt Kupuj / Počkej.</li>
+      <li><b>Hlídej</b> cílovou cenu – dáme vědět e-mailem nebo v prohlížeči.</li>
+    </ol>
+  </div>
+</div></section>
+
 <section id="vydelavame" class="about-money"><div class="wrap">
   <div class="card about-wide money">
     <div><div class="eyebrow">Transparentně</div><h2>Jak vyděláváme</h2>
-    <p>Teď zatím <b>nijak</b> – Lovceny jsou zdarma a bez reklam. Do budoucna plánujeme <b>affiliate odkazy</b>: když přes náš odkaz nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe zůstává stejná.</p></div>
+    {% if AFFILIATE_ON() %}
+    <p>Některé odkazy do obchodů jsou <b>affiliate (provizní)</b>: když přes ně nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe zůstává stejná. Takové odkazy vždy označíme.</p>
+    {% else %}
+    <p>Teď zatím <b>nijak</b> – Lovceny jsou zdarma a bez reklam. Affiliate odkazy ještě nejsou zapnuté (žádosti u Alza/Dognet/eHUB čekají na schválení). Až je spustíme, vždy je označíme.</p>
+    {% endif %}</div>
     <ul class="about-list">
       <li><span aria-hidden="true">✅</span> Affiliate odkazy vždy jasně označíme.</li>
       <li><span aria-hidden="true">✅</span> Provize <b>nikdy neovlivní</b> pořadí ani verdikt – obchod bez provize je nahoře, pokud je nejlevnější.</li>

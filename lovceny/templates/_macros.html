@@ -17,19 +17,21 @@
   <span class="verdict-reason">Klikni na Sledovat a začneme ukládat historii ceny</span>
 </div>
 {%- endmacro %}
-{% macro cmp_button(p, cls="btn-cmp") -%}
+{% macro cmp_button(p, cls="btn-cmp-quiet") -%}
 <button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ p.slug }}" aria-pressed="false"><span aria-hidden="true">⚖️</span> <span class="cmp-txt">Přidat do srovnání</span></button>
 {%- endmacro %}
 {% macro pcard(p, best, v) -%}
+{%- set shop_name = (get_shop(best.shop).name if best and get_shop(best.shop) else (best.shop if best else '')) -%}
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ p.slug }}">
   <div class="p-head">
-    <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, alt=p.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-    <div class="p-meta"><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{% set shop_name = (get_shop(best.shop).name if best and get_shop(best.shop) else (best.shop if best else '')) %}{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
+    <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt=p.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+    <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{{ p.name }}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
   </div>
   <div class="pc-row">{{ badge(v) }}
     <div class="pc-prices">
       <b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b>
+      {% if shop_name %}<span class="pc-shop">{{ shop_name }}</span>{% endif %}
       {% if v.min90 and best and best.price and v.min90 < best.price %}<span class="pc-low">nejníž {{ v.min90|czk }}</span>{% elif v.min90 and best %}<span class="pc-low">u minima</span>{% endif %}
     </div>
   </div>

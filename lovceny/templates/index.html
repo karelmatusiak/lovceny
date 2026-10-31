@@ -15,6 +15,7 @@
     {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
     {% set n_shops = SHOPS.values()|selectattr('status', 'equalto', 'ok')|list|length %}
     <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}.</p>
+    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a></p>
   </div>
   {% if hero_picks %}
   <aside class="hero-picks" aria-labelledby="hero-picks-h">
@@ -46,6 +47,18 @@
   <p><b>Historie cen teprve začíná.</b> Web jsme znovu spustili 31.&nbsp;10.&nbsp;2026 – u většiny produktů zatím nemáme dost dní pro verdikt Kupuj/Počkej. Ceny stahujeme 3× denně; jakmile jich bude víc, verdikty a slevy se doplní samy.</p>
 </div></aside>
 {% endif %}
+
+
+<section class="home-cats" aria-labelledby="home-cats-h"><div class="wrap">
+  <div class="teaser-head"><div><div class="eyebrow">Kategorie</div><h2 id="home-cats-h">Co hlídáme</h2></div>
+    <a class="btn btn-ghost" href="/kategorie">Všechny kategorie →</a></div>
+  <ul class="cat-cards home-cat-cards">
+  {% for c in CATEGORIES %}
+    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ c.icon }}</span>
+      <span><b>{{ c.name }}</b><small>{% set n = cat_counts.get(c.slug, 0) %}{{ cz_count(n, "produkt", "produkty", "produktů") }}</small></span></a></li>
+  {% endfor %}
+  </ul>
+</div></section>
 
 <section class="how-brief" aria-labelledby="how-h"><div class="wrap">
   <div class="eyebrow">Jak to funguje</div>
@@ -93,16 +106,6 @@
 </div></section>
 {% endif %}
 
-<section id="jak"><div class="wrap center">
-  <div class="eyebrow">Podrobněji</div><h2>Od odkazu k hlídání ceny</h2>
-  <picture class="section-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" loading="lazy" decoding="async"></picture>
-  <div class="steps" style="text-align:left">
-    <div class="step"><div class="num">1</div><h3>Vlož</h3><p>Zkopíruj odkaz na produkt z e-shopu nebo napiš jeho název.</p></div>
-    <div class="step"><div class="num">2</div><h3>Porovnej</h3><p>Uvidíš ceny v obchodech, historii a jasný verdikt.</p></div>
-    <div class="step"><div class="num">3</div><h3>Hlídej</h3><p>Nastav cílovou cenu a my ti napíšeme, až na ni cena klesne.</p></div>
-  </div>
-</div></section>
-
 <section id="nezavislost"><div class="wrap"><div class="promise" id="metodika">
   <div><div class="eyebrow">Proč nám věřit</div><h2>Pořadí si nikdo nekoupí.</h2>
     <p>Obchody řadíme výhradně podle ceny. Ceny si ověřujeme sami nebo z oficiálních feedů obchodů.</p></div>
@@ -116,8 +119,12 @@
 <section id="vydelavame"><div class="wrap"><div class="card zasady">
   <div class="eyebrow">Naše zásady</div><h2>Jak vyděláváme</h2>
   <ul>
-    <li><b>Affiliate odkazy:</b> u některých obchodů (např. Alza, Datart) můžeme dostat malou provizi, když přes náš odkaz nakoupíš. Cena pro tebe je stejná.</li>
-    <li><b>Žádné placené pozice:</b> pořadí obchodů je jen podle ceny a verdikt počítáme z historie cen – provize na ně nemá vliv.</li>
+    {% if AFFILIATE_ON() %}
+    <li><b>Affiliate (provizní) odkazy:</b> u některých obchodů (např. Alza, Datart) můžeme dostat malou provizi, když přes náš odkaz nakoupíš. Cena pro tebe je stejná. Takové odkazy vždy označíme.</li>
+    {% else %}
+    <li><b>Zatím nevyděláváme:</b> affiliate odkazy ještě nejsou zapnuté (žádosti u Alza/Dognet/eHUB čekají na schválení). Až je spustíme, vždy je označíme.</li>
+    {% endif %}
+    <li><b>Žádné placené pozice:</b> pořadí obchodů je jen podle ceny a verdikt počítáme z historie cen –{% if AFFILIATE_ON() %} provize na ně nemá vliv{% else %} budoucí provize na ně nebude mít vliv{% endif %}.</li>
     <li><b>Žádné reklamy ani sledovací cookies.</b> Podrobnosti: <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>, <a href="/cookies">Cookies</a>.</li>
   </ul>
 </div></div></section>
