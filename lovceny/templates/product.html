@@ -55,6 +55,7 @@
             <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:#8A5200">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span style="color:#8A5200">Cena bude doplněna{% if s.source=='feed' %} z feedu obchodu{% endif %}</span>
             {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>
+            {% elif o.status=='unavailable' %}<span style="color:#8A5200">Už není v nabídce obchodu</span>
             {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
           <a href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu →</a>

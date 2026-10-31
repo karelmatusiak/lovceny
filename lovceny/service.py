@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .models import Product, Offer, PricePoint, Watch
 from .shops import shop_for_url, get_shop
-from .shops.scrape import PoliteClient, parse_product, Blocked
+from .shops.scrape import PoliteClient, parse_product, Blocked, unavailable_reason
 from .shops.feed import FeedItem
 from .notify import get_sender
 from .util import slugify, normalize_url, czk
@@ -71,7 +71,15 @@ def _update_offer(db: Session, offer: Offer):
         code = getattr(getattr(e, "response", None), "status_code", None)
         return "error", "error", code, offer.last_error
     if res is None:
+        why = unavailable_reason(html)
+        if why:
+            # Vyřazený produkt: nepočítat jako selhání obchodu (skipped), přestat opakovat ve fetchi.
+            offer.status, offer.last_error = "unavailable", why
+            offer.in_stock = False
+            offer.last_checked = datetime.now(timezone.utc)
+            return "unavailable", "skipped", 200, why
         offer.status, offer.last_error = "error", "cena na stránce nenalezena (JSON-LD/meta)"
+        offer.last_checked = datetime.now(timezone.utc)
         return "error", "error", 200, offer.last_error
     p = offer.product
     if res.name and (p.name == _name_from_url(offer.url)):
@@ -108,6 +116,8 @@ def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product |
         st = update_offer(db, offer)
         if st == "blocked":
             msg = f"{shop.name} blokuje automatické stahování ({offer.last_error}). Cenu zatím nemáme."
+        elif st == "unavailable":
+            msg = f"Produkt už není v nabídce obchodu ({offer.last_error})."
         elif st == "error":
             msg = f"Cenu se nepodařilo načíst: {offer.last_error}"
     db.commit()

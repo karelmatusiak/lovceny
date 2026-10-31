@@ -25,12 +25,6 @@
  },
  {
   "cat": "telefony",
-  "name": "SAMSUNG Galaxy A55 5G 8+128GB modro - černá",
-  "url": "https://www.mironet.cz/samsung-galaxy-a55-5g-8128gb-modro-cerna-66-android-14+dp652173/",
-  "image": "https://www.mironet.cz/Foto/s3/93108802.webp"
- },
- {
-  "cat": "telefony",
   "name": "SAMSUNG Galaxy S25 FE 5G 8+128GB černá",
   "url": "https://www.mironet.cz/samsung-galaxy-s25-fe-5g-8128gb-cerna-67-android-16+dp773782/",
   "image": "https://www.mironet.cz/Foto/s3/93110537.webp"
@@ -58,12 +52,6 @@
   "name": "LG televize 43UA75003LA",
   "url": "https://www.ab-com.cz/lg-televize-43ua75003la/",
   "image": "https://www.ab-com.cz/content/images/product/list/1972158.jpg"
- },
- {
-  "cat": "televize",
-  "name": "LG televize 50UA75003LA",
-  "url": "https://www.ab-com.cz/lg-televize-50ua75003la/",
-  "image": "https://www.ab-com.cz/content/images/product/list/1972999.jpg"
  },
  {
   "cat": "televize",
@@ -130,12 +118,6 @@
   "name": "Lenovo IdeaPad Slim 3 14AMN8 šedá",
   "url": "https://www.mironet.cz/lenovo-ideapad-slim-3-14amn8-seda-notebook-14-fhd-athlon-silver-10-8gb-512gb-ssd-radeon-610m-w11h+dp905339/",
   "image": "https://www.mironet.cz/Foto/s3/50060042.webp"
- },
- {
-  "cat": "notebooky",
-  "name": "Lenovo IdeaPad Slim 3 15IAN8 šedá",
-  "url": "https://www.mironet.cz/lenovo-ideapad-slim-3-15ian8-seda-156-fhd-intel-i3n305-18ghz-8gb-512gb-ssd-intel-uhd-w11h+dp967764/",
-  "image": "https://www.mironet.cz/Foto/s3/50128970.webp"
  },
  {
   "cat": "notebooky",
@@ -433,12 +415,6 @@
  },
  {
   "cat": "konzole",
-  "name": "PlayStation 5 Digital Edition 825GB (Slim/E-Chassis)",
-  "url": "https://www.mironet.cz/playstation-5-digital-edition-825gb-slimechassis+dp769042/",
-  "image": "https://www.mironet.cz/Foto/s3/90724739.webp"
- },
- {
-  "cat": "konzole",
   "name": "SONY Playstation 5 PRO Digital 2TB",
   "url": "https://www.svetpocitacu.cz/sony-playstation-5-pro-digital-2tb-1/",
   "image": "https://www.svetpocitacu.cz/imgcache/e/6/p1469670-1877997-0a_193_193_31208.jpg"
@@ -466,12 +442,6 @@
   "name": "SAMSUNG Galaxy Watch 7 (44 mm) BT zelená",
   "url": "https://www.mironet.cz/samsung-galaxy-watch-7-44-mm-bt-zelena-chytre-hodinky-amoled-wifi-bluetooth-gps-wear-os+dp691546/",
   "image": "https://www.mironet.cz/Foto/s3/97004871.webp"
- },
- {
-  "cat": "chytre-hodinky",
-  "name": "Xiaomi Smart Band 9 Active zelená",
-  "url": "https://www.mironet.cz/xiaomi-smart-band-9-active-zelena-fitness-naramek-147-tft-172x320-5atm-bt+dp805879/",
-  "image": "https://www.mironet.cz/Foto/s3/83200818.webp"
  },
  {
   "cat": "fotoaparaty",

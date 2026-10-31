@@ -21,6 +21,26 @@ MIN_DELAY_S = 6.0  # min. rozestup dvou požadavků na stejnou doménu
 BLOCK_MARKERS = ("bobcmn", "cf-chl", "challenge-platform", "Please enable JS", "captcha", "Access Denied")
 
 
+# Obchod přestal produkt nabízet (stránka žije, ale bez ceny). Neplést s dočasnou chybou parseru.
+UNAVAILABLE_MARKERS = (
+    "Tento produkt je momentálně nedostupný nebo již není v naší nabídce",  # Mironet
+    "Toto zboží nadále není možné koupit",  # AB-COM
+    "Produkt byl vyřazen z nabídky",
+    "Tento produkt již není v prodeji",
+)
+
+
+def unavailable_reason(html: str) -> str | None:
+    """Když stránka říká, že produkt už nejde koupit → srozumitelná chyba (jinak None)."""
+    if not html:
+        return None
+    low = html.lower()
+    for m in UNAVAILABLE_MARKERS:
+        if m.lower() in low:
+            return "produkt nedostupný / vyřazen z nabídky obchodu"
+    return None
+
+
 class Blocked(Exception):
     """kind: http (403/429/503) | captcha (JS challenge / captcha stránka) | robots (robots.txt nepovoluje)."""
     def __init__(self, msg: str, kind: str = "http", status: int | None = None):

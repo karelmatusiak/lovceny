@@ -34,7 +34,7 @@ class Offer(Base):
     price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     original_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     in_stock: Mapped[bool | None] = mapped_column(Boolean)
-    # ok | pending (cena bude doplněna) | blocked | error
+    # ok | pending (cena bude doplněna) | blocked | error | unavailable (vyřazen z nabídky)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
     last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

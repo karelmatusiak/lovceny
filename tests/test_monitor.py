@@ -227,3 +227,63 @@ def test_workflow_permissions_and_step():
     wf = (pathlib.Path(__file__).parent.parent / ".github/workflows/fetch.yml").read_text()
     assert "issues: write" in wf and "contents: read" in wf
     assert "--health-out health.json" in wf and "shop_health_issues.py health.json" in wf and "if: always()" in wf
+
+
+def test_unavailable_product_skipped_not_shop_failure(client_db, monkeypatch):
+    """Vyřazený produkt → status unavailable, ve statistikách jako skipped (ne failing)."""
+    from lovceny import service
+    from lovceny.shops.scrape import unavailable_reason
+
+    assert unavailable_reason("<p>Tento produkt je momentálně nedostupný nebo již není v naší nabídce.</p>")
+    assert unavailable_reason("<div>Toto zboží nadále není možné koupit. Prohlédněte si podobné.</div>")
+    assert unavailable_reason("<html>běžná stránka s cenou</html>") is None
+
+    _, db, make = client_db
+    p = make([1000])
+    o = p.offers[0]
+    html = """
+    <html><h1>X</h1>
+    <p>Tento produkt je momentálně nedostupný nebo již není v naší nabídce. Vyberte si jiný.</p>
+    </html>
+    """
+
+    class C:
+        def get(self, url):
+            return html
+
+    st = monitor.FetchStats("t-unavail")
+    monkeypatch.setattr(service, "client", lambda: C())
+    assert service.update_offer(db, o, stats=st) == "unavailable"
+    assert o.status == "unavailable"
+    assert o.in_stock is False
+    assert "nedostupný" in (o.last_error or "")
+    # skipped → nepočítá se do attempts/failures
+    assert dict(st.shops["mironet"].counts) == {"skipped": 1}
+    rows = st.save(db)
+    assert rows[0].attempts == 0 and rows[0].skipped == 1 and rows[0].failures == 0
+
+
+def test_fetch_skips_unavailable_offers(client_db, monkeypatch):
+    """fetch_prices.py už nevolá update_offer pro status=unavailable."""
+    import fetch_prices
+    from lovceny.models import Offer
+
+    _, db, make = client_db
+    p = make([1000])
+    o = p.offers[0]
+    # Celý Mironet v test DB označ jako unavailable (mohou zbývat nabídky z dřívějších testů).
+    for row in db.query(Offer).filter_by(shop="mironet").all():
+        row.status = "unavailable"
+        row.last_error = "produkt nedostupný / vyřazen z nabídky obchodu"
+        row.last_checked = None
+    db.commit()
+    target_id = o.id
+
+    called = []
+    monkeypatch.setattr(fetch_prices, "update_offer",
+                        lambda db, o, stats=None: called.append(o.id) or "ok")
+    monkeypatch.setattr(fetch_prices, "check_watches", lambda db: 0)
+    monkeypatch.setattr(fetch_prices, "cleanup_watches", lambda db: {})
+    fetch_prices.main(["--shop", "mironet", "--min-age-hours", "0", "--limit", "50"])
+    assert called == []
+    assert db.get(Offer, target_id).status == "unavailable"

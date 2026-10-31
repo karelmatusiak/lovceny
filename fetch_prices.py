@@ -66,6 +66,11 @@ def main(argv=None):
     if a.shop:
         q = q.where(Offer.shop == a.shop)
     for o in db.scalars(q.order_by(Offer.last_checked.asc().nullsfirst()).limit(a.limit)).all():
+        if o.status == "unavailable":
+            # Vyřazené produkty nezkoušíme znovu (šetří kvótu a nekazí zdraví obchodu).
+            report[f"{o.shop}:skipped_unavailable"] += 1
+            stats.add(o.shop, "skipped")
+            continue
         lc = o.last_checked
         if lc and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) > cutoff:
             report[f"{o.shop}:skipped_recent"] += 1
