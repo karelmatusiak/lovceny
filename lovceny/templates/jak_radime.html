@@ -41,7 +41,7 @@
   <h2 id="verdikty">5. Jak počítáme verdikty</h2>
   <p>Verdikt je <b>algoritmický odhad</b> z cen, které jsme sami naměřili (za každý den bereme nejnižší cenu napříč obchody). Není to záruka budoucího vývoje ceny.</p>
   <ul>
-    <li><b>Málo dat:</b> máme méně než {{ t.MIN_DAYS }} dní s cenou za posledních 90 dní – verdikt nedáváme.</li>
+    <li><b>Sbíráme data:</b> máme méně než {{ cz_count(t.MIN_DAYS, "den", "dny", "dní") }} s cenou za posledních 90 dní – verdikt nedáváme.</li>
     <li><b>✅ Kupuj:</b> dnešní nejnižší cena je nejvýš {{ pct(t.BUY_OVER_MIN) }} % nad minimem za 90 dní.</li>
     <li><b>⏳ Počkej:</b> žádné z ostatních pravidel neplatí – za posledních 90 dní byla cena nižší.</li>
   </ul>

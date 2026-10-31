@@ -23,7 +23,7 @@ def test_verdict_headlines_and_reasons():
     f = compute(pts(lambda d: 1200 if 3 <= d <= 18 else 1000), 1020, now=NOW)
     assert f.icon == "⚠️" and f.headline == "Za 30 dní bylo levněji" and "nejnižší za 30 dní" in f.reason and f.tooltip.startswith("Nejnižší cena za posledních 30 dní byla")
     n = compute(pts(lambda d: 1000, days=3), 1000, now=NOW)
-    assert n.headline == "Málo dat" and "7" in n.reason
+    assert n.headline == "Sbíráme data" and "7" in n.reason
 
 
 def test_badges_rendered_with_text_on_cards_and_detail():
@@ -38,7 +38,7 @@ def test_badges_rendered_with_text_on_cards_and_detail():
     c = TestClient(app)
     for url in [f"/produkt/{p.id}-{p.slug}", "/hledat?q=badge+test"]:
         html = c.get(url).text
-        assert 'class="verdict v-none' in html and "Málo dat" in html and "Verdikt: " in html
+        assert 'class="verdict v-none' in html and "Sbíráme data" in html and "Verdikt: " in html
         assert "verdict-reason" in html
     detail = c.get(f"/produkt/{p.id}-{p.slug}").text
     assert "verdict-lg" in detail and 'id="hlidani"' in detail and "🔔 Hlídat cenu" in detail

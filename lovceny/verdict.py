@@ -34,9 +34,12 @@ class Verdict:
     reason: str = ""  # krátký jednořádkový důvod pod odznakem
     ref_min30: float | None = None   # nejnižší naměřená cena za 30 dní (u štítku „Za 30 dní bylo levněji“)
     ref_date: object = None          # date té ceny
+    tip: str = ""  # volitelný tooltip (např. u „Sbíráme data“)
 
     @property
     def tooltip(self) -> str:
+        if self.tip:
+            return self.tip
         if self.code != "fake" or self.ref_min30 is None:
             return ""
         return (f"Nejnižší cena za posledních 30 dní byla {czk(self.ref_min30)} (dne {_cz_date(self.ref_date)}). "
@@ -89,13 +92,23 @@ def compute(points, current: float | None, claimed_original: float | None = None
             now: datetime | None = None) -> Verdict:
     now = now or datetime.now(timezone.utc)
     if current is None:
-        return Verdict("none", "Zatím bez ceny", "Cenu zatím nemáme. Jakmile ji načteme, ukážeme verdikt.",
-                       reason="cenu teprve načítáme")
+        return Verdict("none", "Zatím bez ceny", "Cena zatím není k dispozici. Načteme ji při nejbližším stahování (3× denně) a pak ukážeme verdikt.",
+                       reason="cenu teprve načítáme",
+                       tip="Cenu zatím nemáme – produkt je v katalogu, ale žádný obchod ještě cenu nevrátil.")
     series = daily_best(points, now - timedelta(days=90))
     vals = list(series.values())
     if len(vals) < MIN_DAYS:
-        return Verdict("none", "Málo dat", f"Cenu sledujeme teprve {len(vals)} dní. Verdikt dáme po týdnu.",
-                       current=current, reason=f"sledujeme {len(vals)} z {MIN_DAYS} potřebných dní")
+        from .util import cz_count
+        days_txt = cz_count(len(vals), "den", "dny", "dní")
+        tip = (f"Zatím máme historii za {days_txt}. Verdikt Kupuj/Počkej "
+               f"dáváme až po {MIN_DAYS} dnech sledování.")
+        return Verdict(
+            "none", "Sbíráme data",
+            f"Cenu sledujeme teprve {days_txt}. Verdikt dáme po týdnu.",
+            current=current,
+            reason=f"sledujeme {len(vals)} z {MIN_DAYS} potřebných dní",
+            tip=tip,
+        )
     mn, md, mx = min(vals), median(vals), max(vals)
     v = Verdict("wait", "Počkej", "", current, mn, md, mx, suggested_target=round(min(mn, current) / 10) * 10)
 

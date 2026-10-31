@@ -24,12 +24,18 @@
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ p.slug }}">
   <div class="p-head">
-    <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}📦{% endif %}</div>
-    <div><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{{ p.category or '' }}</div></div>
+    <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, alt=p.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+    <div class="p-meta"><div class="p-name sm">{{ p.name }}</div><div class="p-cat">{% set shop_name = (get_shop(best.shop).name if best and get_shop(best.shop) else (best.shop if best else '')) %}{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
   </div>
-  <div class="pc-row">{{ badge(v) }}<b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b></div>
+  <div class="pc-row">{{ badge(v) }}
+    <div class="pc-prices">
+      <b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b>
+      {% if v.min90 and best and best.price and v.min90 < best.price %}<span class="pc-low">nejníž {{ v.min90|czk }}</span>{% elif v.min90 and best %}<span class="pc-low">u minima</span>{% endif %}
+    </div>
+  </div>
 </a>
 {% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
+{% if v.code == 'none' and v.tooltip %}<p class="pc-tip" title="{{ v.tooltip }}">{{ v.reason or 'Sbíráme historii ceny' }}</p>{% endif %}
 {{ cmp_button(p) }}
 </div>
 {%- endmacro %}

@@ -22,7 +22,7 @@ from .service import add_by_url, create_watch, search_db, offers_for_query, smar
 from .verdict import compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
-from .util import czk
+from .util import czk, cz_count, cz_plural
 from . import images
 from . import analytics
 
@@ -32,7 +32,10 @@ app = FastAPI(title="Lovceny")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 tpl = Jinja2Templates(directory=BASE / "templates")
 tpl.env.filters["czk"] = czk
+tpl.env.globals["cz_count"] = cz_count
+tpl.env.globals["cz_plural"] = cz_plural
 tpl.env.globals["SHOPS"] = SHOPS
+tpl.env.globals["get_shop"] = get_shop
 tpl.env.globals["static"] = static_url
 tpl.env.globals["canonical"] = canonical
 tpl.env.globals["public_url"] = public_url
@@ -94,20 +97,117 @@ def product_summary(p: Product):
     return best, v
 
 
-@app.get("/", response_class=HTMLResponse)
+def price_history_thin(db) -> bool:
+    """True while average history is too short for reliable Kupuj/Počkej verdicts."""
+    from .verdict import MIN_DAYS
+    n_priced = db.scalar(select(func.count()).select_from(Offer).where(Offer.price.isnot(None))) or 0
+    if n_priced == 0:
+        return True
+    n_pts = db.scalar(select(func.count()).select_from(PricePoint)) or 0
+    return n_pts < n_priced * MIN_DAYS
+
+
+def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
+    """Karty produktů s aspoň jednou cenou – bez ceny do výpisů nepatří."""
+    from sqlalchemy.orm import selectinload
+    q = select(Product).options(selectinload(Product.offers).selectinload(Offer.points))
+    if order == "watched":
+        watched_ids = [r[0] for r in db.execute(
+            select(Watch.product_id, func.count(Watch.id).label("n"))
+            .group_by(Watch.product_id).order_by(func.count(Watch.id).desc()).limit(limit * 4)
+        ).all()]
+        if watched_ids:
+            products = db.scalars(q.where(Product.id.in_(watched_ids))).all()
+            by_id = {p.id: p for p in products}
+            products = [by_id[i] for i in watched_ids if i in by_id]
+        else:
+            products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
+    else:
+        products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
+    out = []
+    for p in products:
+        best, v = product_summary(p)
+        if best is None:
+            continue
+        out.append((p, best, v))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def gemini_search_on() -> bool:
+    import os
+    return bool(os.environ.get("GEMINI_API_KEY"))
+
+
+tpl.env.globals["AI_SEARCH_ON"] = gemini_search_on
+
+
+def _wants_html_404(request: Request) -> bool:
+    path = request.url.path or "/"
+    if path.startswith("/api/") or path.startswith("/ext/"):
+        return False
+    accept = (request.headers.get("accept") or "").lower()
+    if "application/json" in accept and "text/html" not in accept:
+        return False
+    if not accept or "text/html" in accept or "*/*" in accept:
+        return True
+    return False
+
+
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404 and _wants_html_404(request):
+        return tpl.TemplateResponse(
+            request, "404.html",
+            {"path": request.url.path, "noindex": True},
+            status_code=404,
+        )
+    headers = getattr(exc, "headers", None) or None
+    detail = exc.detail
+    if isinstance(detail, (dict, list)):
+        return JSONResponse(detail, status_code=exc.status_code, headers=headers)
+    return JSONResponse({"detail": detail}, status_code=exc.status_code, headers=headers)
+
+
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
-    products = db.scalars(select(Product).order_by(Product.created_at.desc()).limit(6)).all()
-    cards = [(p, *product_summary(p)) for p in products]
+    cards = priced_product_cards(db, limit=6, order="new")
     deals = real_deals(db, top=3)["buys"]
     from . import blackfriday as bfmod
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
-    return tpl.TemplateResponse(request, "index.html", {"cards": cards, "deals": deals, "bf": bf})
+    return tpl.TemplateResponse(request, "index.html", {
+        "cards": cards, "deals": deals, "bf": bf,
+        "thin_history": price_history_thin(db),
+    })
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    path = BASE / "static" / "brand" / "favicon.ico"
+    return FileResponse(path, media_type="image/x-icon",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/kontakt")
+def kontakt_get():
+    return RedirectResponse("/o-nas#kontakt", status_code=302)
 
 
 @app.get("/slevy", response_class=HTMLResponse)
 def deals_page(request: Request, db=Depends(get_db)):
-    return tpl.TemplateResponse(request, "deals.html", {**real_deals(db), "push_key": pushmod.public_key() if pushmod.enabled() else "",
-                                                        "email_on": False})
+    data = real_deals(db)
+    return tpl.TemplateResponse(request, "deals.html", {
+        **data,
+        "push_key": pushmod.public_key() if pushmod.enabled() else "",
+        "email_on": False,
+        "thin_history": price_history_thin(db),
+        "newest": priced_product_cards(db, limit=6, order="new"),
+        "watched": priced_product_cards(db, limit=6, order="watched"),
+    })
 
 
 @app.get("/ochrana-osobnich-udaju", response_class=HTMLResponse)
@@ -134,6 +234,7 @@ def search(request: Request, q: str = "", zive: int = 0, db=Depends(get_db)):
         r = f"/produkt/{prod.id}-{prod.slug}"
         return RedirectResponse(r + (f"?msg={msg}" if msg else ""), 303)
     results = [(p, *product_summary(p)) for p in search_db(db, q)]
+    results = [r for r in results if r[1] is not None]  # bez ceny nepatří do výpisu
     request.state.an = {"kind": "search", "query": q, "results": len(results)}
     # Málo shod v DB → živé hledání v obchodech. Bez JS (?zive=1) se načte rovnou, jinak přes fetch.
     want_live = len(results) < LIVE_THRESHOLD
@@ -534,7 +635,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
         deal = {r.product.id: r for r in product_rows(db) if r.verdict.code == "buy" and r.product.id in ids and r.savings_pct >= 1}
         rows = sorted([r for r in rows if r[0].id in deal], key=lambda r: -deal[r[0].id].savings_pct)
     else:
-        rows = [r for r in rows if r[1] is not None] + ([] if view else [r for r in rows if r[1] is None])
+        rows = [r for r in rows if r[1] is not None]
     if view == "nejlevnejsi":
         rows = rows[:20]
     t, d = CAT_VIEWS[view]
@@ -546,6 +647,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
         "c": c, "view": view, "rows": rows, "crumbs": crumbs, "canonical_path": path,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
         "page_title": t.format(**fmt), "page_desc": d.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
+        "thin_history": price_history_thin(db),
         "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(rows, path)]})
 
 
@@ -639,7 +741,7 @@ FAQ = [
     ("Platí vám obchody za lepší umístění?",
      "Ne. Pořadí nabídek je vždy jen podle ceny (nejlevnější nahoře). Placené pozice ani „doporučené“ obchody nemáme a mít nebudeme."),
     ("Jak vzniká verdikt Kupuj / Počkej / Za 30 dní bylo levněji?",
-     "Porovnáme dnešní cenu s naměřenou historií: Kupuj, když je cena do 3 % nad minimem za 90 dní. Za 30 dní bylo levněji, když se sleva počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí (stejně jako referenční cena podle § 12a zákona o ochraně spotřebitele), nebo když cena během posledních 3 týdnů vzrostla o 12 % a víc a sleva ji vrátila zpět. U štítku vždy uvádíme naměřenou cenu a datum. Jinak Počkej. Při méně než 7 dnech dat píšeme „Málo dat“. Verdikt je algoritmický odhad, ne záruka. Celá metodika je na stránce Jak řadíme a hodnotíme."),
+     "Porovnáme dnešní cenu s naměřenou historií: Kupuj, když je cena do 3 % nad minimem za 90 dní. Za 30 dní bylo levněji, když se sleva počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí (stejně jako referenční cena podle § 12a zákona o ochraně spotřebitele), nebo když cena během posledních 3 týdnů vzrostla o 12 % a víc a sleva ji vrátila zpět. U štítku vždy uvádíme naměřenou cenu a datum. Jinak Počkej. Při méně než 7 dnech dat píšeme „Sbíráme data“. Verdikt je algoritmický odhad, ne záruka. Celá metodika je na stránce Jak řadíme a hodnotíme."),
     ("Odkud berete ceny?",
      "Z veřejných stránek produktů v obchodech, které automatické čtení dovolují (respektujeme robots.txt a čteme šetrně, nejvýš jednou za pár hodin), a z oficiálních feedů obchodů. Ochranu proti botům nikdy neobcházíme – obchod, který čtení blokuje, prostě nesledujeme."),
     ("Jak často se ceny aktualizují?",

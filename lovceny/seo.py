@@ -61,12 +61,18 @@ STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-oso
 
 
 def sitemap_xml(db) -> str:
+    from .models import Offer
+    from sqlalchemy import exists
     base = public_url()
     urls = [(base + p, None) for p in STATIC_PAGES]
     for c in CATEGORIES:
         urls += [(f"{base}/kategorie/{c.slug}", None), (f"{base}/kategorie/{c.slug}/nejlevnejsi", None),
                  (f"{base}/kategorie/{c.slug}/ve-sleve", None)]
-    for pid, slug, created in db.execute(select(Product.id, Product.slug, Product.created_at).order_by(Product.id)).all():
+    # Jen produkty s aspoň jednou cenou – bezcené nepatří do výpisů ani sitemap
+    has_price = exists().where(Offer.product_id == Product.id, Offer.price.isnot(None))
+    for pid, slug, created in db.execute(
+        select(Product.id, Product.slug, Product.created_at).where(has_price).order_by(Product.id)
+    ).all():
         urls.append((f"{base}/produkt/{pid}-{slug}", created))
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for u, lm in urls:

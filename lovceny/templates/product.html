@@ -15,7 +15,8 @@
       </div>
       <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, p.name) }}</div></div>
       <div class="price-row">
-        <span class="price">{% if best %}{{ best.price|czk }}{% else %}–{% endif %}</span>
+        {% if best %}<span class="price">{{ best.price|czk }}</span>
+        {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
@@ -25,7 +26,7 @@
     <div class="p-chart">
       <div class="chart-top"><h2 class="h3" id="hist-h">Historie ceny</h2></div>
       {% if chart_ranges[2].n == 0 %}
-      <div class="chart-empty"><p><b>Historie zatím není k dispozici.</b> Cenu začneme zapisovat při nejbližším stahování (3× denně).</p></div>
+      <div class="chart-empty"><p><b>{% if best %}Historie zatím není k dispozici.{% else %}Cena zatím není k dispozici.{% endif %}</b> {% if best %}Cenu začneme zapisovat při nejbližším stahování (3× denně).{% else %}Jakmile některý obchod cenu vrátí, ukážeme ji tady i s historií. Mezitím můžeš produkt stejně hlídat.{% endif %}</p></div>
       {% else %}
       <div class="chart-box" role="group" aria-labelledby="hist-h">
         {% set def_key = '90' if chart_ranges[1].n >= 2 else 'all' %}

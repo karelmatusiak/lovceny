@@ -13,9 +13,14 @@
     <a href="/kategorie/{{ c.slug }}/ve-sleve"{% if view == 've-sleve' %} aria-current="page"{% endif %}>Ve slevě</a>
   </nav>
 </div></section>
+{% if thin_history %}
+<aside class="expect-note" role="status"><div class="wrap">
+  <p><b>Historie cen teprve začíná.</b> U většiny produktů zatím nemáme dost dní pro verdikt Kupuj/Počkej. Ceny stahujeme 3× denně – verdikty se doplní samy.</p>
+</div></aside>
+{% endif %}
 <section style="padding-top:8px"><div class="wrap">
   {% if rows %}
-  <p class="cat-count">{{ rows|length }} {% if rows|length == 1 %}produkt{% elif rows|length < 5 %}produkty{% else %}produktů{% endif %} · řazeno {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
+  <p class="cat-count">{{ cz_count(rows|length, 'produkt', 'produkty', 'produktů') }} · řazeno {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
   <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v) }}{% endfor %}</div>
   {% else %}
   <div class="card chart-empty cat-empty">

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link, pcard %}
 {% block title %}Skutečné slevy – Lovceny{% endblock %}
 {% block description %}Žebříček produktů u 90denního minima a přehled slev, u kterých jsme za 30 dní naměřili nižší cenu. Bez placených pozic.{% endblock %}
 {% block og_title %}Skutečné slevy – Lovceny{% endblock %}
@@ -9,6 +9,12 @@
   <p class="lead deals-lead">Produkty, jejichž aktuální cena je u minima za 90 dní (verdikt <b>Kupuj</b>). Řazeno podle úspory oproti obvyklé ceně (medián 90 dní) – ne podle výše uvedené slevy. {{ rank_link() }}</p>
   </div><picture class="page-art"><source type="image/webp" srcset="{{ static('img/slevy-720.webp') }}"><img src="{{ static('img/slevy-720.jpg') }}" width="720" height="480" alt="Ilustrace: dvě cenovky a štít se zatržítkem" fetchpriority="high" decoding="async"></picture>
 </div></section>
+
+{% if thin_history %}
+<aside class="expect-note" role="status"><div class="wrap">
+  <p><b>Historie cen teprve začíná.</b> Verdikt Kupuj (a tedy i tento žebříček) potřebuje aspoň týden naměřených cen. Sbíráme je 3× denně – jakmile jich bude dost, slevy se tu objeví samy.</p>
+</div></aside>
+{% endif %}
 
 <section style="padding-top:8px"><div class="wrap">
   {% if buys %}
@@ -40,10 +46,30 @@
   {% endfor %}
   </div>
   {% else %}
-  <div class="notice warn deals-empty">
-    <b>Zatím máme málo historie.</b> Verdikt Kupuj dáváme až po týdnu sledování ceny. Přidej produkt odkazem z e-shopu – jakmile budeme mít dost dat u minima, objeví se tady.
-    <a href="/#hledat">Přidat produkt →</a>
+  <div class="empty-state card">
+    <div class="empty-ico" aria-hidden="true">🏷️</div>
+    <h2 class="h3">Zatím tu žádné skutečné slevy nejsou</h2>
+    <p>Verdikt <b>Kupuj</b> dáváme až po týdnu sledování ceny u minima. To je v pořádku – radši žádný žebříček než marketingové „slevy“.</p>
+    <p>Mezitím se podívej na produkty, které už hlídáme, nebo přidej vlastní odkaz z e-shopu.</p>
+    <p class="empty-actions">
+      <a class="btn btn-primary" href="/#hledat">Přidat produkt</a>
+      <a class="btn btn-ghost" href="/kategorie">Procházet kategorie</a>
+    </p>
   </div>
+  {% if watched or newest %}
+  {% if watched %}
+  <div class="empty-suggest">
+    <h2 class="h3">Nejsledovanější</h2>
+    <div class="grid">{% for p, best, v in watched %}{{ pcard(p, best, v) }}{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% if newest %}
+  <div class="empty-suggest">
+    <h2 class="h3">Nejnovější produkty</h2>
+    <div class="grid">{% for p, best, v in newest %}{{ pcard(p, best, v) }}{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% endif %}
   {% endif %}
 </div></section>
 

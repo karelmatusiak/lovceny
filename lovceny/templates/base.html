@@ -22,10 +22,16 @@
 <body>
 <a class="skip" href="#obsah">Přeskočit na obsah</a>
 <header class="site-head"><div class="wrap">
-  <nav aria-label="Hlavní navigace">
+  <nav aria-label="Hlavní navigace" class="site-nav">
     <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="159" height="72"></a>
-    <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/over-slevu" class="nav-verify">Ověř slevu</a><a href="/kdy-nakupovat">Kdy nakupovat</a><a href="/o-nas">O nás</a></div>
-    <div class="nav-cta"><a class="btn btn-verify" href="/over-slevu"><span aria-hidden="true">🔎</span> Ověř slevu</a><a class="btn btn-ghost nav-watch" href="/#hledat"><span aria-hidden="true">🔔</span> Hlídat cenu</a></div>
+    <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-panel">
+      <span class="nav-toggle-bars" aria-hidden="true"></span>
+      <span class="sr-only">Menu</span>
+    </button>
+    <div class="nav-panel" id="nav-panel">
+      <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/slevy">Skutečné slevy</a><a href="/over-slevu" class="nav-verify">Ověř slevu</a><a href="/kdy-nakupovat">Kdy nakupovat</a><a href="/o-nas">O nás</a></div>
+      <div class="nav-cta"><a class="btn btn-verify" href="/over-slevu"><span aria-hidden="true">🔎</span> Ověř slevu</a><a class="btn btn-ghost nav-watch" href="/#hledat"><span aria-hidden="true">🔔</span> Hlídat cenu</a></div>
+    </div>
   </nav>
 </div></header>
 <main id="obsah" tabindex="-1">
@@ -62,5 +68,19 @@
   </div>
 </div>
 <script src="{{ static('compare.js') }}" defer></script><script src="{{ static('pwa.js') }}" defer></script>
+<script>
+(function(){
+  var b=document.getElementById("nav-toggle"),p=document.getElementById("nav-panel");
+  if(!b||!p)return;
+  function set(open){
+    b.setAttribute("aria-expanded", open?"true":"false");
+    p.classList.toggle("is-open", open);
+    document.documentElement.classList.toggle("nav-open", open);
+  }
+  b.addEventListener("click", function(){ set(b.getAttribute("aria-expanded")!=="true"); });
+  p.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ set(false); }); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") set(false); });
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body></html>

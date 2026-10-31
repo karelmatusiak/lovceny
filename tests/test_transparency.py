@@ -44,9 +44,10 @@ def test_pages_and_links():
     r = c.get("/jak-radime")
     assert r.status_code == 200
     h = r.text
+    hn = h.replace(" ", " ")
     for s in ("Jak řadíme a hodnotíme", "bez dopravy", "Placené umístění nemáme", "§ 12a", "3 %", "5 %", "12 %",
               "7 dní", "3× denně", "Ceny jsou orientační", "id=\"za-30-dni-levneji\""):
-        assert s in h, s
+        assert s in hn, s
     for shop in SHOPS.values():
         assert shop.name.replace("'", "&#39;") in h
     assert "Odkaz může být provizní" not in h  # bez příznaku skryté

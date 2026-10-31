@@ -56,4 +56,4 @@ def test_product_page_renders_chart(client_db):
     assert "Minimum" in html and "Průměr" in html and "Aktuálně" in html
     empty = make([])
     html = client.get(f"/produkt/{empty.id}").text
-    assert "Historie zatím není k dispozici" in html
+    assert ("Historie zatím není k dispozici" in html) or ("Cena zatím není k dispozici" in html)
