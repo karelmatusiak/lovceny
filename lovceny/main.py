@@ -178,10 +178,12 @@ def home(request: Request, db=Depends(get_db)):
     cards = priced_product_cards(db, limit=6, order="new")
     deals = real_deals(db, top=3)["buys"]
     from . import blackfriday as bfmod
+    from .hero import hero_showcase
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
         "thin_history": price_history_thin(db),
+        "hero_picks": hero_showcase(db),
     })
 
 

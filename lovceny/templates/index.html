@@ -1,25 +1,44 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard, badge %}
+{% extends "base.html" %}{% from "_macros.html" import pcard, badge, shop_img %}
 {% block description %}Lovceny hlídá ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy a upozorní tě na zlevnění. Bez placených pozic.{% endblock %}
 {% block body %}
 {% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">🛍️</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Které slevy jsou opravdu nejnižší? Kontrola 30 dní (§ 12a) u každé.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
-<header class="hero" id="hledat"><div class="wrap">
-  <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
-  <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
-  <p class="lead">Lovceny hlídá ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy a upozorní tě, až produkt zlevní. Vlož odkaz z e-shopu nebo název produktu.</p>
-  <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
-    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input name="q" type="text" required placeholder="Např. tichá pračka do 10 tisíc, sluchátka na běhání nebo odkaz z e-shopu…" aria-label="Název produktu nebo odkaz z e-shopu"></label>
-    <button class="btn btn-primary" type="submit">Prověřit cenu</button>
-  </form>
-  {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
-  {% set n_shops = SHOPS.values()|selectattr('status', 'equalto', 'ok')|list|length %}
-  <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}.</p>
-  <div class="verdicts" aria-label="Možné verdikty">
-    <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
-    <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
-    <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
+<header class="hero" id="hledat"><div class="wrap hero-layout">
+  <div class="hero-copy">
+    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
+    <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
+    <p class="lead">Lovceny hlídá ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy a upozorní tě, až produkt zlevní. Vlož odkaz z e-shopu nebo název produktu.</p>
+    <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
+      <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input name="q" type="text" required placeholder="Např. tichá pračka do 10 tisíc, sluchátka na běhání nebo odkaz z e-shopu…" aria-label="Název produktu nebo odkaz z e-shopu"></label>
+      <button class="btn btn-primary" type="submit">Prověřit cenu</button>
+    </form>
+    {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
+    {% set n_shops = SHOPS.values()|selectattr('status', 'equalto', 'ok')|list|length %}
+    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}.</p>
   </div>
-  <picture class="hero-art"><source type="image/webp" srcset="{{ static('img/hero-720.webp') }} 720w, {{ static('img/hero-1200.webp') }} 1200w" sizes="(max-width:560px) 92vw, 760px"><img src="{{ static('img/hero-1200.jpg') }}" srcset="{{ static('img/hero-720.jpg') }} 720w, {{ static('img/hero-1200.jpg') }} 1200w" sizes="(max-width:560px) 92vw, 760px" width="1200" height="674" alt="Ilustrace: lupa nad grafem klesající ceny, kolem ní mobil, sluchátka, notebook, chytré hodinky, pračka a kávovar" fetchpriority="high" decoding="async"></picture>
+  {% if hero_picks %}
+  <aside class="hero-picks" aria-labelledby="hero-picks-h">
+    <h2 id="hero-picks-h" class="hero-picks-title">Teď stojí za to</h2>
+    <div class="hero-picks-row">
+      {% for h in hero_picks %}
+      {% set shop_name = (get_shop(h.best.shop).name if get_shop(h.best.shop) else h.best.shop) %}
+      <a class="hero-pick" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
+        {% if h.badge %}<span class="hero-pick-badge">{{ h.badge }}</span>{% endif %}
+        <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 96, priority=(loop.first), alt=h.product.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+        <div class="hero-pick-name">{{ h.product.name }}</div>
+        <div class="hero-pick-meta"><b>{{ h.best.price|czk }}</b><span>{{ shop_name }}</span></div>
+      </a>
+      {% endfor %}
+    </div>
+  </aside>
+  {% endif %}
+  <div class="hero-verdicts">
+    <div class="verdicts" aria-label="Možné verdikty">
+      <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
+      <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
+      <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
+    </div>
+  </div>
 </div></header>
 
 {% if thin_history %}
