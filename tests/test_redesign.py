@@ -124,7 +124,15 @@ def test_priced_cards_and_thin_history_helpers():
 
 def test_home_hero_clarity():
     init_db()
+    from lovceny.shops import SHOPS
+    from lovceny.util import cz_count
     html = TestClient(app).get("/").text
     assert "Hlídáme ceny" in html or "hlídá ceny" in html.lower()
     assert "Jak to funguje" in html
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
+    # Hero: shop count line, no chip list
+    n = sum(1 for s in SHOPS.values() if s.status == "ok")
+    expected = "Sledujeme ceny v " + cz_count(n, "českém e-shopu", "českých e-shopech", "českých e-shopech")
+    assert expected in html
+    assert 'class="shops"' not in html
+    assert 'class="shop"' not in html

@@ -12,9 +12,8 @@
     <button class="btn btn-primary" type="submit">Prověřit cenu</button>
   </form>
   {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
-  <div class="shops">Hlídáme:
-    {% for s in SHOPS.values() if s.status == 'ok' %}<span class="shop">{{ s.name }}</span>{% endfor %}
-  </div>
+  {% set n_shops = SHOPS.values()|selectattr('status', 'equalto', 'ok')|list|length %}
+  <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}.</p>
   <div class="verdicts" aria-label="Možné verdikty">
     <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
     <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>

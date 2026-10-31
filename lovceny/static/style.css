@@ -49,6 +49,7 @@ h1 .hl::after{content:"";position:absolute;left:0;right:0;bottom:.06em;height:.1
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink);font-family:inherit}
 .chip:hover{border-color:var(--brand);color:var(--brand)}
 .shops{margin-top:36px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.shops-line{margin-top:28px;font-size:15px;color:var(--muted);text-align:center}
 .shop{font-weight:700;color:var(--ink);background:var(--soft);border-radius:10px;padding:6px 12px;font-size:14px}
 .verdicts{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
 /* badges */
