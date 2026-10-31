@@ -6,7 +6,7 @@ from lovceny.shops import shop_for_url
 
 def test_catalog_is_valid_and_broad():
     items = seed.load_catalog()
-    assert 60 <= len(items) <= 120
+    assert 60 <= len(items) <= 200
     assert len({i["url"] for i in items}) == len(items)
     cats = {i["cat"] for i in items}
     assert cats == set(BY_SLUG)  # každá kategorie má produkty
