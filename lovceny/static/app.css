@@ -58,7 +58,7 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}
 .p-chart canvas{max-width:100%}
 @media (max-width:560px){
   .offer{grid-template-columns:1fr auto;gap:6px 12px}
-  .offer a{grid-column:1/-1}
+  .offer .btn-shop,.offer a{grid-column:1/-1}
   .stats{grid-template-columns:1fr 1fr 1fr;gap:6px}.stats .stat{padding:10px}.stats strong{font-size:14px}
 }
 .verdicts .verdict-badge{font-size:14px}
@@ -395,7 +395,7 @@ main:focus{outline:none}
 .ov-elsewhere{padding:20px 22px;overflow:visible}
 .ov-h2{font-size:19px;margin-bottom:4px}
 .ov-list{list-style:none;display:grid;gap:8px;margin-top:12px}
-.ov-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:14px}
+.ov-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:14px}
 .ov-row .p-img{width:48px;height:48px;font-size:22px}
 .ov-row-main{display:grid;gap:2px;min-width:0}
 .ov-row-main a{font-weight:700;font-size:14.5px;text-decoration:none;overflow-wrap:anywhere}.ov-row-main a:hover{text-decoration:underline}
@@ -722,3 +722,38 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 .about-how-steps{margin:16px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.5}
 .about-how .section-art{margin:12px 0;max-width:420px}
 .nav-cta-btn{white-space:nowrap}
+
+
+/* --- Shop buy CTAs: prominent, consistent, tasteful --- */
+.btn-buy{width:100%;max-width:420px;min-height:52px;height:auto;padding:12px 22px;font-size:16px;line-height:1.25;text-align:center;box-shadow:0 8px 20px -8px rgba(11,110,79,.55)}
+.btn-buy:hover{background:var(--brand-600,#095C42)}
+.btn-buy:focus-visible{outline:3px solid var(--accent,#FF7A45);outline-offset:3px}
+.btn-shop{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;height:auto;padding:0 16px;border-radius:12px;background:var(--brand,#0B6E4F);color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 4px 12px -6px rgba(11,110,79,.45);white-space:nowrap}
+.btn-shop:hover{background:var(--brand-600,#095C42);color:#fff}
+.btn-shop:focus-visible{outline:3px solid var(--accent,#FF7A45);outline-offset:3px}
+.btn-shop-sm{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:44px;height:auto;padding:0 14px;border-radius:11px;background:var(--brand,#0B6E4F);color:#fff;font:inherit;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap}
+.btn-shop-sm:hover{background:var(--brand-600,#095C42);color:#fff}
+.btn-shop-sm:focus-visible{outline:3px solid var(--accent,#FF7A45);outline-offset:3px}
+.offer-best{background:linear-gradient(90deg,var(--brand-50,#E8F5EF),transparent 70%);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:12px}
+.offer-best-tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#0B6E4F;background:#fff;border:1px solid color-mix(in srgb,#0B6E4F 22%,transparent);border-radius:999px;padding:2px 8px;vertical-align:middle}
+.pcard-act{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:2px}
+.pcard-act .btn-cmp-quiet{align-self:center}
+.deal-act,.bf-act{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:0 4px 4px}
+.cmp-buy{margin-top:10px}
+.live-act .btn-shop-sm{align-self:stretch}
+.ov-row .btn-shop-sm{justify-self:end}
+@media (max-width:640px){
+  .ov-row{grid-template-columns:48px minmax(0,1fr);gap:10px}
+  .ov-row-price,.ov-row .btn-shop-sm{grid-column:2;justify-self:start}
+}
+@media (max-width:560px){
+  .btn-buy{max-width:none}
+  .offer .btn-shop{width:100%;justify-content:center}
+  .offer-best{margin:0;padding-left:0;padding-right:0}
+}
+@media (max-width:640px){
+  .pcard-act{width:100%}
+  .pcard-act .btn-shop-sm{flex:1;justify-content:center}
+  .hero-pick-meta{flex-direction:column;align-items:flex-start;gap:8px}
+  .hero-pick-buy{min-height:40px}
+}

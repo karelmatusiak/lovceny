@@ -30,7 +30,9 @@
         <h2 class="cmp-name" id="cmp-n-{{ p.id }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
-          <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>{% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
+          <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>
+            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ it.best_shop.affiliate_link(it.best.url) }}" target="_blank" rel="nofollow sponsored noopener">Koupit v {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+            {% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v, link=true) }}</dd></div>
         </dl>
         <dl class="cmp-dl cmp-mm">

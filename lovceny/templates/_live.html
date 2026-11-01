@@ -18,7 +18,7 @@
       {% if tracked %}<a class="btn btn-ghost" href="/produkt/{{ tracked.id }}-{{ tracked.slug }}">Už hlídáme</a>{{ cmp_button(tracked) }}
       {% else %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ h.url }}"><button class="btn btn-primary"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>
       <form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ h.url }}"><input type="hidden" name="compare" value="1"><button class="btn-cmp" title="Začneme sledovat a přidáme do porovnání"><span aria-hidden="true">⚖️</span> Porovnat</button></form>{% endif %}
-      <a class="live-link" href="{{ h.url }}" target="_blank" rel="noopener nofollow">Do obchodu ↗</a>
+      <a class="btn btn-shop-sm" href="{{ h.url }}" target="_blank" rel="noopener nofollow">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
     </div>
   </div>
 {% endfor %}

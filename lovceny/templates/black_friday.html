@@ -75,7 +75,10 @@
           <div><dt>Vůči obvyklé</dt><dd>{% if r.real_pct >= 0.5 %}−{{ '%.0f'|format(r.real_pct) }}&nbsp;%{% elif r.verdict.median90 %}bez rozdílu{% else %}–{% endif %}</dd></div>
         </dl>{% endif %}
       </div>
+      <div class="bf-act">
       {{ cmp_button(r.product) }}
+      {% if sh %}<a class="btn btn-shop-sm" href="{{ sh.affiliate_link(r.best.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+      </div>
     </li>{% endfor %}
   </ul>
   {% else %}

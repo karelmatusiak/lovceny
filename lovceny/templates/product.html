@@ -19,6 +19,9 @@
         {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
+      {% if best %}{% set bs = get_shop(best.shop) %}
+      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Koupit v {{ bs.name }} za {{ best.price|czk }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      {% endif %}
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
       {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
       {% if cat %}{{ season_hint(cat.slug) }}{% endif %}
@@ -50,15 +53,15 @@
       <p class="ct-note v-{{ v.code }}"><span aria-hidden="true">{{ v.icon }}</span> {{ chart_note }}{% if v.code == 'fake' %} <a href="/jak-radime#za-30-dni-levneji">Metodika</a>{% endif %}</p>
       <div class="offers">
         {% for o in offers %}{% set s = get_shop(o.shop) %}
-        <div class="offer">
-          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}
+        <div class="offer{% if loop.first %} offer-best{% endif %}">
+          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if loop.first %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
             <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:#8A5200">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span class="offer-quiet">Připravujeme cenu{% if s.source=='feed' %} z feedu{% endif %}</span>
             {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>
             {% elif o.status=='unavailable' %}<span style="color:#8A5200">Už není v nabídce obchodu</span>
             {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
-          <a href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu →</a>
+          <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         </div>{% endfor %}
       </div>
       <p class="fair">Seřazeno výhradně podle ceny (bez dopravy), nikdo za pořadí neplatí. {{ rank_link() }}</p>

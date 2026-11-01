@@ -23,13 +23,19 @@
     <h2 id="hero-picks-h" class="hero-picks-title">Teď stojí za to</h2>
     <div class="hero-picks-row">
       {% for h in hero_picks %}
-      {% set shop_name = (get_shop(h.best.shop).name if get_shop(h.best.shop) else h.best.shop) %}
-      <a class="hero-pick" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
+      {% set hs = get_shop(h.best.shop) %}
+      {% set shop_name = (hs.name if hs else h.best.shop) %}
+      <div class="hero-pick">
         {% if h.badge %}<span class="hero-pick-badge">{{ h.badge }}</span>{% endif %}
-        <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 96, priority=(loop.first), alt=h.product.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-        <div class="hero-pick-name">{{ h.product.name }}</div>
-        <div class="hero-pick-meta"><b>{{ h.best.price|czk }}</b><span>{{ shop_name }}</span></div>
-      </a>
+        <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
+          <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 96, priority=(loop.first), alt=h.product.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+          <div class="hero-pick-name">{{ h.product.name }}</div>
+        </a>
+        <div class="hero-pick-meta"><b>{{ h.best.price|czk }}</b>
+          {% if hs %}<a class="btn btn-shop-sm hero-pick-buy" href="{{ hs.affiliate_link(h.best.url) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
+          {% else %}<span>{{ shop_name }}</span>{% endif %}
+        </div>
+      </div>
       {% endfor %}
     </div>
   </aside>

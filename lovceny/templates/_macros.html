@@ -37,7 +37,12 @@
   </div>
 </a>
 {% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
+<div class="pcard-act">
 {{ cmp_button(p) }}
+{% if best %}{% set s = get_shop(best.shop) %}
+<a class="btn btn-shop-sm" href="{{ s.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
+{% endif %}
+</div>
 </div>
 {%- endmacro %}
 {% macro shop_img(url, px=60, priority=false, alt="") -%}
