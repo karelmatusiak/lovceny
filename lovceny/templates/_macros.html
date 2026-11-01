@@ -37,7 +37,6 @@
   </div>
 </a>
 {% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
-{% if v.code == 'none' and v.tooltip %}<p class="pc-tip" title="{{ v.tooltip }}">{{ v.reason or 'Sbíráme historii ceny' }}</p>{% endif %}
 {{ cmp_button(p) }}
 </div>
 {%- endmacro %}

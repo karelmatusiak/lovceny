@@ -49,6 +49,9 @@ def test_pages_and_links():
               "7 dní", "3× denně", "Ceny jsou orientační", "id=\"za-30-dni-levneji\""):
         assert s in hn, s
     for shop in SHOPS.values():
+        if shop.retired:
+            assert shop.name.replace("'", "&#39;") not in h
+            continue
         assert shop.name.replace("'", "&#39;") in h
     assert "Odkaz může být provizní" not in h  # bez příznaku skryté
     p = c.get("/pro-obchody").text

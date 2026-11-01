@@ -401,7 +401,9 @@ def unsubscribe(request: Request, token: str, db=Depends(get_db)):
 
 @app.get("/obchody", response_class=HTMLResponse)
 def shops(request: Request):
-    return tpl.TemplateResponse(request, "shops.html", {})
+    listed = [s for s in SHOPS.values() if not s.retired]
+    listed.sort(key=lambda s: (0 if s.status == "ok" and (s.source != "feed" or s.feed_url) else 1, s.name.lower()))
+    return tpl.TemplateResponse(request, "shops.html", {"shops": listed})
 
 
 _health_cache: dict = {}
@@ -611,11 +613,53 @@ def _cat_or_404(slug: str):
 
 
 def _cat_rows(db, c):
+    """Category product rows; TTL-cached as (product_id, best_offer_id|None, Verdict)."""
     from sqlalchemy.orm import selectinload
+    from . import catcache
+    from .verdict import Verdict
+
+    cached = catcache.get(c.slug)
+    if cached is not None:
+        ids = [pid for pid, _, _ in cached]
+        if not ids:
+            return []
+        products = db.scalars(select(Product).where(Product.id.in_(ids))
+                              .options(selectinload(Product.offers))).all()
+        by_id = {p.id: p for p in products}
+        out = []
+        for pid, bid, v in cached:
+            p = by_id.get(pid)
+            if not p:
+                continue
+            best = next((o for o in p.offers if o.id == bid), None) if bid else None
+            out.append((p, best, v))
+        return out
+
     products = db.scalars(select(Product).where(Product.category_slug == c.slug)
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     rows = [(p, *product_summary(p)) for p in products]
-    return sorted(rows, key=lambda r: (r[1] is None, float(r[1].price) if r[1] else 0))
+    rows = sorted(rows, key=lambda r: (r[1] is None, float(r[1].price) if r[1] else 0))
+    payload = [(p.id, best.id if best else None, v) for p, best, v in rows]
+    catcache.set(c.slug, payload)
+    return rows
+
+
+def _ve_sleve_rows(rows):
+    """Filter/sort category rows for /ve-sleve without scanning the whole catalog."""
+    scored = []
+    for p, best, v in rows:
+        if not best or v.code != "buy" or not v.median90:
+            continue
+        med = float(v.median90)
+        cur = float(best.price)
+        if med <= 0:
+            continue
+        pct = (med - cur) / med * 100
+        if pct < 1:
+            continue
+        scored.append(((p, best, v), pct))
+    scored.sort(key=lambda x: -x[1])
+    return [r for r, _ in scored]
 
 
 CAT_VIEWS = {
@@ -641,10 +685,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
         raise HTTPException(404)
     rows = _cat_rows(db, c)
     if view == "ve-sleve":
-        from .deals import product_rows
-        ids = {p.id for p, _, _ in rows}
-        deal = {r.product.id: r for r in product_rows(db) if r.verdict.code == "buy" and r.product.id in ids and r.savings_pct >= 1}
-        rows = sorted([r for r in rows if r[0].id in deal], key=lambda r: -deal[r[0].id].savings_pct)
+        rows = _ve_sleve_rows(rows)
     else:
         rows = [r for r in rows if r[1] is not None]
     if view == "nejlevnejsi":
@@ -699,6 +740,8 @@ def status_page(request: Request, db=Depends(get_db)):
     health = monitor.evaluate(db, list(hist["last"].values()))
     rows = []
     for s in SHOPS.values():
+        if s.retired:
+            continue
         h = health["shops"].get(s.slug)
         last = hist["last"].get(s.slug)
         if not h and not last:
@@ -859,7 +902,8 @@ def ranking_page(request: Request):
     from . import verdict as vmod
     from .shops import search as smod
     crumbs = [("Lovceny", "/"), ("Jak řadíme a hodnotíme", "/jak-radime")]
-    shops = sorted(SHOPS.values(), key=lambda s: (s.status != "ok", s.name.lower()))
+    shops = sorted((s for s in SHOPS.values() if not s.retired),
+                   key=lambda s: (s.status != "ok", s.name.lower()))
     return tpl.TemplateResponse(request, "jak_radime.html", {
         "crumbs": crumbs, "ld": [seo.breadcrumb_ld(crumbs)], "shops": shops, "t": vmod,
         "pct": lambda x: round(x * 100), "fetch_times": _fetch_times(), "min_age": 2,

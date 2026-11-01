@@ -62,7 +62,8 @@ def main(argv=None):
 
     # 2) přímé čtení stránek (jen obchody, které to dovolují)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=a.min_age_hours)
-    q = select(Offer).where(Offer.shop.in_([s.slug for s in SHOPS.values() if s.source == "scrape"]))
+    q = select(Offer).where(Offer.shop.in_([s.slug for s in SHOPS.values()
+                                              if s.source == "scrape" and not s.retired]))
     if a.shop:
         q = q.where(Offer.shop == a.shop)
     for o in db.scalars(q.order_by(Offer.last_checked.asc().nullsfirst()).limit(a.limit)).all():
@@ -128,6 +129,12 @@ def main(argv=None):
         db.rollback()
         log.error("Black Friday přehled selhal: %s", e)
     log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
+    try:
+        from lovceny import catcache
+        catcache.clear()
+        log.info("Vyprázdněna cache kategorií")
+    except Exception as e:  # noqa: BLE001
+        log.error("Vyprázdnění cache kategorií selhalo: %s", e)
     log.info("SOUHRN: %s", dict(report))
     db.close()
     return 1 if report and all(k.endswith(("error", "blocked")) for k in report) else 0

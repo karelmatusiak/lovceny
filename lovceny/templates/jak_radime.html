@@ -26,7 +26,7 @@
     <caption class="sr-only">Prohledávané obchody a jejich stav</caption>
     <thead><tr><th scope="col">Obchod</th><th scope="col">Zdroj cen</th><th scope="col">Živé hledání</th><th scope="col">Stav</th></tr></thead>
     <tbody>{% for s in shops %}<tr><td><b>{{ s.name }}</b></td><td>{{ 'oficiální feed' if s.source=='feed' else 'stránka produktu' }}</td><td>{{ 'ano' if s.searcher else 'ne' }}</td>
-      <td>{% if s.status=='blocked' %}<span class="st st-bad">nesledujeme</span>{% elif s.source=='feed' and not s.feed_url %}<span class="st st-wait">čeká na feed</span>{% else %}<span class="st st-ok">sledujeme</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      <td>{% if s.status=='blocked' or (s.source=='feed' and not s.feed_url) %}<span class="st st-wait">připravujeme feed</span>{% else %}<span class="st st-ok">sledujeme</span>{% endif %}</td></tr>{% endfor %}</tbody>
   </table></div>
   <p class="small muted">Aktuální úspěšnost stahování po obchodech je na stránce <a href="/stav">Stav obchodů</a>, podrobnosti na <a href="/obchody">Hlídané obchody</a>.</p>
 

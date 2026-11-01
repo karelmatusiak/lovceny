@@ -32,6 +32,8 @@ class Shop:
     page_parser: Callable | None = None
     # obchod vrací 404 na URL bez koncového „/“ (normalize_url ho jinak odřízne)
     trailing_slash: bool = False
+    # skrytý z /obchody a /stav (např. vestavné – runner ConnectTimeout)
+    retired: bool = False
 
     def canonical_url(self, url: str) -> str:
         from ..util import normalize_url
@@ -48,7 +50,7 @@ class Shop:
 
     @property
     def can_scrape(self) -> bool:
-        return self.source == "scrape" and self.status == "ok"
+        return (not self.retired) and self.source == "scrape" and self.status == "ok"
 
     def affiliate_link(self, url: str) -> str:
         """Přidá affiliate parametr (např. Alza ?idp=XXXX). Bez nastaveného ID vrací URL beze změny.
@@ -93,9 +95,9 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          searcher=lambda q: _search.search_4home(q), trailing_slash=True,
          search_note="Živé vyhledávání /hledat/?q= povoleno robots.txt (domácí spotřebiče, kuchyň)."),
     Shop("vestavne", "Vestavné spotřebiče", ["vestavne-spotrebice.cz"], source="scrape", status="ok", color="#8A5A00",
-         note="JSON-LD funguje z běžných IP, ale GitHub Actions runnerům ConnectTimeout – katalog držíme na jiných obchodech.",
-         searcher=lambda q: _search.search_vestavne(q), trailing_slash=True, extra={"match_slug": True},
-         search_note="Živé vyhledávání /search/?search_value= povoleno robots.txt (vestavné spotřebiče)."),
+         note="Vyřazeno: GitHub Actions runnerům ConnectTimeout – katalog držíme na jiných obchodech.",
+         searcher=lambda q: _search.search_vestavne(q), trailing_slash=True, retired=True, extra={"match_slug": True},
+         search_note="Vyřazeno z katalogu (ConnectTimeout z runnerů)."),
     Shop("eta", "ETA", ["eta.cz"], source="scrape", status="ok", color="#D6001C",
          note="Detail bez JSON-LD – cenu čteme z HTML, robots.txt povoluje. Prodává jen značky ETA/Gorenje/Hyundai.",
          searcher=lambda q: _search.search_eta(q), page_parser=lambda h: _search.parse_eta_detail(h), trailing_slash=True,
@@ -116,8 +118,8 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="Cena z meta/HTML produktu, robots.txt povoluje (skupina * chybí).",
          searcher=lambda q: _search.search_mobilyostrava(q),
          search_note="Živé vyhledávání /cz/hledat/?search_nazev= povoleno robots.txt (malý obchod, hlavně příslušenství)."),
-    Shop("istores", "iStores", ["istores.cz"], source="scrape", status="blocked",
-         note="robots.txt nejasný (zakazuje jen slovenské /vyhladavanie), vyřazeno z ohleduplnosti – nehledáme ani nestahujeme."),
+    Shop("istores", "iStores", ["istores.cz"], source="scrape", status="blocked", color="#555555",
+         note="Z ohleduplnosti nestahujeme (nejasný robots). Připravujeme oficiální / affiliate feed."),
     Shop("mobilprovas", "MobilProVás", ["mobilprovas.cz"], source="scrape", status="ok", color="#019CDE",
          note="Malý obchod a servis (Modřice). robots.txt neexistuje (404) = vše povoleno.",
          searcher=lambda q: _search.search_mobilprovas(q),
@@ -135,18 +137,23 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          page_parser=lambda h: _search.parse_mobilfone_detail(h),
          search_note="Vyhledávání (/search.php) zakazuje robots.txt – živě nehledáme, jen sledování podle URL produktu."),
     Shop("czc", "CZC", ["czc.cz"], source="scrape", status="blocked", color="#7A4BD1",
-         note="czc.cz je jen rozcestník na obchod na Allegru, robots.txt zakazuje /hledat*; allegro.cz vrací DataDome (403)."),
+         note="Přímé stahování nejde (Allegro/DataDome). Připravujeme oficiální / affiliate feed."),
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",
-         note="Přesměrováno na Allegro, 403 DataDome."),
+         note="Přesměrováno na Allegro (DataDome). Připravujeme oficiální / affiliate feed."),
     Shop("smarty", "Smarty", ["smarty.cz"], source="scrape", status="blocked", color="#169B5B",
-         note="403 na homepage i produktech."),
-    Shop("electroworld", "Electroworld", ["electroworld.cz"], source="scrape", status="blocked",
-         note="F5 JS challenge (stejná skupina jako Datart)."),
-    Shop("kasa", "Kasa", ["kasa.cz"], source="scrape", status="blocked", note="F5 JS challenge."),
-    Shop("tsbohemia", "TS Bohemia", ["tsbohemia.cz"], source="scrape", status="blocked", note="403 (i robots.txt)."),
-    Shop("conrad", "Conrad", ["conrad.cz"], source="scrape", status="blocked", note="403 ochrana proti botům (i robots.txt)."),
-    Shop("eberry", "eBerry", ["eberry.cz"], source="scrape", status="blocked", note="403 ochrana proti botům (i robots.txt)."),
-    Shop("bscom", "BScom", ["bscom.cz"], source="scrape", status="blocked", note="403 ochrana proti botům (i robots.txt)."),
+         note="Přímé stahování blokuje ochrana. Připravujeme oficiální / affiliate feed."),
+    Shop("electroworld", "Electroworld", ["electroworld.cz"], source="scrape", status="blocked", color="#E2001A",
+         note="F5 ochrana jako Datart. Připravujeme oficiální / affiliate feed."),
+    Shop("kasa", "Kasa", ["kasa.cz"], source="scrape", status="blocked", color="#C45C00",
+         note="F5 ochrana. Připravujeme oficiální / affiliate feed."),
+    Shop("tsbohemia", "TS Bohemia", ["tsbohemia.cz"], source="scrape", status="blocked", color="#333333",
+         note="403 / robots. Připravujeme oficiální / affiliate feed."),
+    Shop("conrad", "Conrad", ["conrad.cz"], source="scrape", status="blocked", color="#000000",
+         note="Ochrana proti botům. Připravujeme oficiální / affiliate feed."),
+    Shop("eberry", "eBerry", ["eberry.cz"], source="scrape", status="blocked", color="#8B1E3F",
+         note="Ochrana proti botům. Připravujeme oficiální / affiliate feed."),
+    Shop("bscom", "BScom", ["bscom.cz"], source="scrape", status="blocked", color="#1A5276",
+         note="Ochrana proti botům. Připravujeme oficiální / affiliate feed."),
 ]}
 
 

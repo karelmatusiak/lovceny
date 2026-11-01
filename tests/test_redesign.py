@@ -131,9 +131,10 @@ def test_home_hero_clarity():
     assert "Jak to funguje" in html
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
     # Hero: shop count line, no chip list; electronics photo removed
-    n = sum(1 for s in SHOPS.values() if s.status == "ok")
+    n = sum(1 for s in SHOPS.values() if s.can_scrape)
     expected = "Sledujeme ceny v " + cz_count(n, "českém e-shopu", "českých e-shopech", "českých e-shopech")
     assert expected in html
+    assert "Pokrytí roste" in html
     assert 'class="shops"' not in html
     assert 'class="shop"' not in html
     assert "hero-art" not in html

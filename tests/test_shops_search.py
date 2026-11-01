@@ -134,10 +134,11 @@ def test_more_appliance_accessories(name, q):
 
 def test_slug_matching_only_where_enabled(monkeypatch):
     hit = SearchHit("mironet", "FINISH Sůl 1.5 kg", 74, "https://www.mironet.cz/finish-sul-do-mycky+dp1/")
-    vs = SearchHit("vestavne", "mora IM 6435", 9990, "https://www.vestavne-spotrebice.cz/x-vestavne-mycky-integrovane/")
+    # delonghi má match_slug; vestavne je retired a live_search ho přeskočí
+    vs = SearchHit("delonghi", "ECAM myčka příslušenství demo", 9990, "https://www.delonghi.com/cs-cz/x-mycky-integrovane/")
     monkeypatch.setattr(SHOPS["mironet"], "searcher", lambda q: [hit])
-    monkeypatch.setattr(SHOPS["vestavne"], "searcher", lambda q: [vs])
-    assert [h.shop for h in live_search("myčka").hits] == ["vestavne"]
+    monkeypatch.setattr(SHOPS["delonghi"], "searcher", lambda q: [vs])
+    assert [h.shop for h in live_search("myčka").hits] == ["delonghi"]
 
 
 @pytest.mark.parametrize("name,q", [("Skříň nad pračku Kamil White", "pračka"), ("Televizní stěna Duru", "televize"),

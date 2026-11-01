@@ -15,6 +15,7 @@
       <div class="st-head">
         <h2 class="h3"><span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}</h2>
         {% if not h %}<span class="st st-wait">bez sledovaných nabídek</span>
+        {% elif not r.last_ok and (not l or not l.ok) %}<span class="st st-wait">zatím bez dat</span>
         {% elif h.ok %}<span class="st st-ok"><span aria-hidden="true">✓</span> v pořádku</span>
         {% else %}<span class="st st-bad"><span aria-hidden="true">!</span> {% for x in h.reasons %}{{ {'failing': 'blokuje / selhává', 'stale': 'staré ceny'}[x.code] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
       </div>

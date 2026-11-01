@@ -582,7 +582,7 @@ def live_search(query: str, shops=None, timeout: float = TIMEOUT_S, limit_per_sh
     c = _cache.get(key)
     if c and now - c[0] < CACHE_TTL_S and shops is None:
         return LiveResult(c[1].hits, c[1].shops, cached=True)
-    targets = [s for s in (shops or SHOPS.values()) if s.searcher]
+    targets = [s for s in (shops or SHOPS.values()) if s.searcher and not getattr(s, 'retired', False)]
     futs = {_pool.submit(s.searcher, query): s for s in targets}
     done, _ = wait(futs, timeout=timeout)
     results, hits = [], []

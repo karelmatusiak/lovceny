@@ -13,8 +13,9 @@
       <button class="btn btn-primary" type="submit">Prověřit cenu</button>
     </form>
     {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
-    {% set n_shops = SHOPS.values()|selectattr('status', 'equalto', 'ok')|list|length %}
-    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}.</p>
+    {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
+    {% set n_shops = tracked|length %}
+    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
     <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a></p>
   </div>
   {% if hero_picks %}
@@ -43,11 +44,10 @@
 </div></header>
 
 {% if thin_history %}
-<aside class="expect-note" role="status"><div class="wrap">
-  <p><b>Historie cen teprve začíná.</b> Web jsme znovu spustili 31.&nbsp;10.&nbsp;2026 – u většiny produktů zatím nemáme dost dní pro verdikt Kupuj/Počkej. Ceny stahujeme 3× denně; jakmile jich bude víc, verdikty a slevy se doplní samy.</p>
+<aside class="expect-note expect-note-quiet" role="status"><div class="wrap">
+  <p><span class="expect-badge">Historie začíná</span> Web znovu od 31.&nbsp;10.&nbsp;2026 – verdikty Kupuj/Počkej doplníme po týdnu měření (ceny 3× denně).</p>
 </div></aside>
 {% endif %}
-
 
 <section class="home-cats" aria-labelledby="home-cats-h"><div class="wrap">
   <div class="teaser-head"><div><div class="eyebrow">Kategorie</div><h2 id="home-cats-h">Co hlídáme</h2></div>
@@ -94,8 +94,8 @@
   </div>
 </div></section>
 {% else %}
-<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
-  <div class="card teaser-empty"><b>🏷️ Slevy dne</b> – jakmile budeme mít u sledovaných produktů aspoň týden historie, ukážeme tu nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></div>
+<section class="deals-teaser deals-teaser-quiet" style="padding-top:24px" aria-label="Slevy dne"><div class="wrap">
+  <p class="teaser-empty-quiet"><span class="expect-badge">Slevy dne</span> Až budeme mít aspoň týden historie, ukážeme nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></p>
 </div></section>
 {% endif %}
 

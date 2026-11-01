@@ -69,7 +69,8 @@ def _aware(d: datetime | None) -> datetime | None:
 def monitored_shops():
     """Obchody, u kterých čekáme čerstvé ceny: čtení stránek povoleno, nebo nastavený feed."""
     from .shops import SHOPS
-    return [s for s in SHOPS.values() if s.can_scrape or (s.source == "feed" and s.feed_url)]
+    return [s for s in SHOPS.values()
+            if (not s.retired) and (s.can_scrape or (s.source == "feed" and s.feed_url))]
 
 
 def last_ok_by_shop(db) -> dict[str, datetime]:
