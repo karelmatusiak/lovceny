@@ -93,7 +93,7 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          searcher=lambda q: _search.search_4home(q), trailing_slash=True,
          search_note="Živé vyhledávání /hledat/?q= povoleno robots.txt (domácí spotřebiče, kuchyň)."),
     Shop("vestavne", "Vestavné spotřebiče", ["vestavne-spotrebice.cz"], source="scrape", status="ok", color="#8A5A00",
-         note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
+         note="JSON-LD funguje z běžných IP, ale GitHub Actions runnerům ConnectTimeout – katalog držíme na jiných obchodech.",
          searcher=lambda q: _search.search_vestavne(q), trailing_slash=True, extra={"match_slug": True},
          search_note="Živé vyhledávání /search/?search_value= povoleno robots.txt (vestavné spotřebiče)."),
     Shop("eta", "ETA", ["eta.cz"], source="scrape", status="ok", color="#D6001C",

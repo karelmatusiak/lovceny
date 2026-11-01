@@ -1,4 +1,4 @@
-"""Týdenní přehled slev: každý pátek (17:17 Praha) snímek nejlepších skutečných slev týdne
+"""Týdenní přehled slev: každý pátek večer (Praha) snímek nejlepších skutečných slev týdne
 (/prehled/<rok>-<týden>) + Web Push odběratelům tématu „tydenni“; e-mailová verze jen s EMAIL_BACKEND.
 
 „Skutečná sleva“ = stejná metodika jako /slevy (deals.real_deals): verdikt Kupuj (do 3 % nad 90denním
@@ -23,7 +23,7 @@ PRAGUE = ZoneInfo("Europe/Prague")
 TOP = 10
 MIN_SAVE_PCT = 1.0
 FRESH_DAYS = 3
-SEND_HOURS = (17, 18)   # cron běží 15:17 i 16:17 UTC (letní/zimní čas) → pošle se jen v 17–18 h pražského času
+SEND_HOURS = (15, 16, 17, 18, 19, 20, 21)  # pátek večer Praha; CET 14 UTC=15, CEST 14 UTC=16; + zpoždění
 TOPIC = "tydenni"
 
 
@@ -191,9 +191,13 @@ def run(db, now: datetime | None = None, force: bool = False, push_sender=None, 
     now = now or datetime.now(timezone.utc)
     local = now.astimezone(PRAGUE)
     if not force and (local.weekday() != 4 or local.hour not in SEND_HOURS):
-        return {"skipped": f"teď je {local:%a %H:%M} Praha – přehled jde jen v pátek 17–18 h"}
+        return {"skipped": f"teď je {local:%a %H:%M} Praha – přehled jde jen v pátek 15–21 h"}
     d = generate(db, now)
     out = {"digest": slug(d), "items": len(items_of(d))}
+    # Dedupe: po prvním pátečním odeslání (push_sent_at) další cron sloty v okně přeskočí
+    if not force and d.push_sent_at is not None:
+        return {**out, "skipped": "už odesláno tento týden", "push": {"sent": 0, "gone": 0, "error": 0},
+                "email": 0, "cleanup": 0}
     out["push"] = send_push(db, d, push_sender)
     out["email"] = send_email(db, d, email_sender)
     out["cleanup"] = cleanup(db, now)

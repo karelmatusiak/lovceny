@@ -1,9 +1,9 @@
 name: Týdenní přehled slev
-# Každý pátek 17:17 pražského času. GitHub cron je v UTC → dva časy (letní 15:17, zimní 16:17 UTC);
-# skript pošle přehled jen v pátek 17–18 h Praha a nejvýš jednou za týden (idempotentní).
+# Pátek večer pražského času. GitHub cron je UTC a často se zpožďuje o desítky minut;
+# víc slotů (CET/CEST + zpoždění) + skript pošle jen pátek 15–21 h Praha a nejvýš jednou za týden.
 on:
   schedule:
-    - cron: "17 15,16 * * 5"
+    - cron: "17 14,15,16,17,18 * * 5"
   workflow_dispatch:
     inputs:
       force:

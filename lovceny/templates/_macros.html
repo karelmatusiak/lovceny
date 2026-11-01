@@ -30,7 +30,7 @@
   </div>
   <div class="pc-row">{{ badge(v) }}
     <div class="pc-prices">
-      <b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}cena bude doplněna{% endif %}</b>
+      <b class="pc-price">{% if best %}{{ best.price|czk }}{% else %}<span class="pc-price-quiet">cena zatím chybí</span>{% endif %}</b>
       {% if shop_name %}<span class="pc-shop">{{ shop_name }}</span>{% endif %}
       {% if v.min90 and best and best.price and v.min90 < best.price %}<span class="pc-low">nejníž {{ v.min90|czk }}</span>{% elif v.min90 and best %}<span class="pc-low">u minima</span>{% endif %}
     </div>

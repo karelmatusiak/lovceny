@@ -47,3 +47,32 @@ def test_affiliate_link(monkeypatch):
     monkeypatch.setenv("ALZA_AFFILIATE_ID", "12345")
     assert alza.affiliate_link("https://www.alza.cz/x.htm?a=1") == "https://www.alza.cz/x.htm?a=1&idp=12345"
     assert shop_for_url("https://m.datart.cz/foo").slug == "datart"
+
+
+def test_unpriced_feed_offer_hidden_on_product_page(client_db, monkeypatch):
+    """Bez ALZA_FEED_URL se pending Alza na produktové stránce neukazuje – produkt s cenou jinde zůstane OK."""
+    monkeypatch.delenv("ALZA_FEED_URL", raising=False)
+    client, db, make = client_db
+    p = make([9990], name="iPhone feed hide")
+    from lovceny.models import Offer
+    o = Offer(product=p, shop="alza", url="https://www.alza.cz/iphone-hide-demo.htm", status="pending")
+    db.add(o)
+    db.commit()
+    html = client.get(f"/produkt/{p.id}").text
+    assert "9\xa0990" in html or "9 990" in html
+    assert "Cena bude doplněna" not in html
+    assert "iphone-hide-demo" not in html
+    # Jakmile feed doplní cenu, nabídka se objeví automaticky (stejná plumbing).
+    o.price = 18990
+    o.status = "ok"
+    db.commit()
+    html2 = client.get(f"/produkt/{p.id}").text
+    assert "Alza" in html2 and ("18\xa0990" in html2 or "18 990" in html2)
+
+
+def test_priced_offers_helper():
+    from types import SimpleNamespace
+    from lovceny.main import priced_offers
+    a = SimpleNamespace(price=10)
+    b = SimpleNamespace(price=None)
+    assert priced_offers([a, b]) == [a]

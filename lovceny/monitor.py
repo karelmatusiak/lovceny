@@ -2,7 +2,7 @@
 
 Pravidla (vyhodnocuje se po každém běhu, výsledek čte .github/workflows/fetch.yml → GitHub issue):
   failing – v běhu selhala většina požadavků na obchod (a pokusů bylo aspoň MIN_ATTEMPTS),
-  stale   – poslední úspěšně stažená cena obchodu je starší než STALE_DAYS (nebo žádná).
+  stale   – poslední úspěšně stažená cena obchodu je starší než STALE_DAYS (obchod, který nikdy neuspěl, se nehlásí).
 """
 import json
 from collections import Counter, defaultdict
@@ -100,9 +100,11 @@ def evaluate(db, run: list[ShopRunStat] | None = None, now: datetime | None = No
             reasons.append({"code": "failing", "text": f"V posledním běhu selhalo {r.failures} z {r.attempts} "
                             f"požadavků ({', '.join(parts)})."})
         lo = last_ok.get(s.slug)
-        if lo is None or now - lo > timedelta(days=STALE_DAYS):
+        # Obchod, který nikdy nevrátil cenu, neoznačujeme jako „stale“ – jinak vypadá,
+        # že rozbil produkty. Nabídky bez ceny se na webu stejně schovávají.
+        if lo is not None and now - lo > timedelta(days=STALE_DAYS):
             from zoneinfo import ZoneInfo
-            when = lo.astimezone(ZoneInfo("Europe/Prague")).strftime("%-d. %-m. %Y %H:%M") + " (čas v ČR)" if lo else "nikdy"
+            when = lo.astimezone(ZoneInfo("Europe/Prague")).strftime("%-d. %-m. %Y %H:%M") + " (čas v ČR)"
             reasons.append({"code": "stale", "text": f"Ceny nejsou aktuální déle než {STALE_DAYS} dny "
                             f"(poslední úspěšné stažení: {when})."})
         out[s.slug] = {

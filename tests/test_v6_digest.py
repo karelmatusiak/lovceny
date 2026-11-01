@@ -44,16 +44,37 @@ def test_week_and_send_window():
 
 
 @pytest.mark.parametrize("when,runs", [
-    (datetime(2026, 10, 16, 15, 17, tzinfo=timezone.utc), True),    # pátek 17:17 letního času
-    (datetime(2026, 10, 16, 14, 17, tzinfo=timezone.utc), False),   # 16:17 Praha
-    (datetime(2027, 1, 8, 16, 17, tzinfo=timezone.utc), True),      # pátek 17:17 zimního času
-    (datetime(2027, 1, 8, 15, 17, tzinfo=timezone.utc), False),     # 16:17 Praha v zimě
+    (datetime(2026, 10, 16, 15, 17, tzinfo=timezone.utc), True),    # pátek 17:17 CEST
+    (datetime(2026, 10, 16, 14, 17, tzinfo=timezone.utc), True),    # 16:17 Praha – uvnitř širšího okna
+    (datetime(2026, 10, 16, 12, 17, tzinfo=timezone.utc), False),   # 14:17 Praha CEST – ještě brzy
+    (datetime(2026, 10, 16, 13, 17, tzinfo=timezone.utc), True),    # 15:17 Praha CEST – začátek okna
+    (datetime(2026, 10, 16, 19, 17, tzinfo=timezone.utc), True),    # 21:17 Praha CEST – poslední hodina okna
+    (datetime(2026, 10, 16, 20, 17, tzinfo=timezone.utc), False),   # 22:17 Praha – po okně
+    (datetime(2027, 1, 8, 16, 17, tzinfo=timezone.utc), True),      # pátek 17:17 CET
+    (datetime(2027, 1, 8, 15, 17, tzinfo=timezone.utc), True),      # 16:17 Praha v zimě
+    (datetime(2027, 1, 8, 14, 17, tzinfo=timezone.utc), True),      # 15:17 Praha v zimě (14 UTC cron)
+    (datetime(2027, 1, 8, 13, 17, tzinfo=timezone.utc), False),     # 14:17 Praha v zimě – ještě brzy
     (datetime(2026, 10, 15, 15, 17, tzinfo=timezone.utc), False),   # čtvrtek
 ])
-def test_run_only_friday_17_prague(clean, when, runs):
+def test_run_only_friday_evening_prague(clean, when, runs):
     client, db, make = clean
     out = digest.run(db, now=when, push_sender=lambda s, p: "ok", email_sender=None)
     assert ("skipped" not in out) == runs
+
+
+def test_run_dedupes_within_wide_window(clean, vapid):
+    """Širší páteční okno + dvojitý cron nesmí poslat 2× (push_sent_at)."""
+    client, db, make = clean
+    _deal(make, db, "Dedupe přehled")
+    client.post("/api/push/tema", json={"topic": "tydenni", "subscription": SUB})
+    sent = []
+    first = datetime(2026, 10, 16, 14, 17, tzinfo=timezone.utc)   # 16:17 Praha
+    second = datetime(2026, 10, 16, 16, 17, tzinfo=timezone.utc)  # 18:17 Praha
+    out1 = digest.run(db, now=first, push_sender=lambda s, p: sent.append(1) or "ok")
+    out2 = digest.run(db, now=second, push_sender=lambda s, p: sent.append(1) or "ok")
+    assert "skipped" not in out1 and out1["push"]["sent"] == 1
+    assert out2.get("skipped") == "už odesláno tento týden"
+    assert sent == [1]
 
 
 def test_items_methodology_and_snapshot_idempotent(clean, monkeypatch):
@@ -183,7 +204,7 @@ def test_email_flow_when_enabled(clean, monkeypatch):
 
 def test_workflow_privacy_sw():
     wf = (ROOT / ".github/workflows/digest.yml").read_text()
-    assert 'cron: "17 15,16 * * 5"' in wf and "python weekly_digest.py" in wf and "VAPID_PRIVATE_KEY" in wf
+    assert 'cron: "17 14,15,16,17,18 * * 5"' in wf and "python weekly_digest.py" in wf and "VAPID_PRIVATE_KEY" in wf
     from fastapi.testclient import TestClient
     from lovceny.main import app
     c = TestClient(app)

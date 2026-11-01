@@ -108,6 +108,29 @@ def seed_catalog(db, items, dry_run=False, fetch=True) -> dict:
     return stats
 
 
+def retire_vestavne(db, dry_run=False) -> dict:
+    """Odstraní nabídky vestavne-spotrebice.cz (ConnectTimeout z GitHub Actions) a osamělé produkty."""
+    from sqlalchemy import or_
+    rows = db.scalars(select(Offer).where(or_(Offer.shop == "vestavne",
+                                              Offer.url.contains("vestavne-spotrebice.cz")))).all()
+    stats = {"offers": 0, "products": 0}
+    if dry_run:
+        stats["offers"] = len(rows)
+        return stats
+    products = {o.product_id: o.product for o in rows}
+    for o in rows:
+        db.delete(o)
+        stats["offers"] += 1
+    db.flush()
+    from lovceny.models import Product
+    for pid, prod in products.items():
+        db.refresh(prod)
+        if not prod.offers:
+            db.delete(prod)
+            stats["products"] += 1
+    db.commit()
+    return stats
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-demo", action="store_true")
@@ -127,6 +150,8 @@ def main(argv=None):
     print(f"Katalog: {len(items)} položek")
     st = seed_catalog(db, items, dry_run=a.dry_run)
     print(f"Katalog hotov: {st}")
+    retired = retire_vestavne(db, dry_run=a.dry_run)
+    print(f"Vestavné nabídky pryč: {retired}")
     if a.dry_run or a.category or a.limit:
         return
     products = []

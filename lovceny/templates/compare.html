@@ -30,7 +30,7 @@
         <h2 class="cmp-name" id="cmp-n-{{ p.id }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
-          <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>{% else %}cena bude doplněna{% endif %}</dd></div>
+          <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>{% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v, link=true) }}</dd></div>
         </dl>
         <dl class="cmp-dl cmp-mm">

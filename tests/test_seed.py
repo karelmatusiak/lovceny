@@ -14,6 +14,7 @@ def test_catalog_is_valid_and_broad():
         s = shop_for_url(i["url"])
         assert s and s.can_scrape, i  # jen obchody, které čtení dovolují
         assert i["name"].strip()
+        assert "vestavne-spotrebice.cz" not in i["url"], i  # GH Actions ConnectTimeout
 
 
 def test_seed_catalog_idempotent(client_db, monkeypatch):
@@ -43,3 +44,19 @@ def test_seed_dry_run_writes_nothing(client_db, monkeypatch):
     items = seed.load_catalog()[-3:]
     st = seed.seed_catalog(db, items, dry_run=True)
     assert st["new"] + st["existing"] == 3
+
+
+def test_retire_vestavne_removes_dead_offers(client_db):
+    _, db, make = client_db
+    p = make([1000], name="Vestavne only")
+    o = p.offers[0]
+    o.shop, o.url, o.price, o.status = "vestavne", "https://www.vestavne-spotrebice.cz/x/", None, "error"
+    db.commit()
+    mixed = make([2000], name="Mixed shop")
+    db.add(Offer(product=mixed, shop="vestavne", url="https://www.vestavne-spotrebice.cz/y/", status="error"))
+    db.commit()
+    st = seed.retire_vestavne(db)
+    assert st["offers"] == 2 and st["products"] == 1  # pure vestavne product gone
+    assert db.get(Product, p.id) is None
+    assert db.get(Product, mixed.id) is not None
+    assert not any(o.shop == "vestavne" for o in db.get(Product, mixed.id).offers)

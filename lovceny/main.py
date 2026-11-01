@@ -88,8 +88,15 @@ def get_db():
         db.close()
 
 
+def priced_offers(offers):
+    """Nabídky s cenou – bez ceny (pending feed / nikdy nenačtené) se v UI neukazují,
+    ať Alza/Datart bez feedu a mrtvé scrape obchody nerozbíjejí produktové stránky.
+    Až feed/scrape cenu doplní, nabídka se objeví sama."""
+    return [o for o in offers if o.price is not None]
+
+
 def product_summary(p: Product):
-    priced = [o for o in p.offers if o.price is not None]
+    priced = priced_offers(p.offers)
     best = min(priced, key=lambda o: o.price, default=None)
     pts = [pt for o in p.offers for pt in o.points]
     v = compute(pts, float(best.price) if best else None,
@@ -340,7 +347,7 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     if not p:
         raise HTTPException(404)
     best, v = product_summary(p)
-    offers = sorted(p.offers, key=lambda o: (o.price is None, float(o.price or 0)))
+    offers = sorted(priced_offers(p.offers), key=lambda o: float(o.price))
     pts = [pt for o in p.offers for pt in o.points]
     ranges = build_chart(pts, verdict=v)
     cat = BY_SLUG.get(p.category_slug or "")
@@ -502,9 +509,9 @@ def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db))
         if v.code == "fake" and v.ref_min30 is not None:   # stejné číslo jako u štítku (okno před akcí)
             min30 = (v.ref_date, v.ref_min30)
         d90 = list(daily_best(pts, now - timedelta(days=90)).values())
-        priced = sorted([o for o in prod.offers if o.price is not None], key=lambda o: float(o.price))
+        priced = sorted(priced_offers(prod.offers), key=lambda o: float(o.price))
         items.append({"p": prod, "best": best, "v": v, "best_shop": get_shop(best.shop) if best else None,
-                      "offers": priced + [o for o in prod.offers if o.price is None],
+                      "offers": priced,
                       "n_shops": len(priced), "color": COMPARE_COLORS[i], "dash": DASHES[i],
                       "min30": min30[1] if min30 else None, "min30_date": min30[0] if min30 else None,
                       "usual": median(d90) if d90 else None, "days": len(daily_best(pts, now - timedelta(days=3650))),

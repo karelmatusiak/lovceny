@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Týdenní přehled slev: snímek /prehled/<rok>-<týden> + Web Push odběratelům (+ e-mail, je-li EMAIL_BACKEND).
 
-  python weekly_digest.py            # pošle jen v pátek 17–18 h pražského času (cron běží 15:17 i 16:17 UTC)
+  python weekly_digest.py            # pošle jen v pátek 15–21 h pražského času (široké okno + dedupe; cron několikrát odpoledne UTC)
   python weekly_digest.py --force    # hned (ruční spuštění workflow)
   python weekly_digest.py --dry-run  # jen vypíše položky, nic neukládá ani neposílá
 Idempotentní: jeden přehled na týden, push i e-mail se pošlou nejvýš jednou.
