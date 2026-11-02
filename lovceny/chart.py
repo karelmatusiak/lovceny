@@ -53,6 +53,8 @@ def _kc(v: float) -> str:
 
 def _y_bounds(lo: float, hi: float) -> tuple[float, float, float]:
     """Nice Y range that does not drag the axis to 0 Kč when prices are far above zero."""
+    if hi < lo:
+        lo, hi = hi, lo
     if hi - lo < max(hi * 0.02, 1):
         lo, hi = lo * 0.97, hi * 1.03
     step = _nice_step(hi - lo)
@@ -63,8 +65,23 @@ def _y_bounds(lo: float, hi: float) -> tuple[float, float, float]:
     if (lo - y0) / (y1 - y0) < 0.15:
         candidate = y0 - step
         # Keep 0 only when the series actually lives near zero
-        if candidate > 0 or lo <= step * 2:
+        if candidate > 0 or lo <= step:
             y0 = max(0.0, candidate)
+    # Flooring onto 0 while the series midpoint is clearly above zero → zoom
+    mid = (lo + hi) / 2
+    if y0 <= 0 and mid > step * 2:
+        pad = max((hi - lo) * 0.12, mid * 0.03, 1)
+        lo2, hi2 = lo - pad, hi + pad
+        step = _nice_step(hi2 - lo2)
+        y0 = (lo2 // step) * step
+        y1 = -(-hi2 // step) * step
+        if y1 <= y0:
+            y1 = y0 + step
+        if y0 < 0:
+            # Data still far from 0: start at first positive nice tick ≤ lo
+            y0 = max(step, (lo // step) * step) if lo >= step else max(0.0, lo - pad)
+            if y0 >= y1:
+                y1 = y0 + step
     if y0 < 0:
         y0 = 0.0
     return y0, y1, step

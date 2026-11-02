@@ -17,7 +17,7 @@ from lovceny.db import SessionLocal, init_db
 from lovceny.models import Offer
 from lovceny.shops import SHOPS
 from lovceny.shops import feed as feedmod
-from lovceny.service import update_offer, apply_feed, check_watches, cleanup_watches
+from lovceny.service import update_offer, apply_feed, check_watches, cleanup_watches, scrub_outlier_price_points
 from lovceny.notify import get_sender
 
 log = logging.getLogger("fetch")
@@ -129,6 +129,11 @@ def main(argv=None):
         db.rollback()
         log.error("Black Friday přehled selhal: %s", e)
     log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
+    try:
+        log.info("Úklid cenových glitchů: %d", scrub_outlier_price_points(db))
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.error("Úklid cenových glitchů selhal: %s", e)
     try:
         from lovceny import catcache
         catcache.clear()

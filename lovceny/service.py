@@ -48,6 +48,13 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
     if price_f <= 0:
         # Sklad/URL můžou zůstat, ale nulovou cenu do historie nepisujeme
         return
+    # Glitch / špatný match (999 Kč u 36k MacBooku): nepisuj pád pod 25 % stávající ceny
+    try:
+        prev = float(offer.price) if offer.price is not None else None
+    except (TypeError, ValueError):
+        prev = None
+    if prev and prev > 0 and price_f < prev * 0.25:
+        return
     offer.price = price_f
     if original is not None:
         try:
@@ -57,6 +64,48 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
             pass
     db.add(PricePoint(offer=offer, price=price_f, original_price=offer.original_price, in_stock=in_stock,
                       captured_at=offer.last_checked, is_demo=False, source=source))
+
+
+
+def scrub_outlier_price_points(db: Session, ratio: float = 0.35) -> int:
+    """Smaž PricePointy daleko pod mediánem produktu (feed/scrape glitche). Nízko v paměti."""
+    from sqlalchemy import text
+    bind = db.get_bind()
+    dialect = bind.dialect.name if bind is not None else ""
+    if dialect.startswith("sqlite"):
+        sql = """
+            DELETE FROM price_points WHERE id IN (
+              SELECT pp.id FROM price_points pp
+              JOIN offers o ON o.id = pp.offer_id
+              JOIN (
+                SELECT o2.product_id AS pid, AVG(pp2.price) AS av
+                FROM price_points pp2 JOIN offers o2 ON o2.id = pp2.offer_id
+                WHERE pp2.price > 0 AND COALESCE(pp2.is_demo, 0) = 0
+                GROUP BY o2.product_id HAVING COUNT(*) >= 2
+              ) m ON m.pid = o.product_id
+              WHERE pp.price > 0 AND COALESCE(pp.is_demo, 0) = 0
+                AND pp.price < m.av * :ratio
+            )
+        """
+    else:
+        sql = """
+            DELETE FROM price_points WHERE id IN (
+              SELECT pp.id FROM price_points pp
+              JOIN offers o ON o.id = pp.offer_id
+              JOIN (
+                SELECT o2.product_id AS pid,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY pp2.price) AS med
+                FROM price_points pp2 JOIN offers o2 ON o2.id = pp2.offer_id
+                WHERE pp2.price > 0 AND COALESCE(pp2.is_demo, false) = false
+                GROUP BY o2.product_id HAVING COUNT(*) >= 2
+              ) m ON m.pid = o.product_id
+              WHERE pp.price > 0 AND COALESCE(pp.is_demo, false) = false
+                AND pp.price < m.med * :ratio
+            )
+        """
+    res = db.execute(text(sql), {"ratio": ratio})
+    db.commit()
+    return res.rowcount or 0
 
 
 def update_offer(db: Session, offer: Offer, stats=None) -> str:

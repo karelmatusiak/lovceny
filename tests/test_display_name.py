@@ -62,3 +62,39 @@ def test_daily_best_skips_zero():
     ]
     series = daily_best(pts, now.replace(year=2020))
     assert list(series.values()) == [1000.0]
+
+
+def test_daily_best_drops_glitch_low():
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from lovceny.verdict import daily_best
+    now = datetime(2026, 11, 2, tzinfo=timezone.utc)
+    pts = [
+        SimpleNamespace(price=36002, captured_at=now - timedelta(days=1), is_demo=False),
+        SimpleNamespace(price=999, captured_at=now, is_demo=False),
+        SimpleNamespace(price=35950, captured_at=now, is_demo=False),
+    ]
+    series = daily_best(pts, now.replace(year=2020))
+    assert 999 not in series.values()
+    assert series[now.date()] == 35950.0
+
+
+def test_chart_ignores_glitch_no_zero_axis():
+    import html as H
+    import re
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from lovceny.chart import build_chart
+    now = datetime(2026, 11, 2, tzinfo=timezone.utc)
+    pts = [
+        SimpleNamespace(price=36002, captured_at=now - timedelta(days=2), is_demo=False),
+        SimpleNamespace(price=999, captured_at=now - timedelta(days=1), is_demo=False),
+        SimpleNamespace(price=36100, captured_at=now, is_demo=False),
+    ]
+    ranges = build_chart(pts, now=now)
+    svg = ranges[0].svg
+    y_labels = [H.unescape(x).replace("\xa0", " ").replace("\u00a0", " ")
+                for x in re.findall(r'class="ax">([^<]*Kč)</text>', svg)]
+    assert y_labels
+    assert not any(lbl.strip() in ("0 Kč", "0 Kc") for lbl in y_labels), y_labels
+    assert ranges[0].min and ranges[0].min > 1000

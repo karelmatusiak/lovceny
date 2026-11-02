@@ -76,9 +76,19 @@ def _aware(d: datetime) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
+def _price_band(prices: list[float]) -> tuple[float, float] | None:
+    """Pásmo rozumných cen (median ± faktor). Glitche typu 999 Kč u MacBooku ven."""
+    if len(prices) < 2:
+        return None
+    m = median(prices)
+    if m <= 0:
+        return None
+    return m * 0.35, m * 3.0
+
+
 def daily_best(points, since: datetime) -> dict:
-    """{date: nejnižší cena napříč obchody}. Nula / None do historie nepatří."""
-    out = {}
+    """{date: nejnižší cena napříč obchody}. Nula / None / cenové glitche nepatří."""
+    rows: list[tuple] = []
     for p in points:
         if p.price is None:
             continue
@@ -91,7 +101,18 @@ def daily_best(points, since: datetime) -> dict:
         t = _aware(p.captured_at)
         if t < since:
             continue
-        d = t.date()
+        rows.append((t.date(), price))
+    if not rows:
+        return {}
+    band = _price_band([p for _, p in rows])
+    if band:
+        lo_b, hi_b = band
+        kept = [(d, p) for d, p in rows if lo_b <= p <= hi_b]
+        # kdyby filtr sebral skoro vše (extrémní výprodej), necháme původní
+        if len(kept) >= max(1, (len(rows) + 1) // 2):
+            rows = kept
+    out: dict = {}
+    for d, price in rows:
         out[d] = min(out.get(d, float("inf")), price)
     return dict(sorted(out.items()))
 
