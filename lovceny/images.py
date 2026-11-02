@@ -73,20 +73,54 @@ def _key(url: str, w: int) -> str:
     return hashlib.sha256(f"{w}|{url}".encode()).hexdigest()
 
 
+# Hostitelé, od kterých free resizer wsrv.nl/images.weserv.nl nedostane obrázek (404/blokace).
+# Pro ty necháme náš /img proxy (po zapnutí Cloudflare orange-cloud se cacheuje na edge).
+WSRV_BLOCKED_HOSTS = ("data.planeo.cz", "planeo.cz", "fast.eu", "mc-static.fast.eu")
+WSRV_BASE = "https://wsrv.nl/"
+
+
+def wsrv_blocked(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in WSRV_BLOCKED_HOSTS)
+
+
+def local_proxy_url(url: str | None, w: int) -> str:
+    """Naše cesta končí na .webp → Cloudflare free ji bere jako cacheovatelný asset."""
+    return f"/img/{w}.webp?u={quote(url or '', safe='')}"
+
+
+def wsrv_url(url: str, w: int) -> str:
+    """Free image CDN: resize + WebP, edge cache u wsrv (nebudí Render)."""
+    return f"{WSRV_BASE}?url={quote(url, safe='')}&w={w}&output=webp&q={QUALITY}&we"
+
+
 def proxy_url(url: str | None, w: int) -> str:
-    return f"/img/{w}?u={quote(url or '', safe='')}"
+    """Primární URL náhledu: wsrv.nl, u blokovaných obchodů lokální /img/*.webp."""
+    if not url:
+        return local_proxy_url(url, w)
+    if wsrv_blocked(url):
+        return local_proxy_url(url, w)
+    return wsrv_url(url, w)
 
 
 def srcset(url: str | None, px: int) -> dict | None:
     """Atributy <img> pro zobrazenou velikost px (CSS px): src (≈2×) + srcset šířek do ≥ 3× px.
-    Nepovolený host → None (šablona použije originál)."""
+    Nepovolený host → None (šablona použije originál).
+    fallback = lokální /img (když selže wsrv) nebo originál (když už je primární /img)."""
     if not url or not is_allowed(url):
         return None
     big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
     ws = [w for w in WIDTHS if w <= big]
     base = next((w for w in WIDTHS if w >= px * 2), WIDTHS[-1])
-    return {"src": proxy_url(url, base), "srcset": ", ".join(f"{proxy_url(url, w)} {w}w" for w in ws),
-            "sizes": f"{px}px"}
+    src = proxy_url(url, base)
+    local = local_proxy_url(url, base)
+    return {
+        "src": src,
+        "srcset": ", ".join(f"{proxy_url(url, w)} {w}w" for w in ws),
+        "sizes": f"{px}px",
+        "fallback": local if src != local else url,
+        "orig": url,
+    }
 
 
 class ImageError(Exception):

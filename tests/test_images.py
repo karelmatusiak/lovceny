@@ -64,11 +64,17 @@ def test_whitelist(url, ok):
 
 def test_srcset_attrs():
     a = images.srcset(OK_URL, 60)
-    assert a["src"].startswith("/img/160?u=https%3A%2F%2Fwww.mironet.cz")
+    # mironet → wsrv.nl (planeo zůstává na /img/*.webp)
+    assert a["src"].startswith("https://wsrv.nl/?url=") and "w=160" in a["src"] and "output=webp" in a["src"]
     assert [p.split()[-1] for p in a["srcset"].split(", ")] == ["80w", "160w", "320w"]  # až do DPR 3
     assert a["sizes"] == "60px"
+    assert a["fallback"].startswith("/img/160.webp?u=https%3A%2F%2Fwww.mironet.cz")
+    assert a["orig"] == OK_URL
     assert images.srcset("https://evil.example.com/a.jpg", 60) is None
     assert images.srcset(None, 60) is None
+    planeo = images.srcset("https://data.planeo.cz/pics/1/2.jpg", 60)
+    assert planeo["src"].startswith("/img/160.webp?u=")
+    assert planeo["fallback"].startswith("https://data.planeo.cz/")
 
 
 def test_resize_to_webp_keeps_ratio_and_no_upscale():
@@ -158,6 +164,8 @@ def test_endpoint_success_headers(client_db, monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
     assert "immutable" in r.headers["cache-control"] and "max-age=31536000" in r.headers["cache-control"]
     assert r.headers["etag"]
+    r2 = client.get("/img/160.webp", params={"u": OK_URL})
+    assert r2.status_code == 200 and r2.headers["content-type"] == "image/webp"
 
 
 def test_endpoint_rejects_and_falls_back(client_db, monkeypatch):
@@ -179,8 +187,14 @@ def test_templates_use_srcset(client_db):
     p.image_url = OK_URL
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
-    assert 'srcset="/img/80?u=' in html and 'sizes="60px"' in html and 'fetchpriority="high"' in html
+    assert "wsrv.nl/?url=" in html and 'sizes="60px"' in html and 'fetchpriority="high"' in html
+    assert 'data-fallback="/img/160.webp?u=' in html or 'data-fallback="/img/80.webp?u=' in html or "data-fallback=" in html
+    assert "onerror=" in html and 'loading="lazy"' not in html.split("fetchpriority")[0]  # priority → no lazy on hero
+    p.image_url = "https://data.planeo.cz/pics/1/x.jpg"
+    db.commit()
+    html = client.get(f"/produkt/{p.id}").text
+    assert 'src="/img/' in html and ".webp?u=" in html and "wsrv.nl" not in html
     p.image_url = "https://evil.example.com/a.jpg"  # cizí host → originál, bez proxy
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
-    assert 'src="https://evil.example.com/a.jpg"' in html and "/img/80?u=https%3A%2F%2Fevil" not in html
+    assert 'src="https://evil.example.com/a.jpg"' in html and "wsrv.nl/?url=https%3A%2F%2Fevil" not in html

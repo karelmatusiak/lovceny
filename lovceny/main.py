@@ -751,8 +751,7 @@ def robots_txt():
 
 
 # ---------- Obrázky produktů: proxy + zmenšení do WebP ----------
-@app.get("/img/{w:int}")
-def image_proxy(w: int, u: str = ""):
+def _image_proxy_response(w: int, u: str):
     """Zmenšený WebP obrázek z povoleného obchodu. Chyba → přesměrování na originál (pokud je povolený)."""
     if w not in images.WIDTHS or not images.is_allowed(u):
         raise HTTPException(404)
@@ -765,6 +764,18 @@ def image_proxy(w: int, u: str = ""):
     return Response(data, media_type="image/webp", headers={
         "Cache-Control": "public, max-age=31536000, immutable", "ETag": '"' + hashlib.md5(data).hexdigest() + '"',
         "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'"})
+
+
+@app.get("/img/{w}.webp")
+def image_proxy_webp(w: int, u: str = ""):
+    """Stejné jako /img/{w}, cesta s příponou .webp kvůli Cloudflare free cache (extension)."""
+    return _image_proxy_response(w, u)
+
+
+@app.get("/img/{w:int}")
+def image_proxy(w: int, u: str = ""):
+    """Zpětná kompatibilita starých /img/{w}?u=… URL (stále cacheované přes Cache Rule)."""
+    return _image_proxy_response(w, u)
 
 
 # ---------- Stav obchodů (monitoring blokací) ----------
