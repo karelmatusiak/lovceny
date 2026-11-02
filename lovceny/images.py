@@ -3,8 +3,8 @@
 Bezpečnost: stahujeme jen z hostitelů našich obchodů (domény z registry + jejich CDN), jen http(s),
 max. MAX_BYTES, timeout, redirect jen opět na povolený host, jen obrázky (Pillow ověří formát),
 ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě šablona/endpoint spadne na originální URL.
-Cache: IMG_CACHE_DIR (výchozí /tmp/lovceny-img – na Renderu je disk dočasný, to nevadí),
-IMG_CACHE_MAX_MB (výchozí 150). Nejdéle nepoužité soubory mažeme (LRU podle mtime, hit = touch).
+Paměť (Render free 512 MiB): najednou jen IMG_CONCURRENCY resize (výchozí 1), malé limity bajtů/pixelů,
+Image.draft + thumbnail, close(), semafor kolem miss cesty. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
 """
 import hashlib
 import io
@@ -20,8 +20,10 @@ import httpx
 log = logging.getLogger("lovceny.images")
 
 WIDTHS = (80, 160, 320, 640)
-MAX_BYTES = 8 * 1024 * 1024
-MAX_PIXELS = 40_000_000
+# Těsné limity: 1 velký Shopify JPEG (~1 MB) se v Pillow snadno nafoukne na desítky MB;
+# 4 souběžné PNG 6k×4k lokálně = ~760 MB RSS → OOM na free 512 MiB.
+MAX_BYTES = 2 * 1024 * 1024
+MAX_PIXELS = 8_000_000  # ~8 MP (např. 3500×2300)
 TIMEOUT = httpx.Timeout(6.0, connect=4.0)
 MAX_REDIRECTS = 3
 QUALITY = 78
@@ -35,6 +37,27 @@ _robots: dict[str, tuple[float, object]] = {}
 ROBOTS_TTL_S = 24 * 3600
 _lock = threading.Lock()
 _last_evict = 0.0
+
+
+def _concurrency() -> int:
+    try:
+        return max(1, min(4, int(os.environ.get("IMG_CONCURRENCY") or "1")))
+    except ValueError:
+        return 1
+
+
+# Semafor kolem download+resize (cache hit mimo). Lazy kvůli testům měnícím env.
+_sem: threading.BoundedSemaphore | None = None
+_sem_n: int | None = None
+
+
+def _resize_sem() -> threading.BoundedSemaphore:
+    global _sem, _sem_n
+    n = _concurrency()
+    if _sem is None or _sem_n != n:
+        _sem = threading.BoundedSemaphore(n)
+        _sem_n = n
+    return _sem
 
 
 def allowed_hosts() -> tuple[str, ...]:
@@ -64,9 +87,9 @@ def cache_dir() -> Path:
 
 def cache_cap_bytes() -> int:
     try:
-        return int(float(os.environ.get("IMG_CACHE_MAX_MB") or 150) * 1024 * 1024)
+        return int(float(os.environ.get("IMG_CACHE_MAX_MB") or 40) * 1024 * 1024)
     except ValueError:
-        return 150 * 1024 * 1024
+        return 40 * 1024 * 1024
 
 
 def _key(url: str, w: int) -> str:
@@ -183,24 +206,44 @@ def _download(url: str, client: httpx.Client | None = None) -> bytes:
 def resize_webp(data: bytes, w: int) -> bytes:
     from PIL import Image, ImageOps
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+    im = None
     try:
         im = Image.open(io.BytesIO(data))
+        # JPEG: dekóduj hned ve zmenšeném měřítku (méně RAM než full decode + resize)
+        try:
+            im.draft("RGB", (w, w * 4))
+        except Exception:
+            pass
+        # size je u většiny formátů dostupné bez plného dekódování
         if im.width * im.height > MAX_PIXELS:
             raise ImageError("příliš mnoho pixelů")
-        im.draft("RGB", (w * 2, w * 2))  # JPEG: rychlé dekódování ve zmenšeném měřítku
         im = ImageOps.exif_transpose(im)
-        im.load()
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGBA" if ("transparency" in im.info or im.mode in ("LA", "PA", "P")) else "RGB")
+        if im.width > w:
+            nh = max(1, round(im.height * w / im.width))
+            resized = im.resize((w, nh), Image.LANCZOS)
+            try:
+                im.close()
+            except Exception:
+                pass
+            im = resized
+        out = io.BytesIO()
+        # method=2: méně peaku než 4, stále dobrý WebP
+        im.save(out, "WEBP", quality=QUALITY, method=2)
+        return out.getvalue()
     except ImageError:
         raise
     except Exception as e:  # Pillow: nepodporovaný/poškozený soubor, bomba…
+        if type(e).__name__ in ("DecompressionBombError", "DecompressionBombWarning"):
+            raise ImageError("příliš mnoho pixelů") from e
         raise ImageError(f"neplatný obrázek: {type(e).__name__}") from e
-    if im.mode not in ("RGB", "RGBA"):
-        im = im.convert("RGBA" if ("transparency" in im.info or im.mode in ("LA", "PA", "P")) else "RGB")
-    if im.width > w:
-        im = im.resize((w, max(1, round(im.height * w / im.width))), Image.LANCZOS)
-    out = io.BytesIO()
-    im.save(out, "WEBP", quality=QUALITY, method=4)
-    return out.getvalue()
+    finally:
+        if im is not None:
+            try:
+                im.close()
+            except Exception:
+                pass
 
 
 def evict(force: bool = False) -> int:
@@ -248,22 +291,38 @@ def get(url: str, w: int, client: httpx.Client | None = None) -> bytes:
         t = _fail.get(url)
     if t and time.monotonic() - t < FAIL_TTL_S:
         raise ImageError("nedávno selhalo")
+    sem = _resize_sem()
+    if not sem.acquire(timeout=12.0):
+        raise ImageError("příliš vytíženo")
     try:
-        data = resize_webp(_download(url, client), w)
-    except ImageError:
-        with _lock:
-            _fail[url] = time.monotonic()
-            if len(_fail) > 5000:
-                _fail.clear()
-        raise
-    tmp = f.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
-    try:
-        tmp.write_bytes(data)
-        os.replace(tmp, f)
-    except OSError as e:
-        log.warning("cache obrázků: zápis selhal: %s", e)
-    evict()
-    return data
+        # double-check cache: jiný thread mohl mezitím zapsat
+        try:
+            data = f.read_bytes()
+            os.utime(f)
+            return data
+        except OSError:
+            pass
+        try:
+            data = resize_webp(_download(url, client), w)
+        except ImageError:
+            with _lock:
+                _fail[url] = time.monotonic()
+                if len(_fail) > 2000:
+                    # drop oldest half by timestamp
+                    old = sorted(_fail, key=_fail.get)[:1000]
+                    for k in old:
+                        _fail.pop(k, None)
+            raise
+        tmp = f.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, f)
+        except OSError as e:
+            log.warning("cache obrázků: zápis selhal: %s", e)
+        evict()
+        return data
+    finally:
+        sem.release()
 
 
 def clear_failures():

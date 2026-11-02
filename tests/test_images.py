@@ -19,9 +19,14 @@ def _jpeg(w=1200, h=800, color=(200, 30, 30)):
 @pytest.fixture(autouse=True)
 def _cache(tmp_path, monkeypatch):
     monkeypatch.setenv("IMG_CACHE_DIR", str(tmp_path / "img"))
+    monkeypatch.delenv("IMG_CONCURRENCY", raising=False)
+    images._sem = None
+    images._sem_n = None
     images.clear_failures()
     yield
     images.clear_failures()
+    images._sem = None
+    images._sem_n = None
 
 
 def client_for(handler):
@@ -198,3 +203,52 @@ def test_templates_use_srcset(client_db):
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
     assert 'src="https://evil.example.com/a.jpg"' in html and "wsrv.nl/?url=https%3A%2F%2Fevil" not in html
+
+
+def test_rejects_too_many_pixels(monkeypatch):
+    monkeypatch.setattr(images, "MAX_PIXELS", 100_000)
+    # 500×500 = 250k > 100k
+    c, _ = serve({OK_URL: httpx.Response(200, content=_jpeg(500, 500), headers={"content-type": "image/jpeg"})})
+    with pytest.raises(images.ImageError, match="pixel"):
+        images.get(OK_URL, 160, client=c)
+
+
+def test_concurrency_serializes_misses(monkeypatch):
+    """S IMG_CONCURRENCY=1 běží nejvýš jeden download+resize najednou."""
+    import threading
+    import time
+    monkeypatch.setenv("IMG_CONCURRENCY", "1")
+    images._sem = None
+    images._sem_n = None
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def slow_jpeg(req):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.15)
+        with lock:
+            active -= 1
+        return httpx.Response(200, content=_jpeg(200, 150), headers={"content-type": "image/jpeg"})
+
+    urls = [f"https://www.mironet.cz/Images/foto{i}.jpg" for i in range(4)]
+    routes = {u: slow_jpeg for u in urls}
+    c, _ = serve(routes)
+
+    errs = []
+    def worker(u):
+        try:
+            assert images.get(u, 80, client=c)
+        except Exception as e:
+            errs.append(e)
+
+    ts = [threading.Thread(target=worker, args=(u,)) for u in urls]
+    for th in ts:
+        th.start()
+    for th in ts:
+        th.join()
+    assert not errs
+    assert peak == 1, peak

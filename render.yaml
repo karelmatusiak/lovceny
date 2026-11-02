@@ -52,4 +52,6 @@ services:
       - key: ADMIN_TOKEN
         sync: false
       - key: IMG_CACHE_MAX_MB
-        value: "150"
+        value: "40"
+      - key: IMG_CONCURRENCY
+        value: "1"
