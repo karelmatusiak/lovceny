@@ -36,7 +36,11 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
         d["image"] = p.image_url
     if p.ean:
         d["gtin13" if len(p.ean) == 13 else "gtin"] = p.ean
-    if p.category:
+    from .categories import BY_SLUG
+    cat = BY_SLUG.get(p.category_slug or "")
+    if cat:
+        d["category"] = cat.name
+    elif p.category and "|" not in p.category:
         d["category"] = p.category
     if priced:
         prices = [float(o.price) for o in priced]

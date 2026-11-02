@@ -32,7 +32,7 @@ def test_product_page_primary_buy_cta():
     pid, slug = _seed_product("prod")
     html = TestClient(app).get(f"/produkt/{pid}-{slug}").text
     assert 'class="btn btn-primary btn-buy"' in html
-    assert "v obchodě Mironet" in html
+    assert "· Mironet" in html and "Koupit za" in html
     assert 'class="btn btn-shop"' in html
     assert "Do obchodu" in html
     assert 'rel="nofollow sponsored noopener"' in html

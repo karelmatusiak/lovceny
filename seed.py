@@ -163,12 +163,14 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
             print(f"!! feed {slug}: {e}")
             stats[slug] = {"error": str(e)}
             continue
+        # 1) nejdřív napoj nabídky na EXISTUJÍCÍ katalog (bez vytváření duplicit)
+        st_attach = apply_feed(db, slug, items, create_missing=False)
+        # 2) teprve pak konzervativně vytvoř pár nových (jen bez shody)
         picked = []
         for it in items:
             cat = classify(it.name, it.category)
             if cat not in cats:
                 continue
-            # iStyle: držet se Apple / značkových produktů, ne příslušenství bez modelu
             if slug == "istyle":
                 n = (it.name or "").lower()
                 apple = ("iphone", "ipad", "airpods", "apple watch", "imac", "mac mini", "mac studio",
@@ -176,11 +178,19 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
                 if not any(k in n for k in apple):
                     continue
             picked.append(it)
-            if len(picked) >= limit:
+            if len(picked) >= limit * 4:  # širší výběr; max_create omezí nové
                 break
-        st = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
+        st_create = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
+        st = {
+            "loaded": len(items),
+            "picked": len(picked),
+            "attached": st_attach.get("attached", 0) + st_create.get("attached", 0),
+            "matched": st_attach.get("matched", 0) + st_create.get("matched", 0),
+            "created": st_create.get("created", 0),
+            "skipped": st_attach.get("skipped", 0),
+        }
         print(f"Feed seed {slug}: loaded={len(items)} picked={len(picked)} → {st}")
-        stats[slug] = {"loaded": len(items), "picked": len(picked), **st}
+        stats[slug] = st
     return stats
 
 

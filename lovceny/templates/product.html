@@ -11,7 +11,7 @@
     <div class="p-info">
       <div class="p-head">
         <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, priority=true) }}{% else %}📦{% endif %}</div>
-        <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{{ p.category or '' }}{% if p.ean %} · EAN {{ p.ean }}{% endif %}</div></div>
+        <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
       </div>
       <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, p.name) }}</div></div>
       <div class="price-row">
@@ -20,7 +20,7 @@
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       {% if best %}{% set bs = get_shop(best.shop) %}
-      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Koupit za {{ best.price|czk }} v obchodě {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% endif %}
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
       {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
@@ -67,7 +67,7 @@
       <p class="fair">Seřazeno výhradně podle ceny (bez dopravy), nikdo za pořadí neplatí. {{ rank_link() }}</p>
       {% if offers|length <= 1 %}
       {% set n_ok = SHOPS.values()|selectattr('can_scrape')|list|length %}
-      <p class="coverage-note">Zatím tu máme cenu z jednoho obchodu. Katalog postupně rozšiřujeme – ceny teď čteme z {{ cz_count(n_ok, "e-shopu", "e-shopů", "e-shopů") }} (viz <a href="/obchody">Hlídané obchody</a>). Partnerství neuvádíme, dokud nejsou skutečně napojená.</p>
+      <p class="coverage-note">Zatím tu máme cenu z jednoho obchodu. Katalog postupně rozšiřujeme – ceny teď čteme z {{ cz_count(n_ok, "e-shopu", "e-shopů", "e-shopů") }} (viz <a href="/obchody">Hlídané obchody</a>). Affiliate partnerství (např. eHUB u iStyle, Sencor, Smarty) označujeme u odkazů – na pořadí nemá vliv.</p>
       {% endif %}
       {{ affiliate_note() }}
     </div>

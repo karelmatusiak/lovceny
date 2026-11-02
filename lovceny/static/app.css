@@ -725,7 +725,7 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 
 
 /* --- Shop buy CTAs: prominent, consistent, tasteful --- */
-.btn-buy{width:100%;max-width:420px;min-height:52px;height:auto;padding:12px 22px;font-size:16px;line-height:1.25;text-align:center;box-shadow:0 8px 20px -8px rgba(11,110,79,.55)}
+.btn-buy{width:100%;max-width:420px;min-height:48px;height:auto;padding:10px 18px;font-size:15px;line-height:1.2;text-align:center;white-space:nowrap;box-shadow:0 8px 20px -8px rgba(11,110,79,.55)}.p-ean{font-size:12px;color:var(--muted);font-weight:400}
 .btn-buy:hover{background:var(--brand-600,#095C42)}
 .btn-buy:focus-visible{outline:3px solid var(--accent,#FF7A45);outline-offset:3px}
 .btn-shop{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;height:auto;padding:0 16px;border-radius:12px;background:var(--brand,#0B6E4F);color:#fff;font:inherit;font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 4px 12px -6px rgba(11,110,79,.45);white-space:nowrap}
@@ -747,7 +747,7 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
   .ov-row-price,.ov-row .btn-shop-sm{grid-column:2;justify-self:start}
 }
 @media (max-width:560px){
-  .btn-buy{max-width:none}
+  .btn-buy{max-width:none;white-space:normal;font-size:15px;padding:12px 16px}
   .offer .btn-shop{width:100%;justify-content:center}
   .offer-best{margin:0;padding-left:0;padding-right:0}
 }

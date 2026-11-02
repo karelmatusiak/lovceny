@@ -57,28 +57,147 @@ def normalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+# CZ ↔ EN barvy (a běžné varianty) → kanonický anglický token
+_COLOR_CANON: dict[str, str] = {}
+for _canon, _alts in {
+    "black": ("black", "cerna", "cerny", "cerne", "cernou", "cernych"),
+    "white": ("white", "bila", "bily", "bile", "bilou", "bilych"),
+    "blue": ("blue", "modra", "modry", "modre", "modrou"),
+    "pink": ("pink", "ruzova", "ruzovy", "ruzove", "ruzovou", "jemne ruzova", "jemne ruzovy"),
+    "green": ("green", "zelena", "zeleny", "zelene", "zelenou"),
+    "yellow": ("yellow", "zluta", "zluty", "zlute", "zlutou"),
+    "purple": ("purple", "violet", "fialova", "fialovy", "fialove", "fialovou"),
+    "silver": ("silver", "stribrna", "stribrny", "stribrne", "stribrnou"),
+    "gold": ("gold", "zlata", "zlaty", "zlate", "zlatou"),
+    "gray": ("gray", "grey", "seda", "sedy", "sede", "sedou", "vesmirne seda", "vesmirne sedy",
+             "space gray", "spacegrey", "spacegray", "space grey"),
+    "orange": ("orange", "oranzova", "oranzovy"),
+    "red": ("red", "cervena", "cerveny", "cervene"),
+    "titanium": ("titanium", "titan", "titany", "prirodni titan", "natural titanium",
+                 "desert titanium", "black titanium", "white titanium", "naturaltitanium",
+                 "deserttitanium", "blacktitanium", "whitetitanium"),
+    "starlight": ("starlight",),
+    "midnight": ("midnight",),
+}.items():
+    for a in _alts:
+        _COLOR_CANON[a] = _canon
+
+_VARIANT_TOKENS = frozenset({
+    "plus", "pro", "max", "mini", "air", "ultra", "se", "fe", "lite", "e",
+})
+_CAPACITY_RE = re.compile(r"\b(\d+)\s*gb\b")
+# MPN / model kód: písmena+číslice (svc7811wh, sbl7170, mtp03sxa, qe55q60…)
+_MPN_RE = re.compile(r"\b(?=[a-z]*\d)[a-z]{1,6}\d{2,6}[a-z0-9]{0,6}\b")
+
+
+def canonicalize_name(name: str) -> str:
+    """normalize_name + sjednocení barev (černý→black) a mezer u GB."""
+    s = normalize_name(name)
+    if not s:
+        return ""
+    # víceslovné barvy nejdřív (delší klíče)
+    for src in sorted(_COLOR_CANON, key=len, reverse=True):
+        if " " in src:
+            s = s.replace(src, _COLOR_CANON[src])
+    parts = []
+    for t in s.split():
+        parts.append(_COLOR_CANON.get(t, t))
+    s = " ".join(parts)
+    s = re.sub(r"\b(\d+)\s*gb\b", r"\1gb", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _capacity(canon: str) -> str | None:
+    m = _CAPACITY_RE.search(canon.replace("gb", " gb "))  # 128gb → 128 gb
+    if m:
+        return m.group(1)
+    m = re.search(r"\b(\d+)gb\b", canon)
+    return m.group(1) if m else None
+
+
+def _colors(canon: str) -> set[str]:
+    known = set(_COLOR_CANON.values())
+    return {t for t in canon.split() if t in known}
+
+
+def _variants(canon: str) -> set[str]:
+    return {t for t in canon.split() if t in _VARIANT_TOKENS}
+
+
+def _mpn_tokens(canon: str) -> set[str]:
+    """Modelové kódy (Sencor SVC 7811WH → svc7811wh po normalize; i bez mezery)."""
+    # po canonicalize zbývají tokeny; spojíme i „svc“+„7811wh“ styl
+    toks = canon.split()
+    out = set(_MPN_RE.findall(canon.replace(" ", "")))  # celý řetězec bez mezer
+    out |= set(_MPN_RE.findall(canon))
+    # dvojice: písmenný prefix + číselný kód vedle sebe
+    for i, t in enumerate(toks[:-1]):
+        if t.isalpha() and len(t) <= 5 and any(c.isdigit() for c in toks[i + 1]):
+            out.add(t + toks[i + 1])
+    return {x for x in out if len(x) >= 4}
+
+
 def _model_tokens(norm: str) -> set[str]:
-    """Výrazné modelové tokeny (čísla/kódy typu svc7811wh, iphone, 128gb)."""
+    """Výrazné modelové tokeny (čísla/kódy typu svc7811wh, 128gb, iphone15)."""
     return {t for t in norm.split() if len(t) >= 3 and any(c.isdigit() for c in t)}
 
 
 def names_match(a: str, b: str) -> bool:
-    """Konzervativní shoda názvů: identický normalizovaný text, nebo silný překryv modelů.
-    Nikdy nepáruje jen podle značky / obecného slova."""
-    na, nb = normalize_name(a), normalize_name(b)
-    if not na or not nb:
+    """Konzervativní shoda: kanonický název (barvy CZ↔EN), kapacita, varianta, MPN.
+    Nikdy nepáruje jen podle značky. 15 ≠ 15 Plus, 128GB ≠ 256GB, černá ≠ bílá."""
+    ca, cb = canonicalize_name(a), canonicalize_name(b)
+    if not ca or not cb:
         return False
-    if na == nb:
+    if ca == cb:
         return True
-    # kratší je podřetězec delšího a sdílí aspoň jeden modelový token
-    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
-    if shorter in longer:
-        ta, tb = _model_tokens(na), _model_tokens(nb)
-        return bool(ta and tb and ta & tb)
-    ta, tb = _model_tokens(na), _model_tokens(nb)
-    # obě strany mají ≥2 modelové tokeny a všechny kratší strany jsou v delší
-    if ta and tb and len(ta) >= 2 and len(tb) >= 2:
-        return ta <= tb or tb <= ta
+
+    capa, capb = _capacity(ca), _capacity(cb)
+    if capa and capb and capa != capb:
+        return False
+    cola, colb = _colors(ca), _colors(cb)
+    if cola and colb and cola.isdisjoint(colb):
+        return False
+    va, vb = _variants(ca), _variants(cb)
+    # varianta na jedné straně (plus/pro/…) musí být i na druhé, jinak jiné SKU
+    if va != vb and (va or vb):
+        # povolíme jen pokud kratší strana nemá žádnou variantu a delší má – to je nesoulad
+        if va != vb:
+            return False
+
+    mpn_a, mpn_b = _mpn_tokens(ca), _mpn_tokens(cb)
+    if mpn_a and mpn_b:
+        if mpn_a & mpn_b:
+            return True
+        # obě mají MPN a žádný společný → jiné zboží
+        return False
+
+    # jádro bez barev/kapacity: stejné významné tokeny
+    def core(c: str) -> list[str]:
+        drop = set(_COLOR_CANON.values()) | {"gb"}
+        out = []
+        for t in c.split():
+            if t in drop or re.fullmatch(r"\d+gb", t):
+                continue
+            out.append(t)
+        return out
+
+    ca_c, cb_c = core(ca), core(cb)
+    if not ca_c or not cb_c:
+        return False
+    # přesná shoda jádra
+    if ca_c == cb_c:
+        return True
+    # kratší jádro je prefix/podmnožina delšího (stejné pořadí) + shodná kapacita/barva pokud jsou
+    if len(ca_c) <= len(cb_c):
+        shorter, longer = ca_c, cb_c
+    else:
+        shorter, longer = cb_c, ca_c
+    if " ".join(shorter) in " ".join(longer):
+        # vyžadujeme aspoň jeden modelový token s číslem společný
+        ta, tb = _model_tokens(ca), _model_tokens(cb)
+        if ta and tb and ta & tb:
+            # kapacita: pokud ji má jen jedna strana, OK; barva stejně
+            return True
     return False
 
 

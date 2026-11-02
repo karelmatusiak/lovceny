@@ -45,7 +45,7 @@ def test_single_shop_coverage_copy(client_db):
     html = c.get(f"/produkt/{p.id}-{p.slug}").text
     assert "jednoho obchodu" in html
     assert "rozšiřujeme" in html
-    assert "Partnerství neuvádíme" in html
+    assert "Affiliate partnerství" in html or "eHUB" in html
     about = c.get("/o-nas").text
     assert "Nepokrýváme celý trh" in about
     home = c.get("/").text

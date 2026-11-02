@@ -73,6 +73,13 @@ def test_names_match_conservative():
     assert feed.names_match("Sencor SVC 7811WH", "Sencor SVC 7811WH bílý")
     assert not feed.names_match("Sencor", "Sencor SVC 7811WH")
     assert not feed.names_match("Apple iPhone 15", "Apple iPhone 14")
+    # CZ ↔ EN barva + kapacita / varianta
+    assert feed.names_match("Apple iPhone 15 128GB - černý", "Apple iPhone 15 128GB Black")
+    assert feed.names_match("Apple iPhone 15 128GB černá", "Apple iPhone 15 128GB Black")
+    assert not feed.names_match("Apple iPhone 15 128GB Black", "Apple iPhone 15 Plus 128GB Black")
+    assert not feed.names_match("Apple iPhone 15 128GB Black", "Apple iPhone 15 256GB Black")
+    assert not feed.names_match("Apple iPhone 15 128GB Black", "Apple iPhone 15 128GB White")
+    assert feed.names_match("Sencor SBL 7170", "Sencor SBL7170")
 
 
 def test_apply_feed_attach_by_ean_and_create():
@@ -103,3 +110,53 @@ def test_obchody_shows_ehub_partners(client_db):
     assert "iStyle" in html and "Sencor" in html and "Smarty" in html
     assert "oficiální feed" in html
     assert "affiliate odkazy" in html  # Smarty zdroj
+
+
+def test_apply_feed_attach_by_name_color():
+    """Feed s EAN připojí nabídku k existujícímu produktu bez EAN podle názvu (černý↔Black)."""
+    from lovceny.db import Base, engine
+    init_db()
+    Base.metadata.drop_all(bind=engine)
+    init_db()
+    db = SessionLocal()
+    p = Product(name="Apple iPhone 15 128GB Black", slug=slugify("iphone-15-black-color-match-x"))
+    db.add(Offer(product=p, shop="mironet", url="https://www.mironet.cz/iphone-15-black-color-match-x",
+                 status="ok", price=17990, in_stock=True))
+    db.commit()
+    pid = p.id
+    item = feed.FeedItem(
+        item_id="COLOR1",
+        name="Apple iPhone 15 128GB - černý",
+        url="https://istyle.cz/products/iphone-15-color-match-x",
+        price=16490,
+        ean="9990001112223",  # v katalogu není
+        category="Heureka.cz | Elektronika | Mobilní telefony",
+        in_stock=True,
+    )
+    st = apply_feed(db, "istyle", [item])
+    assert st["attached"] == 1, st
+    assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 1
+    # create_missing True nesmí vytvořit duplicitu – URL/název už sedí
+    st2 = apply_feed(db, "istyle", [item], create_missing=True, max_create=5)
+    assert st2["matched"] == 1 and st2["created"] == 0, st2
+    assert db.query(Product).count() == 1
+    db.refresh(p)
+    assert p.category is None or "|" not in (p.category or "")
+    db.close()
+
+
+def test_product_page_clean_category_and_buy_label(client_db, monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    c, db, make = client_db
+    p = make([16490], name="Apple iPhone 15 128GB Black", shop="mironet", category="telefony")
+    p.category = "Heureka.cz | Elektronika | Mobilní telefony"
+    p.ean = "195949036033"
+    db.add(Offer(product=p, shop="istyle", url="https://istyle.cz/products/iphone-15-demo",
+                 status="ok", price=16490, in_stock=True))
+    db.commit()
+    html = c.get(f"/produkt/{p.id}").text
+    # viditelný podtitul i JSON-LD berou čistý název kategorie, ne Heureka path
+    assert "Heureka.cz |" not in html
+    assert "Mobilní telefony" in html
+    assert "Koupit za" in html and ("· iStyle" in html or "· Mironet" in html)
+    assert "v obchodě" not in html.split("btn-buy")[1][:120]

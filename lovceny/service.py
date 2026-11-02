@@ -128,29 +128,48 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                max_create: int | None = None) -> dict:
     """Spáruje položky feedu s nabídkami a zapíše ceny.
 
-    Párování (v tomto pořadí): URL → ITEM_ID → EAN nabídky obchodu → EAN libovolného produktu
-    → konzervativní shoda názvu s existujícím produktem (jen když EAN chybí).
-    create_missing: založí nové produkty (volitelně max_create strop).
+    Párování: URL → ITEM_ID → EAN nabídky obchodu → EAN produktu → konzervativní shoda názvu
+    (barvy CZ↔EN, kapacita, varianta, MPN). create_missing jen když žádná shoda.
     """
-    from .shops.feed import names_match, strip_tracking
-    from .categories import classify
+    from .shops.feed import canonicalize_name, names_match, strip_tracking
+    from .categories import BY_SLUG, classify
 
     stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0}
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
     by_url = {strip_tracking(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
     by_ean_offer = {o.product.ean: o for o in offers if o.product.ean}
-    # všechny produkty s EAN / jménem – pro připojení nabídky k existujícímu katalogu
-    products = db.scalars(select(Product)).all()
+    products = list(db.scalars(select(Product)).all())
     by_ean_prod = {p.ean: p for p in products if p.ean}
-    # jméno → produkt; při kolizi (stejný norm. název u více produktů) vynecháme (konzervativně)
-    by_name: dict[str, Product | None] = {}
-    from .shops.feed import normalize_name
+    # kanonický název → produkt; kolize = None (nepárovat)
+    by_canon: dict[str, Product | None] = {}
     for p in products:
-        key = normalize_name(p.name)
+        key = canonicalize_name(p.name)
         if not key:
             continue
-        by_name[key] = None if key in by_name else p
+        by_canon[key] = None if key in by_canon else p
+
+    def find_by_name(feed_name: str) -> Product | None:
+        key = canonicalize_name(feed_name)
+        hit = by_canon.get(key)
+        if hit is not None:
+            return hit
+        found = [p for p in products if names_match(p.name, feed_name)]
+        if not found:
+            return None
+        if len(found) == 1:
+            return found[0]
+        # duplicity v katalogu (stejný kanonický název): preferuj produkt bez nabídky tohoto obchodu
+        without = [p for p in found if not any(x.shop == shop_slug for x in p.offers)]
+        if len(without) == 1:
+            return without[0]
+        return None  # nejednoznačné → konzervativně přeskočit
+
+    def clean_category_label(name: str, feed_cat: str | None) -> tuple[str | None, str | None]:
+        """(category_slug, lidský label) – nikdy surový Heureka CATEGORYTEXT."""
+        slug = classify(name, feed_cat)
+        label = BY_SLUG[slug].name if slug and slug in BY_SLUG else None
+        return slug, label
 
     created = 0
     for it in items:
@@ -158,35 +177,40 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         o = by_url.get(clean) or by_id.get(it.item_id) or (by_ean_offer.get(it.ean) if it.ean else None)
         if o is None:
             prod = by_ean_prod.get(it.ean) if it.ean else None
-            if prod is None and not it.ean:
-                # konzervativní name match jen bez EAN (špatný EAN match je horší)
-                cand = by_name.get(normalize_name(it.name))
-                if cand is not None and names_match(cand.name, it.name):
-                    prod = cand
+            if prod is None:
+                prod = find_by_name(it.name)
             if prod is not None:
-                o = Offer(product=prod, shop=shop_slug, url=clean)
-                db.add(o)
-                db.flush()
-                by_url[clean] = o
-                if it.item_id:
-                    by_id[it.item_id] = o
-                if prod.ean:
-                    by_ean_offer[prod.ean] = o
-                stats["attached"] += 1
+                # už má tento obchod nabídku na produktu? pak aktualizuj tu
+                existing = next((x for x in prod.offers if x.shop == shop_slug), None)
+                if existing is not None:
+                    o = existing
+                    by_url[clean] = o
+                    stats["matched"] += 1
+                else:
+                    o = Offer(product=prod, shop=shop_slug, url=clean)
+                    db.add(o)
+                    db.flush()
+                    by_url[clean] = o
+                    if it.item_id:
+                        by_id[it.item_id] = o
+                    if prod.ean:
+                        by_ean_offer[prod.ean] = o
+                    stats["attached"] += 1
             elif create_missing and (max_create is None or created < max_create):
-                cat_slug = classify(it.name, it.category)
+                cat_slug, cat_label = clean_category_label(it.name, it.category)
                 prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean, image_url=it.image,
-                               category=it.category, category_slug=cat_slug)
+                               category=cat_label, category_slug=cat_slug)
                 o = Offer(product=prod, shop=shop_slug, url=clean)
                 db.add(o)
                 db.flush()
+                products.append(prod)
                 by_url[clean] = o
                 if it.item_id:
                     by_id[it.item_id] = o
                 if it.ean:
                     by_ean_prod[it.ean] = prod
                     by_ean_offer[it.ean] = o
-                by_name[normalize_name(it.name)] = prod
+                by_canon[canonicalize_name(it.name)] = prod
                 created += 1
                 stats["created"] += 1
             else:
@@ -201,7 +225,13 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         o.product.ean = o.product.ean or it.ean
         o.product.image_url = o.product.image_url or it.image
         if not o.product.category_slug:
-            o.product.category_slug = classify(o.product.name, it.category or o.product.category)
+            slug, label = clean_category_label(o.product.name, it.category)
+            o.product.category_slug = slug
+            if not o.product.category or "|" in (o.product.category or ""):
+                o.product.category = label
+        elif o.product.category and "|" in o.product.category:
+            # oprav surový Heureka path z dřívějších importů
+            o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
     db.commit()
     return stats
