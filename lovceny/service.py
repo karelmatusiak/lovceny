@@ -124,33 +124,84 @@ def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product |
     return prod, msg
 
 
-def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missing: bool = False) -> dict:
-    """Spáruje položky feedu s nabídkami (URL → ITEM_ID → EAN) a zapíše ceny."""
-    stats = {"matched": 0, "created": 0, "skipped": 0}
+def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missing: bool = False,
+               max_create: int | None = None) -> dict:
+    """Spáruje položky feedu s nabídkami a zapíše ceny.
+
+    Párování (v tomto pořadí): URL → ITEM_ID → EAN nabídky obchodu → EAN libovolného produktu
+    → konzervativní shoda názvu s existujícím produktem (jen když EAN chybí).
+    create_missing: založí nové produkty (volitelně max_create strop).
+    """
+    from .shops.feed import names_match, strip_tracking
+    from .categories import classify
+
+    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0}
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
-    by_url = {normalize_url(o.url): o for o in offers}
+    by_url = {strip_tracking(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
-    by_ean = {o.product.ean: o for o in offers if o.product.ean}
+    by_ean_offer = {o.product.ean: o for o in offers if o.product.ean}
+    # všechny produkty s EAN / jménem – pro připojení nabídky k existujícímu katalogu
+    products = db.scalars(select(Product)).all()
+    by_ean_prod = {p.ean: p for p in products if p.ean}
+    # jméno → produkt; při kolizi (stejný norm. název u více produktů) vynecháme (konzervativně)
+    by_name: dict[str, Product | None] = {}
+    from .shops.feed import normalize_name
+    for p in products:
+        key = normalize_name(p.name)
+        if not key:
+            continue
+        by_name[key] = None if key in by_name else p
+
+    created = 0
     for it in items:
-        o = by_url.get(normalize_url(it.url)) or by_id.get(it.item_id) or (by_ean.get(it.ean) if it.ean else None)
+        clean = strip_tracking(it.url)
+        o = by_url.get(clean) or by_id.get(it.item_id) or (by_ean_offer.get(it.ean) if it.ean else None)
         if o is None:
-            if not create_missing:
+            prod = by_ean_prod.get(it.ean) if it.ean else None
+            if prod is None and not it.ean:
+                # konzervativní name match jen bez EAN (špatný EAN match je horší)
+                cand = by_name.get(normalize_name(it.name))
+                if cand is not None and names_match(cand.name, it.name):
+                    prod = cand
+            if prod is not None:
+                o = Offer(product=prod, shop=shop_slug, url=clean)
+                db.add(o)
+                db.flush()
+                by_url[clean] = o
+                if it.item_id:
+                    by_id[it.item_id] = o
+                if prod.ean:
+                    by_ean_offer[prod.ean] = o
+                stats["attached"] += 1
+            elif create_missing and (max_create is None or created < max_create):
+                cat_slug = classify(it.name, it.category)
+                prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean, image_url=it.image,
+                               category=it.category, category_slug=cat_slug)
+                o = Offer(product=prod, shop=shop_slug, url=clean)
+                db.add(o)
+                db.flush()
+                by_url[clean] = o
+                if it.item_id:
+                    by_id[it.item_id] = o
+                if it.ean:
+                    by_ean_prod[it.ean] = prod
+                    by_ean_offer[it.ean] = o
+                by_name[normalize_name(it.name)] = prod
+                created += 1
+                stats["created"] += 1
+            else:
                 stats["skipped"] += 1
                 continue
-            prod = None
-            if it.ean:
-                prod = db.scalar(select(Product).where(Product.ean == it.ean))
-            prod = prod or Product(name=it.name, slug=slugify(it.name), ean=it.ean, image_url=it.image,
-                                   category=it.category)
-            o = Offer(product=prod, shop=shop_slug, url=normalize_url(it.url))
-            db.add(o)
-            stats["created"] += 1
         else:
             stats["matched"] += 1
+        o.url = clean  # sjednotit bez UTM
         o.external_id = it.item_id or o.external_id
-        if it.name and o.product.name == _name_from_url(o.url):
+        if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
             o.product.name, o.product.slug = it.name, slugify(it.name)
         o.product.ean = o.product.ean or it.ean
+        o.product.image_url = o.product.image_url or it.image
+        if not o.product.category_slug:
+            o.product.category_slug = classify(o.product.name, it.category or o.product.category)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
     db.commit()
     return stats

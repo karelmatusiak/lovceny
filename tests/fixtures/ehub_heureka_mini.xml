@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SHOP>
+  <SHOPITEM>
+    <ITEM_ID>IS1</ITEM_ID>
+    <PRODUCTNAME>Apple iPhone 15 128GB černá</PRODUCTNAME>
+    <URL><![CDATA[https://istyle.cz/products/iphone-15-128gb-cerna?utm_source=heureka.cz&utm_medium=product]]></URL>
+    <IMGURL>https://cdn.shopify.com/s/files/1/x/iphone.jpg</IMGURL>
+    <PRICE_VAT>19990</PRICE_VAT>
+    <EAN>0195949035838</EAN>
+    <CATEGORYTEXT>Heureka.cz | Elektronika | Mobilní telefony</CATEGORYTEXT>
+    <DELIVERY_DATE>0</DELIVERY_DATE>
+  </SHOPITEM>
+  <SHOPITEM>
+    <ITEM_ID>SC1</ITEM_ID>
+    <PRODUCTNAME>Sencor SVC 7811WH</PRODUCTNAME>
+    <URL><![CDATA[https://www.sencor.cz/vysavac-svc-7811wh?utm_source=heureka&utm_campaign=x]]></URL>
+    <IMGURL>https://data.planeo.cz/pics/x.jpg</IMGURL>
+    <PRICE_VAT>2490,00</PRICE_VAT>
+    <EAN>8590669123456</EAN>
+    <CATEGORYTEXT>Heureka.cz | Domácí spotřebiče | Vysavače</CATEGORYTEXT>
+    <DELIVERY_DATE>0</DELIVERY_DATE>
+  </SHOPITEM>
+  <SHOPITEM>
+    <ITEM_ID>SKIP</ITEM_ID>
+    <PRODUCTNAME>Bez ceny</PRODUCTNAME>
+    <URL>https://www.sencor.cz/bez-ceny</URL>
+  </SHOPITEM>
+</SHOP>

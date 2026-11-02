@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 health.json
 vapid-keys.txt
+# stažené Heureka feedy (lokálně, velké)
+data/feeds/

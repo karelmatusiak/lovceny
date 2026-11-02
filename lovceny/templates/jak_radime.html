@@ -25,8 +25,8 @@
   <div class="cmp-table-wrap" tabindex="0" role="region" aria-label="Seznam obchodů"><table class="tbl">
     <caption class="sr-only">Prohledávané obchody a jejich stav</caption>
     <thead><tr><th scope="col">Obchod</th><th scope="col">Zdroj cen</th><th scope="col">Živé hledání</th><th scope="col">Stav</th></tr></thead>
-    <tbody>{% for s in shops %}<tr><td><b>{{ s.name }}</b></td><td>{{ 'oficiální feed' if s.source=='feed' else 'stránka produktu' }}</td><td>{{ 'ano' if s.searcher else 'ne' }}</td>
-      <td>{% if s.status=='blocked' or (s.source=='feed' and not s.feed_url) %}<span class="st st-wait">připravujeme feed</span>{% else %}<span class="st st-ok">sledujeme</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for s in shops %}{% set st, label = s.status_label() %}<tr><td><b>{{ s.name }}</b></td><td>{% if s.source=='feed' %}oficiální feed{% elif s.ehub_bid %}affiliate odkazy{% else %}stránka produktu{% endif %}</td><td>{{ 'ano' if s.searcher else 'ne' }}</td>
+      <td><span class="st st-{{ st }}">{{ label }}</span></td></tr>{% endfor %}</tbody>
   </table></div>
   <p class="small muted">Aktuální úspěšnost stahování po obchodech je na stránce <a href="/stav">Stav obchodů</a>, podrobnosti na <a href="/obchody">Hlídané obchody</a>.</p>
 

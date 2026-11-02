@@ -23,6 +23,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
           DATART_FEED_URL: ${{ secrets.DATART_FEED_URL }}
+          ISTYLE_FEED_URL: ${{ secrets.ISTYLE_FEED_URL }}
+          SENCOR_FEED_URL: ${{ secrets.SENCOR_FEED_URL }}
+          EHUB_AID: ${{ secrets.EHUB_AID }}
           # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.
           EMAIL_BACKEND: ${{ secrets.EMAIL_BACKEND || 'log' }}
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}

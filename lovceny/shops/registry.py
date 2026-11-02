@@ -24,6 +24,8 @@ class Shop:
     feed_url_env: str | None = None
     affiliate_param: str | None = None
     affiliate_env: str | None = None
+    # eHUB campaign link ID (a_bid); when set, affiliate_link wraps via eHUB click.php
+    ehub_bid: str | None = None
     color: str = "#0B6E4F"
     extra: dict = field(default_factory=dict)
     # živé vyhledávání: funkce(query) -> list[SearchHit]; None = obchod živě nehledáme
@@ -46,22 +48,55 @@ class Shop:
 
     @property
     def feed_url(self) -> str:
-        return os.environ.get(self.feed_url_env, "") if self.feed_url_env else ""
+        """URL feedu z env; pokud chybí, použije se extra[feed_url_default] (veřejné Heureka feedy)."""
+        if not self.feed_url_env:
+            return ""
+        env = os.environ.get(self.feed_url_env)
+        if env is not None:
+            return env.strip()
+        return (self.extra.get("feed_url_default") or "").strip()
 
     @property
     def can_scrape(self) -> bool:
         return (not self.retired) and self.source == "scrape" and self.status == "ok"
 
+    @property
+    def affiliate_active(self) -> bool:
+        """True, když affiliate_link opravdu obalí URL (param ID nebo eHUB a_bid + a_aid)."""
+        if self.affiliate_param and self.affiliate_env and os.environ.get(self.affiliate_env):
+            return True
+        if self.ehub_bid:
+            from .ehub import ehub_aid
+            return bool(ehub_aid())
+        return False
+
+    def status_label(self) -> tuple[str, str]:
+        """(css_mod, lidský stav) pro /obchody a /jak-radime. css_mod: ok | wait."""
+        if self.source == "feed" and self.feed_url:
+            return "ok", "oficiální feed"
+        if self.ehub_bid and self.source == "feed":
+            return "wait", "affiliate napojeno, feed URL chybí"
+        if self.ehub_bid and self.status == "blocked":
+            return "ok", "affiliate odkazy (feed připravujeme)"
+        if self.status == "blocked" or (self.source == "feed" and not self.feed_url):
+            return "wait", "připravujeme oficiální feed"
+        return "ok", "funguje"
+
     def affiliate_link(self, url: str) -> str:
-        """Přidá affiliate parametr (např. Alza ?idp=XXXX). Bez nastaveného ID vrací URL beze změny.
-        Na pořadí ani verdikt nemá vliv."""
+        """Affiliate obalení: Alza/Datart parametr, nebo eHUB click.php (a_bid na Shop).
+        Bez nastaveného ID / a_aid vrací URL beze změny. Na pořadí ani verdikt nemá vliv."""
         aff_id = os.environ.get(self.affiliate_env, "") if self.affiliate_env else ""
-        if not (self.affiliate_param and aff_id):
-            return url
-        p = urlparse(url)
-        q = [(k, v) for k, v in parse_qsl(p.query) if k != self.affiliate_param]
-        q.append((self.affiliate_param, aff_id))
-        return urlunparse(p._replace(query=urlencode(q)))
+        if self.affiliate_param and aff_id:
+            p = urlparse(url)
+            q = [(k, v) for k, v in parse_qsl(p.query) if k != self.affiliate_param]
+            q.append((self.affiliate_param, aff_id))
+            return urlunparse(p._replace(query=urlencode(q)))
+        if self.ehub_bid:
+            from .ehub import ehub_aid, ehub_click_url
+            aid = ehub_aid()
+            if aid:
+                return ehub_click_url(self.ehub_bid, url, aid)
+        return url
 
 
 SHOPS: dict[str, Shop] = {s.slug: s for s in [
@@ -141,7 +176,18 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",
          note="Přesměrováno na Allegro (DataDome). Připravujeme oficiální / affiliate feed."),
     Shop("smarty", "Smarty", ["smarty.cz"], source="scrape", status="blocked", color="#169B5B",
-         note="Přímé stahování blokuje ochrana. Připravujeme oficiální / affiliate feed."),
+         note="Přímé stahování blokuje ochrana. Affiliate odkazy přes eHUB jsou napojené; oficiální XML feed ještě nemáme (žádost u affiliate manažera).",
+         ehub_bid="1651aa06"),
+    Shop("istyle", "iStyle", ["istyle.cz"], source="feed", status="ok", color="#000000",
+         note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="ISTYLE_FEED_URL", ehub_bid="92ecd9a4",
+         extra={"feed_url_default": "https://storage.feedyio.com/istyle-cz.myshopify.com/68b6d626f576022fbe107ccf.xml"}),
+    Shop("sencor", "Sencor", ["sencor.cz"], source="feed", status="ok", color="#E30613",
+         note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="SENCOR_FEED_URL", ehub_bid="67b5afc3",
+         extra={"feed_url_default": "https://intranet.fastplus.sk/easyfeed/easyfeed/cz/heureka_RF4xDM0vDlB9/OUT/sencor_heureka.xml"}),
     Shop("electroworld", "Electroworld", ["electroworld.cz"], source="scrape", status="blocked", color="#E2001A",
          note="F5 ochrana jako Datart. Připravujeme oficiální / affiliate feed."),
     Shop("kasa", "Kasa", ["kasa.cz"], source="scrape", status="blocked", color="#C45C00",

@@ -100,6 +100,7 @@ def test_affiliate_note_flag(monkeypatch):
     monkeypatch.setenv("LOVCENY_AFFILIATE", "1")
     assert "Odkaz může být provizní – na pořadí to nemá vliv." in c.get("/jak-radime").text
     monkeypatch.setenv("LOVCENY_AFFILIATE", "0")
+    monkeypatch.setenv("EHUB_AID", "")  # eHUB by jinak držel AFFILIATE_ON
     assert "Odkaz může být provizní" not in c.get("/").text
 
 

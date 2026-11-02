@@ -131,6 +131,59 @@ def retire_vestavne(db, dry_run=False) -> dict:
     db.commit()
     return stats
 
+
+def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> dict:
+    """Konzervativně přidá produkty z iStyle/Sencor Heureka feedů do existujících kategorií.
+
+    Bereme jen položky, které classify() zařadí (Apple u iStyle, spotřebiče u Sencoru).
+    Idempotentní přes apply_feed (URL/EAN).
+    """
+    from lovceny.shops import SHOPS, feed as feedmod
+    from lovceny.service import apply_feed
+    from lovceny.categories import classify
+
+    stats = {}
+    targets = [
+        ("istyle", istyle_limit, ("telefony", "notebooky", "sluchatka", "chytre-hodinky", "fotoaparaty", "chytra-domacnost")),
+        ("sencor", sencor_limit, ("vysavace", "kavovary", "televize", "chytra-domacnost")),
+    ]
+    for slug, limit, cats in targets:
+        shop = SHOPS[slug]
+        src = shop.feed_url
+        if not src:
+            stats[slug] = {"error": "no feed url"}
+            continue
+        if dry_run:
+            print(f"[dry-run] {slug}: feed {src} (limit {limit}, cats {cats})")
+            stats[slug] = {"dry_run": True, "limit": limit}
+            continue
+        try:
+            items = feedmod.load(src)
+        except Exception as e:  # noqa: BLE001
+            print(f"!! feed {slug}: {e}")
+            stats[slug] = {"error": str(e)}
+            continue
+        picked = []
+        for it in items:
+            cat = classify(it.name, it.category)
+            if cat not in cats:
+                continue
+            # iStyle: držet se Apple / značkových produktů, ne příslušenství bez modelu
+            if slug == "istyle":
+                n = (it.name or "").lower()
+                apple = ("iphone", "ipad", "airpods", "apple watch", "imac", "mac mini", "mac studio",
+                         "macbook air", "macbook pro", "apple macbook")
+                if not any(k in n for k in apple):
+                    continue
+            picked.append(it)
+            if len(picked) >= limit:
+                break
+        st = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
+        print(f"Feed seed {slug}: loaded={len(items)} picked={len(picked)} → {st}")
+        stats[slug] = {"loaded": len(items), "picked": len(picked), **st}
+    return stats
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-demo", action="store_true")
@@ -138,6 +191,10 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--from-feeds", action="store_true",
+                    help="doplnit katalog z iStyle/Sencor Heureka feedů (konzervativně)")
+    ap.add_argument("--feed-limit", type=int, default=25,
+                    help="max. nových produktů na obchod při --from-feeds")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -152,6 +209,9 @@ def main(argv=None):
     print(f"Katalog hotov: {st}")
     retired = retire_vestavne(db, dry_run=a.dry_run)
     print(f"Vestavné nabídky pryč: {retired}")
+    if a.from_feeds:
+        fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, dry_run=a.dry_run)
+        print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:
         return
     products = []

@@ -50,11 +50,11 @@ tpl.env.filters["pretty_name"] = lambda q: __import__("lovceny.verify", fromlist
 
 def affiliate_on() -> bool:
     """Affiliate upozornění se ukáže, až když jsou odkazy opravdu provizní:
-    LOVCENY_AFFILIATE=1, nebo je u některého obchodu nastavené affiliate ID."""
+    LOVCENY_AFFILIATE=1, affiliate ID Alza/Datart, nebo eHUB a_bid + a_aid (výchozí AID)."""
     import os
     if os.environ.get("LOVCENY_AFFILIATE", "0") == "1":
         return True
-    return any(s.affiliate_param and s.affiliate_env and os.environ.get(s.affiliate_env) for s in SHOPS.values())
+    return any(s.affiliate_active for s in SHOPS.values())
 
 
 tpl.env.globals["AFFILIATE_ON"] = affiliate_on
@@ -402,7 +402,7 @@ def unsubscribe(request: Request, token: str, db=Depends(get_db)):
 @app.get("/obchody", response_class=HTMLResponse)
 def shops(request: Request):
     listed = [s for s in SHOPS.values() if not s.retired]
-    listed.sort(key=lambda s: (0 if s.status == "ok" and (s.source != "feed" or s.feed_url) else 1, s.name.lower()))
+    listed.sort(key=lambda s: (0 if s.status_label()[0] == "ok" else 1, s.name.lower()))
     return tpl.TemplateResponse(request, "shops.html", {"shops": listed})
 
 
