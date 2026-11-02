@@ -98,3 +98,7 @@ def test_chart_ignores_glitch_no_zero_axis():
     assert y_labels
     assert not any(lbl.strip() in ("0 Kč", "0 Kc") for lbl in y_labels), y_labels
     assert ranges[0].min and ranges[0].min > 1000
+
+
+def test_strips_inline_category_word():
+    assert short_name("LG televize 43QNED84A3C") == "LG 43QNED84A3C"

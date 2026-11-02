@@ -118,6 +118,21 @@ def _is_category_part(part: str) -> bool:
     return False
 
 
+
+_INLINE_CAT_RE = re.compile(
+    r"(?i)\b("
+    r"televize|television|notebooky?|laptop|sluchátka|sluchatka|"
+    r"lednice|mrazák|mrazak|kávovar|kavovar|"
+    r"vysavač|vysavac"
+    r")\b"
+)
+
+
+def _strip_inline_category(s: str) -> str:
+    """„LG televize 43QNED…“ → „LG 43QNED…“ (OLED/QLED necháme – panel)."""
+    return _clean_ws(_INLINE_CAT_RE.sub(" ", s))
+
+
 def _is_junk_part(part: str) -> bool:
     p = part.strip()
     if not p:
@@ -292,8 +307,8 @@ def short_name(name: str, *, max_len: int = 78) -> str:
     if " / " not in raw and len(raw) <= max_len and not _AFTER_COMMA_SPEC.search(raw):
         # pořád zkrátit Watch / MacBook Pro comma
         if re.search(r"(?i)\bwatch\b", raw) or re.match(r"(?i)^macbook\s+pro\b", raw):
-            return _trim_first_segment(raw)[:max_len]
-        return raw
+            return _strip_inline_category(_trim_first_segment(raw))[:max_len]
+        return _strip_inline_category(raw)[:max_len]
 
     parts = [p.strip() for p in re.split(r"\s+/+\s*", raw) if p.strip()]
     head = _trim_first_segment(parts[0] if parts else raw)
@@ -327,7 +342,7 @@ def short_name(name: str, *, max_len: int = 78) -> str:
             break
 
     out = _clean_ws(" ".join(out_bits))
-    out = re.sub(r"\s{2,}", " ", out).strip(" ,/;")
+    out = _strip_inline_category(re.sub(r"\s{2,}", " ", out).strip(" ,/;"))
     if len(out) > max_len:
         cut = out[: max_len - 1]
         if " " in cut:
