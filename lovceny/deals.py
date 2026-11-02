@@ -69,8 +69,14 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 50
 
 
 def real_deals(db, *, top: int = 40, fake_limit: int = 20) -> dict:
+    from .names import uniquify_short_names
     rows = product_rows(db)
     buys = sorted((r for r in rows if r.verdict.code == "buy"),
                   key=lambda r: (r.savings_czk, r.savings_pct), reverse=True)[:top]
     fakes = [r for r in rows if r.verdict.code == "fake"][:fake_limit]
+    prods = [r.product for r in buys + fakes if getattr(r, "product", None)]
+    if prods:
+        shorts = uniquify_short_names([p.name or "" for p in prods])
+        for p, s in zip(prods, shorts):
+            p.display_name = s
     return {"buys": buys, "fakes": fakes, "include_demo": include_demo()}

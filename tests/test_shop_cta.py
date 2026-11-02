@@ -35,7 +35,8 @@ def test_product_page_primary_buy_cta():
     assert "· Mironet" in html and "Koupit za" in html
     assert 'class="btn btn-shop"' in html
     assert "Do obchodu" in html
-    assert 'rel="nofollow sponsored noopener"' in html
+    assert 'rel="nofollow noopener"' in html
+    assert 'sponsored' not in html.split('btn-primary btn-buy', 1)[1].split('</a>', 1)[0]
     assert 'target="_blank"' in html
     assert "offer-best" in html
 
@@ -45,4 +46,19 @@ def test_pcard_has_shop_cta():
     html = TestClient(app).get("/kategorie/telefony").text
     assert 'class="btn btn-shop-sm"' in html
     assert "Do obchodu" in html
-    assert 'rel="nofollow sponsored noopener"' in html
+    assert 'rel="nofollow noopener"' in html
+    assert 'rel="nofollow sponsored noopener"' not in html
+
+
+def test_affiliate_shop_rel_sponsored(monkeypatch):
+    """eHUB shop with active AID keeps rel=sponsored."""
+    from lovceny.shops import get_shop
+    from lovceny.shops import ehub as ehubmod
+    shop = get_shop("istyle")
+    assert shop is not None and shop.ehub_bid
+    monkeypatch.setattr(ehubmod, "ehub_aid", lambda: "667205fc")
+    assert shop.affiliate_active
+    from lovceny.main import shop_rel
+    assert shop_rel(shop) == "nofollow sponsored noopener"
+    mir = get_shop("mironet")
+    assert shop_rel(mir) == "nofollow noopener"

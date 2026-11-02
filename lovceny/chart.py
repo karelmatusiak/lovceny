@@ -51,6 +51,26 @@ def _kc(v: float) -> str:
     return czk(v).replace("\u00a0Kč", " Kč")
 
 
+def _y_bounds(lo: float, hi: float) -> tuple[float, float, float]:
+    """Nice Y range that does not drag the axis to 0 Kč when prices are far above zero."""
+    if hi - lo < max(hi * 0.02, 1):
+        lo, hi = lo * 0.97, hi * 1.03
+    step = _nice_step(hi - lo)
+    y0 = (lo // step) * step
+    y1 = -(-hi // step) * step
+    if y1 <= y0:
+        y1 = y0 + step
+    if (lo - y0) / (y1 - y0) < 0.15:
+        candidate = y0 - step
+        # Keep 0 only when the series actually lives near zero
+        if candidate > 0 or lo <= step * 2:
+            y0 = max(0.0, candidate)
+    if y0 < 0:
+        y0 = 0.0
+    return y0, y1, step
+
+
+
 def build_range(points, days: int | None, key: str, label: str, now: datetime | None = None,
                 verdict=None) -> ChartRange:
     now = now or datetime.now(timezone.utc)
@@ -92,15 +112,7 @@ def _svg(r: ChartRange, verdict, W: int = W, H: int = H, sfx: str = "") -> str:
     PAD_L = 64 if W > 500 else 58
     items = r.points
     lo, hi = min(v for _, v in items), max(v for _, v in items)
-    if hi - lo < max(hi * 0.02, 1):            # skoro rovná čára → rozumný rozsah kolem ceny
-        lo, hi = lo * 0.97, hi * 1.03
-    step = _nice_step(hi - lo)
-    y0 = (lo // step) * step
-    y1 = -(-hi // step) * step
-    if y1 == y0:
-        y1 = y0 + step
-    if (lo - y0) / (y1 - y0) < 0.15:   # místo pod minimem pro jeho popisek
-        y0 -= step
+    y0, y1, step = _y_bounds(lo, hi)
     d0 = items[0][0]
     span_days = max((items[-1][0] - d0).days, 1)
     iw, ih = W - PAD_L - PAD_R, H - PAD_T - PAD_B
@@ -192,12 +204,7 @@ def _multi_svg(series: list[dict], key: str, label: str, W: int, H: int, sfx: st
     allv = [v for s in series for _, v in s["items"]]
     alld = [d for s in series for d, _ in s["items"]]
     lo, hi = min(allv), max(allv)
-    if hi - lo < max(hi * 0.02, 1):
-        lo, hi = lo * 0.97, hi * 1.03
-    step = _nice_step(hi - lo)
-    y0, y1 = (lo // step) * step, -(-hi // step) * step
-    if y1 == y0:
-        y1 = y0 + step
+    y0, y1, step = _y_bounds(lo, hi)
     d0, d1 = min(alld), max(alld)
     span = max((d1 - d0).days, 1)
     iw, ih = W - PAD_L - PAD_R, H - PAD_T - PAD_B

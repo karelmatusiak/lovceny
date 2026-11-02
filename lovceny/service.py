@@ -33,10 +33,29 @@ def _name_from_url(url: str) -> str:
 
 def record_price(db: Session, offer: Offer, price: float, original: float | None, in_stock: bool | None,
                  source: str, when: datetime | None = None):
-    offer.price, offer.original_price, offer.in_stock = price, original, in_stock
-    offer.status, offer.last_error = "ok", None
+    """Uloží aktuální cenu. price<=0 / None nepatří do historie (graf by jinak šel na 0 Kč)."""
     offer.last_checked = when or datetime.now(timezone.utc)
-    db.add(PricePoint(offer=offer, price=price, original_price=original, in_stock=in_stock,
+    offer.status, offer.last_error = "ok", None
+    offer.in_stock = in_stock
+    if original is not None:
+        offer.original_price = original
+    if price is None:
+        return
+    try:
+        price_f = float(price)
+    except (TypeError, ValueError):
+        return
+    if price_f <= 0:
+        # Sklad/URL můžou zůstat, ale nulovou cenu do historie nepisujeme
+        return
+    offer.price = price_f
+    if original is not None:
+        try:
+            orig_f = float(original)
+            offer.original_price = orig_f if orig_f > 0 else None
+        except (TypeError, ValueError):
+            pass
+    db.add(PricePoint(offer=offer, price=price_f, original_price=offer.original_price, in_stock=in_stock,
                       captured_at=offer.last_checked, is_demo=False, source=source))
 
 

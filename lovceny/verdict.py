@@ -77,14 +77,22 @@ def _aware(d: datetime) -> datetime:
 
 
 def daily_best(points, since: datetime) -> dict:
-    """{date: nejnižší cena napříč obchody}"""
+    """{date: nejnižší cena napříč obchody}. Nula / None do historie nepatří."""
     out = {}
     for p in points:
+        if p.price is None:
+            continue
+        try:
+            price = float(p.price)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
         t = _aware(p.captured_at)
         if t < since:
             continue
         d = t.date()
-        out[d] = min(out.get(d, float("inf")), float(p.price))
+        out[d] = min(out.get(d, float("inf")), price)
     return dict(sorted(out.items()))
 
 

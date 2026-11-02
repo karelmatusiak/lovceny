@@ -24,7 +24,7 @@
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
         <div class="deal-info">
-          <div class="p-name sm">{{ r.product.name }}</div>
+          <div class="p-name sm">{{ dname(r.product) }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
         </div>
         <div class="deal-prices">
@@ -44,7 +44,7 @@
       <div class="deal-act">
       {{ cmp_button(r.product) }}
       {% if r.best %}{% set s = get_shop(r.best.shop) %}
-      <a class="btn btn-shop-sm" href="{{ s.affiliate_link(r.best.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-shop-sm" href="{{ s.affiliate_link(r.best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% endif %}
       </div>
     </article>
@@ -88,7 +88,7 @@
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
         <div class="deal-info">
-          <div class="p-name sm">{{ r.product.name }}</div>
+          <div class="p-name sm">{{ dname(r.product) }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
           {% if r.verdict.tooltip %}<p class="deal-why">{{ r.verdict.tooltip }}</p>{% endif %}
         </div>

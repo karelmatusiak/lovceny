@@ -6,10 +6,10 @@
 {%- for h in r.elsewhere %}{% set s = SHOPS[h.shop] %}
   <li class="ov-row{% if loop.first %} ov-best{% endif %}">
     <div class="p-img">{% if h.image %}{{ shop_img(h.image, 48) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-    <div class="ov-row-main"><a href="{{ s.affiliate_link(h.url) }}" target="_blank" rel="noopener nofollow sponsored">{{ h.name }}</a>
+    <div class="ov-row-main"><a href="{{ s.affiliate_link(h.url) }}" target="_blank" rel="{{ shop_rel(s) }}">{{ h.name }}</a>
       <span class="p-cat"><span class="shop-dot" style="background:{{ s.color }}"></span>{{ s.name }}{% if loop.first %} · <b class="ov-lowest">nejnižší cena</b>{% endif %}</span></div>
     <b class="ov-row-price">{{ h.price|czk }}</b>
-    <a class="btn btn-shop-sm" href="{{ s.affiliate_link(h.url) }}" target="_blank" rel="noopener nofollow sponsored">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+    <a class="btn btn-shop-sm" href="{{ s.affiliate_link(h.url) }}" target="_blank" rel="{{ shop_rel(s) }}">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
   </li>{% endfor %}
 </ul>
 {{ affiliate_note() }}

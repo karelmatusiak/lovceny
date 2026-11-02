@@ -25,8 +25,8 @@
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ p.slug }}">
   <div class="p-head">
-    <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt=p.name) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-    <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{{ p.name }}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
+    <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt=dname(p)) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+    <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{{ dname(p) }}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
   </div>
   <div class="pc-row">{{ badge(v) }}
     <div class="pc-prices">
@@ -41,7 +41,7 @@
 <div class="pcard-act">
 {{ cmp_button(p) }}
 {% if best and best.in_stock is not false %}{% set s = get_shop(best.shop) %}
-<a class="btn btn-shop-sm" href="{{ s.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
+<a class="btn btn-shop-sm" href="{{ s.affiliate_link(best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
 {% endif %}
 </div>
 </div>

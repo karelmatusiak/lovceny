@@ -21,7 +21,7 @@
   <h2 class="h3">Teď v rozpočtu ({{ found|length }})</h2>
   {% if found %}
   <ul class="bw-list">{% for p, o in found[:30] %}{% set s = SHOPS.get(o.shop) %}
-    <li class="card bw-item"><a href="/produkt/{{ p.id }}-{{ p.slug }}"><span class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span><span class="bw-name"><span class="bw-n">{{ p.name }}</span><small>{{ s.name if s else o.shop }}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</small></span><b>{{ o.price|czk }}</b></a></li>{% endfor %}
+    <li class="card bw-item"><a href="/produkt/{{ p.id }}-{{ p.slug }}"><span class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span><span class="bw-name"><span class="bw-n" title="{{ p.name }}">{{ dname(p) }}</span><small>{{ s.name if s else o.shop }}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</small></span><b>{{ o.price|czk }}</b></a></li>{% endfor %}
   </ul>
   <p class="fair">Řazeno jen podle ceny (bez dopravy). {{ rank_link() }}</p>
   {% else %}<p class="sub">Teď nic takového nevidíme. Jakmile se to změní, ozveme se.</p>{% endif %}

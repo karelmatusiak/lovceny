@@ -23,6 +23,7 @@ from .verdict import compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk, cz_count, cz_plural
+from .names import short_name, uniquify_short_names
 from .availability import (
     offer_is_buyable, best_buyable_offer, last_known_offer,
     sort_offers_for_display,
@@ -50,6 +51,31 @@ tpl.env.filters["fromjson"] = json.loads
 from . import seasons  # noqa: E402
 tpl.env.globals["season_tip"] = seasons.category_tip
 tpl.env.filters["pretty_name"] = lambda q: __import__("lovceny.verify", fromlist=["x"]).pretty_name(q)
+tpl.env.filters["short_name"] = short_name
+
+
+def assign_display_names(products):
+    """Nastaví ephemeral product.display_name (unikátní short name)."""
+    products = [p for p in products if p is not None]
+    if not products:
+        return products
+    shorts = uniquify_short_names([p.name or "" for p in products])
+    for p, s in zip(products, shorts):
+        p.display_name = s
+    return products
+
+
+def assign_all_display_names(db):
+    rows = db.scalars(select(Product)).all()
+    assign_display_names(rows)
+    return {p.id: getattr(p, "display_name", short_name(p.name)) for p in rows}
+
+
+def dname(p):
+    return getattr(p, "display_name", None) or short_name(getattr(p, "name", "") or "")
+
+
+tpl.env.globals["dname"] = dname
 
 
 def affiliate_on() -> bool:
@@ -62,6 +88,16 @@ def affiliate_on() -> bool:
 
 
 tpl.env.globals["AFFILIATE_ON"] = affiliate_on
+
+
+def shop_rel(shop) -> str:
+    """sponsored jen u aktivního affiliate; jinak nofollow noopener."""
+    if shop is not None and getattr(shop, "affiliate_active", False):
+        return "nofollow sponsored noopener"
+    return "nofollow noopener"
+
+
+tpl.env.globals["shop_rel"] = shop_rel
 
 
 def _prague(d, fmt="%-d. %-m. %H:%M"):
@@ -149,6 +185,7 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
         out.append((p, best, v))
         if len(out) >= limit:
             break
+    assign_display_names([p for p, _, _ in out])
     return out
 
 
@@ -221,6 +258,7 @@ def kontakt_get():
 @app.get("/slevy", response_class=HTMLResponse)
 def deals_page(request: Request, db=Depends(get_db)):
     data = real_deals(db)
+    assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
     return tpl.TemplateResponse(request, "deals.html", {
         **data,
         "push_key": pushmod.public_key() if pushmod.enabled() else "",
@@ -362,7 +400,10 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     pts = [pt for o in p.offers for pt in o.points]
     ranges = build_chart(pts, verdict=v)
     cat = BY_SLUG.get(p.category_slug or "")
-    crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(p.name, f"/produkt/{p.id}-{p.slug}")]
+    # unikátní short name napříč katalogem (levné – stovky řádků)
+    assign_all_display_names(db)
+    dn = dname(p)
+    crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(dn, f"/produkt/{p.id}-{p.slug}")]
     has_demo = any(pt.is_demo for pt in pts)
     all_oos = best is None and last_known is not None
     display_price = best or last_known
@@ -378,7 +419,7 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         "ld": [seo.product_ld(p, offers, v), seo.breadcrumb_ld(crumbs)],
         "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
         "share_url": canonical(f"/produkt/{p.id}-{p.slug}"),
-        "share_text": f"{p.name}" + share_price + f" ({v.headline}) na Lovceny"})
+        "share_text": f"{dn}" + share_price + f" ({v.headline}) na Lovceny"})
 
 
 @app.post("/produkt/{pid}/hlidat")
@@ -517,6 +558,7 @@ def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db))
         extra = db.get(Product, int(pridat))
         if extra and all(x.id != extra.id for x in products):
             products.append(extra)
+    assign_display_names(products)
     now = datetime.now(timezone.utc)
     items = []
     for i, prod in enumerate(products):
@@ -654,6 +696,7 @@ def _cat_rows(db, c):
             if best is None:
                 continue
             out.append((p, best, v))
+        assign_display_names([p for p, _, _ in out])
         return out
 
     products = db.scalars(select(Product).where(Product.category_slug == c.slug)
@@ -676,6 +719,7 @@ def _cat_rows(db, c):
     by_pid = {pid: (pid, bid, v) for pid, bid, v in payload}
     payload = [by_pid[p.id] for p, _, _ in rows]
     catcache.set(c.slug, payload)
+    assign_display_names([p for p, _, _ in rows])
     return rows
 
 

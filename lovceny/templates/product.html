@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, badge, cmp_button, share, rank_link, affiliate_note %}
-{% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
+{% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
 {% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ p.image_url }}">{% else %}{{ super() }}{% endif %}{% endblock %}
@@ -11,9 +11,9 @@
     <div class="p-info">
       <div class="p-head">
         <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, priority=true) }}{% else %}📦{% endif %}</div>
-        <div><h1 class="p-name">{{ p.name }}</h1><div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
+        <div><h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>{% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}<div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
       </div>
-      <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, p.name) }}</div></div>
+      <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, dname(p)) }}</div></div>
       <div class="price-row">
         {% if best %}<span class="price">{{ best.price|czk }}</span>
         {% elif last_known %}<span class="price">{{ last_known.price|czk }}</span><span class="oos-label">Momentálně není skladem</span>
@@ -21,7 +21,7 @@
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       {% if best %}{% set bs = get_shop(best.shop) %}
-      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% elif all_oos %}
       <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
       {% endif %}
@@ -67,9 +67,9 @@
             {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
           {% if is_oos %}
-          <a class="offer-oos-link" href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
+          <a class="offer-oos-link" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
           {% else %}
-          <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+          <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
           {% endif %}
         </div>{% endfor %}
       </div>

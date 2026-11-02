@@ -4,11 +4,11 @@
 {% block body %}
 <section class="cmp-hero"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-tokens="{{ tokens }}" data-pridat="{{ pridat }}">
   <div class="eyebrow"><span aria-hidden="true">⚖️</span> Srovnání produktů</div>
-  <h1 class="page-h1 cmp-title">{% if items|length >= 2 %}{% for it in items %}<span class="cmp-h-item">{{ it.p.name|truncate(64, true, "…", 0) }}</span>{% if not loop.last %} <span class="cmp-vs">vs.</span> {% endif %}{% endfor %}{% else %}Srovnání produktů{% endif %}</h1>
+  <h1 class="page-h1 cmp-title">{% if items|length >= 2 %}{% for it in items %}<span class="cmp-h-item">{{ dname(it.p)|truncate(64, true, "…", 0) }}</span>{% if not loop.last %} <span class="cmp-vs">vs.</span> {% endif %}{% endfor %}{% else %}Srovnání produktů{% endif %}</h1>
   {% if items|length < 2 %}
   <picture class="empty-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
   <div class="notice warn cmp-empty">
-    {% if items %}Ve srovnání máš zatím jen <b>{{ items[0].p.name }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Přidat do srovnání</b> u karty nebo v detailu produktu.
+    {% if items %}Ve srovnání máš zatím jen <b>{{ dname(items[0].p) }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Přidat do srovnání</b> u karty nebo v detailu produktu.
     {% else %}Srovnání je prázdné. U produktů klikni na <b>⚖️ Přidat do srovnání</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
     <a class="btn btn-ghost" href="/kategorie">Vybrat produkty →</a>
   </div>
@@ -25,13 +25,13 @@
     <div class="cmp-grid" style="--n:{{ items|length }}">
       {% for it in items %}{% set p = it.p %}
       <article class="card cmp-col{% if cheapest == p.id %} is-cheapest{% endif %}" style="border-top:5px solid {{ it.color }}" aria-labelledby="cmp-n-{{ p.id }}">
-        <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ p.name }} ze srovnání">✕ Odebrat</button>
+        <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ dname(p) }} ze srovnání">✕ Odebrat</button>
         <div class="cmp-img">{% if p.image_url %}{{ shop_img(p.image_url, 140) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-        <h2 class="cmp-name" id="cmp-n-{{ p.id }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ p.name }}</h2>
+        <h2 class="cmp-name" id="cmp-n-{{ p.id }}" title="{{ p.name }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ dname(p) }}</h2>
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>
-            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ it.best_shop.affiliate_link(it.best.url) }}" target="_blank" rel="nofollow sponsored noopener">Koupit v obchodě {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ it.best_shop.affiliate_link(it.best.url) }}" target="_blank" rel="{{ shop_rel(it.best_shop) }}">Koupit v obchodě {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
             {% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v, link=true) }}</dd></div>
         </dl>
@@ -41,10 +41,10 @@
         </dl>
         <dl class="cmp-dl">
           <div><dt>Obchody ({{ it.n_shops }})</dt><dd><ul class="cmp-shops">
-            {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="nofollow sponsored noopener">{{ s.name if s else o.shop }}<span class="sr-only"> (otevře se v novém okně)</span></a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
+            {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="{{ shop_rel(s) }}">{{ s.name if s else o.shop }}<span class="sr-only"> (otevře se v novém okně)</span></a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
           </ul></dd></div>
         </dl>
-        <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ p.slug }}">Detail a historie<span class="sr-only"> – {{ p.name }}</span> →</a>
+        <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ p.slug }}">Detail a historie<span class="sr-only"> – {{ dname(p) }}</span> →</a>
       </article>
       {% endfor %}
     </div>
@@ -57,7 +57,7 @@
   <p class="cmp-swipe">Tabulku posuneš do strany →</p>
   <div class="cmp-table-wrap" role="region" aria-labelledby="cmp-tab-h" tabindex="0">
   <table class="cmp-table" style="--n:{{ items|length }}">
-    <thead><tr><th scope="col"><span class="sr-only">Údaj</span></th>{% for it in items %}<th scope="col"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ it.p.name }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th scope="col"><span class="sr-only">Údaj</span></th>{% for it in items %}<th scope="col"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ dname(it.p) }}</th>{% endfor %}</tr></thead>
     <tbody>
       <tr><th scope="row">Nejnižší cena teď</th>{% for it in items %}<td class="{% if cheapest == it.p.id %}cmp-best{% endif %}"><b>{{ it.best.price|czk if it.best else '–' }}</b>{% if cheapest == it.p.id %} <span class="cmp-best-tag">nejlevnější</span>{% endif %}</td>{% endfor %}</tr>
       <tr><th scope="row">Kde</th>{% for it in items %}<td>{{ (it.best_shop.name if it.best_shop else it.best.shop) if it.best else '–' }}</td>{% endfor %}</tr>
@@ -92,7 +92,7 @@
       </div>
       {% endfor %}
     </div>
-    <ul class="cmp-legend">{% for it in items %}<li><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="33" y2="5" stroke="{{ it.color }}" stroke-width="3"{% if it.dash %} stroke-dasharray="{{ it.dash }}"{% endif %}/></svg>{{ it.p.name }}</li>{% endfor %}</ul>
+    <ul class="cmp-legend">{% for it in items %}<li><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="33" y2="5" stroke="{{ it.color }}" stroke-width="3"{% if it.dash %} stroke-dasharray="{{ it.dash }}"{% endif %}/></svg>{{ dname(it.p) }}</li>{% endfor %}</ul>
     {% else %}<div class="chart-empty"><p><b>Historie zatím není k dispozici.</b> Graf ukážeme, jakmile budeme mít aspoň dva dny cen.</p></div>{% endif %}
     <p class="fair">Každá čára = nejnižší cena produktu napříč obchody v daný den (bez dopravy). Verdikty počítáme jen z naměřených cen. {{ rank_link() }}</p>
   </div>

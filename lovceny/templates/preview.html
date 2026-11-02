@@ -18,7 +18,7 @@
     </div>
     <div class="preview-act">
       <form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>
-      <a class="btn btn-shop" href="{{ shop.affiliate_link(url) }}" target="_blank" rel="noopener nofollow sponsored">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-shop" href="{{ shop.affiliate_link(url) }}" target="_blank" rel="{{ shop_rel(shop) }}">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
     </div>
   </div>
 </div></section>

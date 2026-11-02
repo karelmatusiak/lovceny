@@ -28,10 +28,11 @@ def breadcrumb_ld(crumbs) -> dict:
 
 
 def product_ld(p: Product, offers, verdict=None) -> dict:
+    from .names import short_name
     from .shops import get_shop
     from .availability import offer_is_buyable
     priced = [o for o in offers if o.price is not None]
-    d = {"@context": "https://schema.org", "@type": "Product", "name": p.name,
+    d = {"@context": "https://schema.org", "@type": "Product", "name": getattr(p, "display_name", None) or short_name(p.name),
          "url": _abs(f"/produkt/{p.id}-{p.slug}")}
     if p.image_url:
         d["image"] = p.image_url
@@ -59,7 +60,7 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
 
 def itemlist_ld(rows, path: str) -> dict:
     return {"@context": "https://schema.org", "@type": "ItemList", "url": _abs(path),
-            "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": _abs(f"/produkt/{p.id}-{p.slug}"), "name": p.name}
+            "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": _abs(f"/produkt/{p.id}-{p.slug}"), "name": getattr(p, "display_name", None) or p.name}
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
