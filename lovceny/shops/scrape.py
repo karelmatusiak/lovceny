@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import httpx
 
 from .robots import Robots
+from ..availability import parse_schema_availability, parse_html_availability
 
 log = logging.getLogger("lovceny.scrape")
 
@@ -156,9 +157,9 @@ def parse_product(html: str) -> ScrapeResult | None:
         if price is None:
             continue
         avail = str(offers.get("availability", ""))
-        in_stock = None
-        if avail:
-            in_stock = any(k in avail for k in ("InStock", "InStoreOnly", "LimitedAvailability", "OnlineOnly"))
+        in_stock = parse_schema_availability(avail)
+        if in_stock is None:
+            in_stock = parse_html_availability(html)
         img = d.get("image")
         if isinstance(img, list):
             img = img[0] if img else None
@@ -172,7 +173,8 @@ def parse_product(html: str) -> ScrapeResult | None:
     m = re.search(r'<meta[^>]+(?:property|itemprop)="(?:product:price:amount|price)"[^>]+content="([^"]+)"', html)
     if m:
         name = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', html)
-        return ScrapeResult(_num(m.group(1)), None, None, name.group(1) if name else None, None, None, None)
+        return ScrapeResult(_num(m.group(1)), None, parse_html_availability(html),
+                            name.group(1) if name else None, None, None, None)
     return None
 
 
@@ -204,7 +206,9 @@ def parse_microdata(html: str) -> ScrapeResult | None:
     if not avail:
         a = re.search(r'itemprop=["\']availability["\'][^>]*href=["\']([^"\']+)', html, re.I)
         avail = a.group(1) if a else ""
-    in_stock = any(k in avail for k in ("InStock", "InStoreOnly", "LimitedAvailability", "OnlineOnly")) if avail else None
+    in_stock = parse_schema_availability(avail)
+    if in_stock is None:
+        in_stock = parse_html_availability(html)
     img = re.search(r'<img\b[^>]*itemprop=["\']image["\'][^>]*\bsrc=["\']([^"\']+)', html, re.I) or \
         re.search(r'itemprop=["\']image["\'][^>]*content=["\']([^"\']+)', html, re.I)
     gtin = _md(html, "gtin13") or _md(html, "gtin")

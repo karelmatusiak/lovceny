@@ -12,7 +12,7 @@ def test_parse_heureka_xml():
     items = feed.load(str(SAMPLE))
     assert len(items) == 2  # položka bez ceny přeskočena
     assert items[0].item_id == "RI045b3" and items[0].price == 18990 and items[0].ean == "0195949035838"
-    assert items[1].price == 2490.0 and items[1].in_stock is False
+    assert items[1].price == 2490.0 and items[1].in_stock is True  # DELIVERY_DATE 3 = na objednávku
 
 
 def test_parse_csv():

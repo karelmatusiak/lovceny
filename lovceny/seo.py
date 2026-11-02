@@ -29,6 +29,7 @@ def breadcrumb_ld(crumbs) -> dict:
 
 def product_ld(p: Product, offers, verdict=None) -> dict:
     from .shops import get_shop
+    from .availability import offer_is_buyable
     priced = [o for o in offers if o.price is not None]
     d = {"@context": "https://schema.org", "@type": "Product", "name": p.name,
          "url": _abs(f"/produkt/{p.id}-{p.slug}")}
@@ -47,10 +48,11 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
         d["offers"] = {
             "@type": "AggregateOffer", "priceCurrency": "CZK", "lowPrice": f"{min(prices):.2f}",
             "highPrice": f"{max(prices):.2f}", "offerCount": len(priced),
-            "availability": "https://schema.org/InStock" if any(o.in_stock for o in priced) else "https://schema.org/OutOfStock",
+            "availability": "https://schema.org/InStock" if any(offer_is_buyable(o) for o in priced) else "https://schema.org/OutOfStock",
             "offers": [{"@type": "Offer", "price": f"{float(o.price):.2f}", "priceCurrency": "CZK", "url": o.url,
                         "seller": {"@type": "Organization", "name": get_shop(o.shop).name if get_shop(o.shop) else o.shop},
-                        **({"availability": "https://schema.org/InStock" if o.in_stock else "https://schema.org/OutOfStock"}
+                        **({"availability": ("https://schema.org/InStock" if o.in_stock is not False
+                                             else "https://schema.org/OutOfStock")}
                            if o.in_stock is not None else {})} for o in sorted(priced, key=lambda o: float(o.price))]}
     return d
 

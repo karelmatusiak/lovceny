@@ -19,6 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import httpx
 
 from ..util import normalize_url
+from ..availability import parse_delivery_date
 
 # Tracking parametry z feedů (Heureka UTM apod.) – pro párování a desturl je odřízneme.
 _TRACKING_KEYS = frozenset({
@@ -215,6 +216,17 @@ def _from_row(r: dict) -> FeedItem | None:
     if not url or price is None:
         return None
     dd = r.get("DELIVERY_DATE", "")
+    # DELIVERY_DATE: 0 = skladem, 1..MAX = na objednávku, chybí/záporné = nedostupné.
+    # AVAILABILITY (Heureka): 1 = skladem, 0 = není – použijeme když DELIVERY_DATE chybí.
+    in_stock = parse_delivery_date(dd) if str(dd).strip() != "" else None
+    if in_stock is None:
+        av = str(r.get("AVAILABILITY", "")).strip().lower()
+        if av in ("1", "true", "yes", "skladem", "in stock", "instock"):
+            in_stock = True
+        elif av in ("0", "false", "no", "out of stock", "outofstock", "nedostupne", "nedostupné"):
+            in_stock = False
+        elif str(dd).strip() == "":
+            in_stock = False  # chybějící DELIVERY_DATE i AVAILABILITY → nedostupné
     return FeedItem(
         item_id=r.get("ITEM_ID") or None,
         name=r.get("PRODUCTNAME") or r.get("PRODUCT") or url,
@@ -224,7 +236,7 @@ def _from_row(r: dict) -> FeedItem | None:
         image=r.get("IMGURL") or None,
         category=r.get("CATEGORYTEXT") or None,
         original_price=_f(r.get("PRICE_VAT_ORIGINAL")),
-        in_stock=(dd == "0") if dd != "" else None,
+        in_stock=in_stock,
     )
 
 

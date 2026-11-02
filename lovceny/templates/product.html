@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, badge, cmp_button, share, rank_link, affiliate_note %}
-{% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% endif %}, historie a verdikt | Lovceny{% endblock %}
-{% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
+{% block title %}{{ p.name }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
+{% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
 {% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ p.image_url }}">{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block body %}
@@ -16,11 +16,14 @@
       <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, p.name) }}</div></div>
       <div class="price-row">
         {% if best %}<span class="price">{{ best.price|czk }}</span>
+        {% elif last_known %}<span class="price">{{ last_known.price|czk }}</span><span class="oos-label">Momentálně není skladem</span>
         {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       {% if best %}{% set bs = get_shop(best.shop) %}
       <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="nofollow sponsored noopener" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      {% elif all_oos %}
+      <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
       {% endif %}
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
       {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
@@ -53,15 +56,21 @@
       <p class="ct-note v-{{ v.code }}"><span aria-hidden="true">{{ v.icon }}</span> {{ chart_note }}{% if v.code == 'fake' %} <a href="/jak-radime#za-30-dni-levneji">Metodika</a>{% endif %}</p>
       <div class="offers">
         {% for o in offers %}{% set s = get_shop(o.shop) %}
-        <div class="offer{% if loop.first %} offer-best{% endif %}">
-          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if loop.first %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
-            <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span style="color:#8A5200">Není skladem</span>{% endif %}
+        {% set is_oos = o.in_stock is false %}
+        {% set is_best = best and o.id == best.id %}
+        <div class="offer{% if is_best %} offer-best{% endif %}{% if is_oos %} offer-oos{% endif %}">
+          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if is_best %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
+            <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span class="stock-oos">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span class="offer-quiet">Připravujeme cenu{% if s.source=='feed' %} z feedu{% endif %}</span>
             {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>
             {% elif o.status=='unavailable' %}<span style="color:#8A5200">Už není v nabídce obchodu</span>
             {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
+          {% if is_oos %}
+          <a class="offer-oos-link" href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
+          {% else %}
           <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+          {% endif %}
         </div>{% endfor %}
       </div>
       <p class="fair">Seřazeno výhradně podle ceny (bez dopravy), nikdo za pořadí neplatí. {{ rank_link() }}</p>
@@ -80,7 +89,7 @@
     <picture class="watch-art"><source type="image/webp" srcset="{{ static('img/hlidani-720.webp') }}"><img src="{{ static('img/hlidani-720.jpg') }}" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
   <form class="card watch-form" method="post" action="/produkt/{{ p.id }}/hlidat">
     <div class="row2">
-      <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (best.price if best else ''))|int if (v.suggested_target or best) else '' }}"><span>Kč</span></div></div>
+      <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (display_price.price if display_price else ''))|int if (v.suggested_target or display_price) else '' }}"><span>Kč</span></div></div>
       <div class="field"><label for="em">E-mail</label><input id="em" name="email" type="email" required placeholder="ty@example.cz"></div>
     </div>
     <label class="check"><input type="checkbox" name="only_in_stock" value="true"> Jen když je skladem</label>

@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from .models import Product, Offer
 from .verdict import compute, Verdict
+from .availability import best_buyable_offer
 
 
 def include_demo() -> bool:
@@ -51,8 +52,7 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 50
     now = datetime.now(timezone.utc)
     rows = []
     for p in products:
-        priced = [o for o in p.offers if o.price is not None]
-        best = min(priced, key=lambda o: float(o.price), default=None)
+        best = best_buyable_offer(p.offers)
         if not best:
             continue
         pts, saw_demo = _points_for(p, allow)

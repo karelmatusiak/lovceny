@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from .models import Product, Offer, Watch
 from .verdict import compute, MIN_DAYS, Verdict
 from .deals import _points_for, include_demo
+from .availability import best_buyable_offer
 
 HERO_LIMIT = 4
 HERO_TTL_S = 90
@@ -100,8 +101,7 @@ def _candidates(db) -> list[HeroPick]:
     for p in products:
         if not (p.image_url or "").strip():
             continue
-        priced = [o for o in p.offers if o.price is not None]
-        best = min(priced, key=lambda o: float(o.price), default=None)
+        best = best_buyable_offer(p.offers)
         if not best:
             continue
         pts, _ = _points_for(p, allow)
@@ -144,8 +144,7 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
             p = by_id.get(c["id"])
             if not p or not (p.image_url or "").strip():
                 continue
-            priced = [o for o in p.offers if o.price is not None]
-            best = min(priced, key=lambda o: float(o.price), default=None)
+            best = best_buyable_offer(p.offers)
             if not best:
                 continue
             pts, _ = _points_for(p, include_demo())

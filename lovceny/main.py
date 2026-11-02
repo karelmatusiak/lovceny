@@ -23,6 +23,10 @@ from .verdict import compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk, cz_count, cz_plural
+from .availability import (
+    offer_is_buyable, best_buyable_offer, last_known_offer,
+    sort_offers_for_display,
+)
 from . import images
 from . import analytics
 
@@ -96,11 +100,17 @@ def priced_offers(offers):
 
 
 def product_summary(p: Product):
-    priced = priced_offers(p.offers)
-    best = min(priced, key=lambda o: o.price, default=None)
+    """Nejlepší *koupitelná* nabídka (ne „Není skladem“) + verdikt.
+
+    Verdikt počítáme z koupitelné ceny; když žádná není, z poslední známé
+    (historie zůstává), ale `best` je None → UI bez CTA.
+    """
+    best = best_buyable_offer(p.offers)
+    last = last_known_offer(p.offers)
+    ref = best or last
     pts = [pt for o in p.offers for pt in o.points]
-    v = compute(pts, float(best.price) if best else None,
-                float(best.original_price) if best and best.original_price else None)
+    v = compute(pts, float(ref.price) if ref else None,
+                float(ref.original_price) if ref and ref.original_price else None)
     return best, v
 
 
@@ -347,21 +357,28 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     if not p:
         raise HTTPException(404)
     best, v = product_summary(p)
-    offers = sorted(priced_offers(p.offers), key=lambda o: float(o.price))
+    last_known = last_known_offer(p.offers)
+    offers = sort_offers_for_display(p.offers)
     pts = [pt for o in p.offers for pt in o.points]
     ranges = build_chart(pts, verdict=v)
     cat = BY_SLUG.get(p.category_slug or "")
     crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(p.name, f"/produkt/{p.id}-{p.slug}")]
     has_demo = any(pt.is_demo for pt in pts)
+    all_oos = best is None and last_known is not None
+    display_price = best or last_known
     request.state.an = {"product_id": p.id, "path": f"/produkt/{p.id}"}
+    share_price = f" – teď od {czk(best.price)}" if best else (
+        f" – naposledy {czk(last_known.price)} (není skladem)" if last_known else "")
     return tpl.TemplateResponse(request, "product.html", {
-        "p": p, "best": best, "v": v, "offers": offers, "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
+        "p": p, "best": best, "last_known": last_known, "all_oos": all_oos,
+        "display_price": display_price, "v": v, "offers": offers,
+        "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "cat": cat, "crumbs": crumbs,
         "canonical_path": f"/produkt/{p.id}-{p.slug}",
         "ld": [seo.product_ld(p, offers, v), seo.breadcrumb_ld(crumbs)],
         "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
         "share_url": canonical(f"/produkt/{p.id}-{p.slug}"),
-        "share_text": f"{p.name}" + (f" – teď od {czk(best.price)}" if best else "") + f" ({v.headline}) na Lovceny"})
+        "share_text": f"{p.name}" + share_price + f" ({v.headline}) na Lovceny"})
 
 
 @app.post("/produkt/{pid}/hlidat")
@@ -632,14 +649,32 @@ def _cat_rows(db, c):
             if not p:
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
+            if best is None:
+                best = last_known_offer(p.offers)
+            if best is None:
+                continue
             out.append((p, best, v))
         return out
 
     products = db.scalars(select(Product).where(Product.category_slug == c.slug)
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
-    rows = [(p, *product_summary(p)) for p in products]
-    rows = sorted(rows, key=lambda r: (r[1] is None, float(r[1].price) if r[1] else 0))
-    payload = [(p.id, best.id if best else None, v) for p, best, v in rows]
+    rows = []
+    payload = []
+    for p in products:
+        buyable, v = product_summary(p)
+        # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.
+        display = buyable or last_known_offer(p.offers)
+        if display is None:
+            continue
+        rows.append((p, display, v))
+        payload.append((p.id, buyable.id if buyable else None, v))
+    rows = sorted(rows, key=lambda r: (
+        r[1].in_stock is False,  # OOS dolů
+        float(r[1].price) if r[1] else 0,
+    ))
+    # payload order follows rows after sort
+    by_pid = {pid: (pid, bid, v) for pid, bid, v in payload}
+    payload = [by_pid[p.id] for p, _, _ in rows]
     catcache.set(c.slug, payload)
     return rows
 
@@ -648,7 +683,7 @@ def _ve_sleve_rows(rows):
     """Filter/sort category rows for /ve-sleve without scanning the whole catalog."""
     scored = []
     for p, best, v in rows:
-        if not best or v.code != "buy" or not v.median90:
+        if not best or best.in_stock is False or v.code != "buy" or not v.median90:
             continue
         med = float(v.median90)
         cur = float(best.price)
