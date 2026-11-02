@@ -180,7 +180,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         clean = strip_tracking(it.url)
         o = by_url.get(clean) or by_id.get(it.item_id)
         # EAN/name soft-match jen když položka projde whitelist + min. cenou
-        accepted = accept_feed_item(it.name, it.category, it.price)
+        accepted = accept_feed_item(it.name, it.category, it.price, url=it.url)
         if o is None and accepted:
             o = by_ean_offer.get(it.ean) if it.ean else None
         if o is None:

@@ -108,6 +108,28 @@ def canonicalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+# Písmenné kódy barev na konci Sencor MPN (SVC 45RD, 730GR, 511TQ…)
+_COLOR_CODE = "rd|bk|wh|bl|gr|tq|vt|ti|gd|yl|or|pk|sv|gn|cr|cb"
+_MPN_COLOR_JOINED = re.compile(rf"\b([a-z]{{1,6}}\d{{2,5}})({_COLOR_CODE})\b", re.I)
+_MPN_COLOR_NUM = re.compile(rf"\b(\d{{2,5}})({_COLOR_CODE})\b", re.I)
+
+
+def variant_family_key(name: str) -> str:
+    """Klíč rodiny variant: bez barvy (slova i kódu v MPN), kapacita zůstává.
+
+    SVC 45RD-EUE3 a SVC 45BK-EUE3 → stejný klíč; 128GB Black ≠ 256GB Black.
+    """
+    c = canonicalize_name(name)
+    if not c:
+        return ""
+    drop = set(_COLOR_CANON.values()) | {"eue1", "eue2", "eue3", "eue4", "eu"}
+    toks = [t for t in c.split() if t not in drop]
+    s = " ".join(toks)
+    s = _MPN_COLOR_JOINED.sub(lambda m: m.group(1).lower(), s)
+    s = _MPN_COLOR_NUM.sub(lambda m: m.group(1), s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def _capacity(canon: str) -> str | None:
     m = _CAPACITY_RE.search(canon.replace("gb", " gb "))  # 128gb → 128 gb
     if m:

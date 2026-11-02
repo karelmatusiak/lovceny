@@ -218,10 +218,42 @@ def feed_category_slug(shop_category: str | None) -> str | None:
     return None
 
 
-def accept_feed_item(name: str, shop_category: str | None, price: float | None) -> str | None:
+# URL / název sanity: feed CATEGORYTEXT bývá špatně (čistič oken v „Robotické vysavače“).
+_WINDOW_CLEANER_RX = re.compile(
+    r"cistic[-_ ]?oken|cistici?\s+oken|window\s*clean|roboticky[-_ ]?cistic[-_ ]?oken",
+    re.I,
+)
+_SCW_RX = re.compile(r"(^|[^a-z])scw(\s|-|_|\d)", re.I)
+
+
+def category_url_conflict(slug: str | None, name: str, url: str | None = None) -> bool:
+    """True = název/URL nesedí na cílovou kategorii (např. čistič oken ≠ vysavač)."""
+    if not slug:
+        return False
+    hay = _fold(name) + " " + _fold(url or "")
+    path = _fold((url or "").replace("https://", "").replace("http://", ""))
+    if slug == "vysavace":
+        if _WINDOW_CLEANER_RX.search(hay) or _WINDOW_CLEANER_RX.search(path):
+            return True
+        if _SCW_RX.search(name or "") or re.search(r"\bscw[-_]?\d", path) or "scw-" in path:
+            return True
+        if re.search(r"\bsrw\b", _fold(name)) and ("oken" in hay or "window" in hay):
+            return True
+        if "roboticky-cistic-oken" in path or "cistic-oken" in path:
+            return True
+    return False
+
+
+def accept_feed_item(
+    name: str,
+    shop_category: str | None,
+    price: float | None,
+    url: str | None = None,
+) -> str | None:
     """Vrátí category_slug pokud feed položka smí vytvořit/připojit nabídku, jinak None.
 
-    Pravidla: ne příslušenství, CATEGORYTEXT whitelist → slug, cena ≥ MIN_PRICE, classify souhlasí.
+    Pravidla: ne příslušenství, CATEGORYTEXT whitelist → slug, cena ≥ MIN_PRICE,
+    classify souhlasí, URL/název neodporuje kategorii (čistič oken ≠ vysavač).
     """
     if is_accessory_text(name, shop_category):
         return None
@@ -230,8 +262,12 @@ def accept_feed_item(name: str, shop_category: str | None, price: float | None) 
     feed_slug = feed_category_slug(shop_category)
     if feed_slug is None:
         return None
-    guessed = classify(name, shop_category)
+    if category_url_conflict(feed_slug, name, url):
+        return None
+    guessed = classify(name, shop_category, url=url)
     if guessed != feed_slug:
+        return None
+    if category_url_conflict(guessed, name, url):
         return None
     min_p = MIN_PRICE_CZK.get(feed_slug, 0)
     if price < min_p:
@@ -239,17 +275,21 @@ def accept_feed_item(name: str, shop_category: str | None, price: float | None) 
     return feed_slug
 
 
-def classify(name: str, shop_category: str | None = None) -> str | None:
+def classify(name: str, shop_category: str | None = None, url: str | None = None) -> str | None:
     if is_accessory_text(name, shop_category):
         return None
     n = _fold(name)
     hay = n + _fold(shop_category or "")
     for c in _CLASSIFY:
+        matched = False
         for k in c.keywords:
             k2 = _fold(k).strip() if not k.startswith(" ") else _fold(k)[1:-1]
             if (k.startswith(" ") and k2 in hay) or re.search(r"\b" + re.escape(k2), hay):
-                return c.slug
+                matched = True
+                break
+        if matched and not category_url_conflict(c.slug, name, url):
+            return c.slug
     for slug, rx in _PATTERNS:
-        if rx.search(n):
+        if rx.search(n) and not category_url_conflict(slug, name, url):
             return slug
     return None

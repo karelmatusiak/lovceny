@@ -244,3 +244,59 @@ def test_retire_bad_feed_items_removes_filter_offer(client_db):
     st = retire_bad_feed_items(db, dry_run=False)
     assert st["offers"] >= 1
     assert db.get(Product, pid) is None or not db.get(Product, pid).offers
+
+
+def test_scw_window_cleaner_rejected():
+    """Čistič oken SCW nesmí do vysavačů – ani když feed CATEGORYTEXT lže."""
+    from lovceny.categories import accept_feed_item, category_url_conflict, classify
+    rob = "Heureka.cz | Bílé zboží | Malé spotřebiče | Robotické vysavače"
+    url = "https://www.sencor.cz/cistic-oken-scw-3001yl"
+    assert category_url_conflict("vysavace", "Sencor SCW 3001YL", url)
+    assert accept_feed_item("Sencor SCW 3001YL", rob, 1099, url=url) is None
+    assert classify("Sencor SCW 3001YL", rob, url=url) is None
+    srw = "https://www.sencor.cz/roboticky-cistic-oken-srw-6010wh-aquino"
+    assert accept_feed_item("Sencor SRW 6010WH Aquino", rob, 4999, url=srw) is None
+
+
+def test_variant_family_key_collapses_colors():
+    from lovceny.shops.feed import variant_family_key as vfk
+    assert vfk("Sencor SVC 45RD-EUE3") == vfk("Sencor SVC 45BK-EUE3")
+    assert vfk("Sencor SVC 730GR-EUE2") == vfk("Sencor SVC 730RD-EUE2")
+    assert vfk("Sencor SVC 510GR-EUE2") != vfk("Sencor SVC 511TQ-EUE2")
+    assert vfk("Apple iPhone 15 128GB Black") == vfk("Apple iPhone 15 128GB White")
+    assert vfk("Apple iPhone 15 128GB Black") != vfk("Apple iPhone 15 256GB Black")
+
+
+def test_pick_feed_create_items_caps_and_collapses():
+    from lovceny.shops.feed import FeedItem
+    from seed import pick_feed_create_items, FEED_MAX_PER_BRAND_CAT
+    vac = "Heureka.cz | Bílé zboží | Malé spotřebiče | Vysavače"
+    items = [
+        FeedItem("1", "Sencor SVC 45RD-EUE3", "https://sencor.cz/vysavac-svc-45rd", 899, category=vac, in_stock=True),
+        FeedItem("2", "Sencor SVC 45BK-EUE3", "https://sencor.cz/vysavac-svc-45bk", 849, category=vac, in_stock=True),
+        FeedItem("3", "Sencor SVC 45WH-EUE3", "https://sencor.cz/vysavac-svc-45wh", 879, category=vac, in_stock=True),
+        FeedItem("4", "Sencor SCW 3001YL", "https://sencor.cz/cistic-oken-scw-3001yl", 1099,
+                 category="Heureka.cz | Bílé zboží | Malé spotřebiče | Robotické vysavače", in_stock=True),
+    ]
+    # 4 další různé modely (dohromady s 45* = 5 rodin < cap) + 3 drahé navíc → cap
+    for i, price in enumerate([1999, 2499, 2999, 3499], start=5):
+        items.append(FeedItem(
+            str(i), f"Sencor SVC {1000+i}BK", f"https://sencor.cz/vysavac-svc-{1000+i}bk",
+            float(price), category=vac, in_stock=True,
+        ))
+    picked = pick_feed_create_items(items, ("vysavace",))
+    names = [p.name for p in picked]
+    assert "Sencor SCW 3001YL" not in names
+    assert sum(1 for n in names if "SVC 45" in n) == 1
+    assert any("45BK" in n for n in names)  # nejlevnější skladem z barev
+    assert len(picked) == 5  # pod capem
+
+    # přes cap: přidej další drahé rodiny → zůstane max FEED_MAX_PER_BRAND_CAT a bez nejlevnějších
+    for i, price in enumerate([4999, 5499, 5999, 6499], start=20):
+        items.append(FeedItem(
+            str(i), f"Sencor SVC {2000+i}TI", f"https://sencor.cz/vysavac-svc-{2000+i}ti",
+            float(price), category=vac, in_stock=True,
+        ))
+    picked2 = pick_feed_create_items(items, ("vysavace",))
+    assert len(picked2) == FEED_MAX_PER_BRAND_CAT
+    assert min(float(p.price) for p in picked2) >= 2499

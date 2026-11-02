@@ -132,11 +132,68 @@ def retire_vestavne(db, dry_run=False) -> dict:
     return stats
 
 
-def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> dict:
-    """Konzervativně přidá produkty z iStyle/Sencor Heureka feedů do existujících kategorií.
+# Max nových feed produktů na (značka, kategorie) – ať Vysavače nejsou plné 20× Sencor barev.
+FEED_MAX_PER_BRAND_CAT = 6
 
-    Bereme jen položky, které classify() zařadí (Apple u iStyle, spotřebiče u Sencoru).
-    Idempotentní přes apply_feed (URL/EAN).
+
+def _feed_brand(name: str) -> str:
+    n = (name or "").lower()
+    if "sencor" in n:
+        return "sencor"
+    if any(k in n for k in (
+        "iphone", "ipad", "airpods", "apple watch", "imac", "mac mini", "mac studio",
+        "macbook", "apple ",
+    )):
+        return "apple"
+    tok = n.replace("-", " ").split()
+    return tok[0] if tok else "other"
+
+
+def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter=None,
+                           max_per_brand_cat: int = FEED_MAX_PER_BRAND_CAT):
+    """1 produkt na barevnou rodinu (nejlevnější skladem) + max N na značku/kategorii (vyšší cena)."""
+    from lovceny.categories import accept_feed_item
+    from lovceny.shops.feed import variant_family_key
+
+    families: dict[tuple, object] = {}
+    for it in items:
+        cat = accept_feed_item(it.name, it.category, it.price, url=it.url)
+        if cat not in allowed_cats:
+            continue
+        if brand_filter is not None and not brand_filter(it.name):
+            continue
+        brand = _feed_brand(it.name)
+        fam = variant_family_key(it.name) or (it.name or "").lower()
+        key = (cat, brand, fam)
+        prev = families.get(key)
+        if prev is None:
+            families[key] = it
+            continue
+
+        def better(a, b):
+            a_ok = a.in_stock is not False
+            b_ok = b.in_stock is not False
+            if a_ok != b_ok:
+                return a if a_ok else b
+            return a if float(a.price or 0) <= float(b.price or 0) else b
+
+        families[key] = better(prev, it)
+
+    by_cb: dict[tuple, list] = {}
+    for (cat, brand, _fam), it in families.items():
+        by_cb.setdefault((cat, brand), []).append(it)
+    picked = []
+    for group in by_cb.values():
+        group.sort(key=lambda x: float(x.price or 0), reverse=True)
+        picked.extend(group[:max_per_brand_cat])
+    picked.sort(key=lambda x: float(x.price or 0), reverse=True)
+    return picked
+
+
+def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> dict:
+    """Konzervativně přidá produkty z iStyle/Sencor Heureka feedů.
+
+    accept_feed_item + sloučení barev + FEED_MAX_PER_BRAND_CAT na značku/kategorii.
     """
     from lovceny.shops import SHOPS, feed as feedmod
     from lovceny.service import apply_feed
@@ -146,6 +203,13 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
         ("istyle", istyle_limit, ("telefony", "notebooky", "sluchatka", "chytre-hodinky", "fotoaparaty", "chytra-domacnost")),
         ("sencor", sencor_limit, ("vysavace", "kavovary", "televize", "chytra-domacnost")),
     ]
+
+    def _apple_only(name: str) -> bool:
+        n = (name or "").lower()
+        apple = ("iphone", "ipad", "airpods", "apple watch", "imac", "mac mini", "mac studio",
+                 "macbook air", "macbook pro", "apple macbook")
+        return any(k in n for k in apple)
+
     for slug, limit, cats in targets:
         shop = SHOPS[slug]
         src = shop.feed_url
@@ -162,24 +226,9 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
             print(f"!! feed {slug}: {e}")
             stats[slug] = {"error": str(e)}
             continue
-        # 1) nejdřív napoj nabídky na EXISTUJÍCÍ katalog (bez vytváření duplicit)
         st_attach = apply_feed(db, slug, items, create_missing=False)
-        # 2) teprve pak konzervativně vytvoř pár nových (jen bez shody)
-        from lovceny.categories import accept_feed_item
-        picked = []
-        for it in items:
-            cat = accept_feed_item(it.name, it.category, it.price)
-            if cat not in cats:
-                continue
-            if slug == "istyle":
-                n = (it.name or "").lower()
-                apple = ("iphone", "ipad", "airpods", "apple watch", "imac", "mac mini", "mac studio",
-                         "macbook air", "macbook pro", "apple macbook")
-                if not any(k in n for k in apple):
-                    continue
-            picked.append(it)
-            if len(picked) >= limit * 4:  # širší výběr; max_create omezí nové
-                break
+        bf = _apple_only if slug == "istyle" else None
+        picked = pick_feed_create_items(items, cats, brand_filter=bf)
         st_create = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
         st = {
             "loaded": len(items),
@@ -195,19 +244,18 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
 
 
 def retire_bad_feed_items(db, dry_run=False) -> dict:
-    """Odstraní nabídky/produkty z feed seedu, které jsou příslušenství, služba, nebo pod min. cenou.
+    """Odstraní příslušenství/špatné kategorie, čističe oken, barevné duplicity a převis capu.
 
     Preferujeme smazání (jako retire_vestavne): bez nabídek produkt zmizí ze sitemap i /produkt.
     """
     from lovceny.categories import (
-        MIN_PRICE_CZK, accept_feed_item, is_accessory_text,
+        MIN_PRICE_CZK, accept_feed_item, category_url_conflict, is_accessory_text,
     )
     from lovceny.models import Product
     from lovceny.shops import SHOPS, feed as feedmod
-    from lovceny.shops.feed import strip_tracking
+    from lovceny.shops.feed import strip_tracking, variant_family_key
 
     stats = {"offers": 0, "products": 0, "reasons": []}
-    # URL z feedu, které dnes neprojdou accept (příslušenství / špatná kategorie / levné)
     bad_urls: set[str] = set()
     url_meta: dict[str, str] = {}
     for slug in ("istyle", "sencor"):
@@ -221,14 +269,16 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             continue
         for it in items:
             clean = strip_tracking(it.url)
-            if is_accessory_text(it.name, it.category) or accept_feed_item(it.name, it.category, it.price) is None:
+            if is_accessory_text(it.name, it.category) or accept_feed_item(
+                it.name, it.category, it.price, url=it.url
+            ) is None:
                 bad_urls.add(clean)
                 url_meta[clean] = it.name
 
-    # Nabídky istyle/sencor s podezřelým URL (filtr, kryt, sklo, …) i bez feed hit
     url_rx = (
         "filtr", "sacek", "sacky", "kryt", "pouzdro", "obal", "sklo", "folie", "case",
         "cover", "nahradni", "prislusenstvi", "comfort", "powerbank", "kabel", "adapter",
+        "cistic-oken", "cistici-oken", "window-clean", "roboticky-cistic-oken",
     )
     offers = db.scalars(select(Offer).where(Offer.shop.in_(("istyle", "sencor")))).all()
     to_delete = []
@@ -236,24 +286,104 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
         clean = strip_tracking(o.url)
         low = (o.url or "").lower()
         reason = None
+        prod = o.product
         if clean in bad_urls:
             reason = f"feed-reject:{url_meta.get(clean, '')[:40]}"
         elif any(k in low for k in url_rx):
             reason = "url-keyword"
-        elif is_accessory_text(o.product.name if o.product else "", None):
+        elif is_accessory_text(prod.name if prod else "", None):
             reason = "product-name-accessory"
+        elif prod and category_url_conflict(prod.category_slug, prod.name or "", o.url):
+            reason = "url-category-conflict"
         else:
-            # cena pod minimem kategorie u jediného shopu
-            slug = o.product.category_slug if o.product else None
+            slug = prod.category_slug if prod else None
             min_p = MIN_PRICE_CZK.get(slug or "", 0)
             if o.price is not None and min_p and float(o.price) < min_p:
                 reason = f"price<{min_p}"
         if reason:
             to_delete.append((o, reason))
 
+    feed_shops = ("istyle", "sencor")
+
+    def _is_feed_only(p) -> bool:
+        shops = {x.shop for x in p.offers}
+        return bool(shops) and shops <= set(feed_shops)
+
+    def _best_price(p):
+        prices = [float(x.price) for x in p.offers if x.price is not None and x.in_stock is not False]
+        if not prices:
+            prices = [float(x.price) for x in p.offers if x.price is not None]
+        return min(prices) if prices else 0.0
+
+    def _max_price(p):
+        prices = [float(x.price) for x in p.offers if x.price is not None]
+        return max(prices) if prices else 0.0
+
+    # Naplánuj variant+cap deletions na aktuálním stavu (po odečtení to_delete nabídek)
+    doomed_offer_ids = {o.id for o, _ in to_delete}
+    # simuluj produkty po smazání nabídek
+    all_prods = list(db.scalars(select(Product)).all())
+    surviving_offers = {
+        p.id: [o for o in p.offers if o.id not in doomed_offer_ids]
+        for p in all_prods
+    }
+
+    def feed_only_after(p) -> bool:
+        shops = {o.shop for o in surviving_offers.get(p.id, [])}
+        return bool(shops) and shops <= set(feed_shops)
+
+    fam_groups: dict[tuple, list] = {}
+    for p in all_prods:
+        if not surviving_offers.get(p.id):
+            continue
+        if not feed_only_after(p):
+            continue
+        cat = p.category_slug or "?"
+        brand = _feed_brand(p.name)
+        fam = variant_family_key(p.name) or (p.name or "").lower()
+        fam_groups.setdefault((cat, brand, fam), []).append(p)
+
+    extra_products: list[tuple] = []  # (product, reason)
+    keep_prefer: set[int] = set()
+    for _key, group in fam_groups.items():
+        if len(group) <= 1:
+            keep_prefer.add(group[0].id)
+            continue
+        # u variant ber nejlevnější (reprezentant)
+        ranked = sorted(group, key=lambda p: (
+            0 if any(o.in_stock is not False for o in surviving_offers[p.id]) else 1,
+            _best_price(p),
+        ))
+        keep_prefer.add(ranked[0].id)
+        for p in ranked[1:]:
+            extra_products.append((p, f"variant-of:{ranked[0].name[:40]}"))
+
+    drop_ids = {p.id for p, _ in extra_products}
+    cap_groups: dict[tuple, list] = {}
+    for p in all_prods:
+        if p.id in drop_ids:
+            continue
+        if not surviving_offers.get(p.id) or not feed_only_after(p):
+            continue
+        # pokud by po to_delete nezůstaly nabídky, produkt stejně spadne
+        cat = p.category_slug or "?"
+        brand = _feed_brand(p.name)
+        cap_groups.setdefault((cat, brand), []).append(p)
+
+    for (cat, brand), group in cap_groups.items():
+        if len(group) <= FEED_MAX_PER_BRAND_CAT:
+            continue
+        ranked = sorted(group, key=_max_price, reverse=True)
+        for p in ranked[FEED_MAX_PER_BRAND_CAT:]:
+            extra_products.append((p, f"cap:{cat}/{brand}>{FEED_MAX_PER_BRAND_CAT}"))
+
     if dry_run:
         stats["offers"] = len(to_delete)
-        stats["reasons"] = [f"{o.shop} {o.product.name[:40]!r} {r} {float(o.price) if o.price else '-'}" for o, r in to_delete[:80]]
+        stats["products"] = len({p.id for p, _ in extra_products})
+        stats["reasons"] = (
+            [f"{o.shop} {o.product.name[:40]!r} {r}" for o, r in to_delete[:60]]
+            + [f"would-del product {p.id} {p.name[:50]!r} ({r})" for p, r in extra_products[:60]]
+        )
         return stats
 
     products = {}
@@ -269,8 +399,27 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             stats["reasons"].append(f"del product {pid} {prod.name[:50]!r}")
             db.delete(prod)
             stats["products"] += 1
+    db.flush()
+
+    for p, reason in extra_products:
+        # mohl už zmizet
+        fresh = db.get(Product, p.id)
+        if fresh is None:
+            continue
+        for o in list(fresh.offers):
+            if o.shop in feed_shops:
+                stats["reasons"].append(f"del offer {o.id} {o.shop} {fresh.name[:50]!r} ({reason})")
+                db.delete(o)
+                stats["offers"] += 1
+        db.flush()
+        db.refresh(fresh)
+        if not fresh.offers:
+            stats["reasons"].append(f"del product {fresh.id} {fresh.name[:50]!r} ({reason})")
+            db.delete(fresh)
+            stats["products"] += 1
     db.commit()
     return stats
+
 
 
 def main(argv=None):
