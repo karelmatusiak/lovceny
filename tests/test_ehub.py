@@ -182,6 +182,40 @@ def test_names_match_rejects_shared_partial_mpn():
     assert feed.names_match("Sencor SVC 7811WH", "Sencor SVC 7811WH bílý")
 
 
+
+def test_names_match_rejects_cross_line_and_chip():
+    """Slabé MPN (pro2/air15) nesmí spárovat AirPods↔iPhone ani M3↔M5."""
+    assert not feed.names_match("Apple AirPods Pro 2", "Apple iPhone 18 Pro 256GB")
+    assert not feed.names_match("Apple MacBook Air 15 M3", "Apple MacBook Air 15 M5")
+    assert feed.names_match("Apple MacBook Air 15 M3", "Apple MacBook Air 15 M3 2024")
+    assert not feed.names_match("LG OLED55B65LA", "ASUS PA278QV 27\" monitor")
+    assert not feed.names_match("LG OLED55B65LA televize", "ASUS PA278QV monitor")
+
+
+def test_apply_feed_detaches_mismatched_ehub_url(client_db):
+    """Špatný desturl na nabídce (AirPods→iPhone) se při feedu odpojí / přesune."""
+    from lovceny.shops.feed import FeedItem
+    from lovceny.service import apply_feed
+    c, db, make = client_db
+    air = make([4990], name="Apple AirPods Pro 2", shop="istyle", category="sluchatka")
+    o = air.offers[0]
+    o.url = "https://www.istyle.cz/apple-iphone-18-pro-256gb.html"
+    o.external_id = "bad-airpods"
+    phone = make([29990], name="Apple iPhone 18 Pro 256GB", shop="alza", category="telefony")
+    db.commit()
+    items = [FeedItem(
+        "iphone-feed", "Apple iPhone 18 Pro 256GB",
+        "https://www.istyle.cz/apple-iphone-18-pro-256gb.html", 29990,
+        category="Mobily", in_stock=True,
+    )]
+    st = apply_feed(db, "istyle", items, create_missing=False)
+    assert st["detached"] + st["reattached"] >= 1, st
+    db.refresh(air)
+    # AirPods už nemá istyle URL na iPhone
+    urls = [x.url for x in air.offers]
+    assert not any("iphone-18-pro" in u for u in urls), urls
+
+
 def test_accept_feed_item_orca_and_filter():
     from lovceny.categories import accept_feed_item, is_accessory_text
     vac_cat = "Heureka.cz | Bílé zboží | Malé spotřebiče | Vysavače"

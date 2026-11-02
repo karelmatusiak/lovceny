@@ -148,31 +148,107 @@ def _variants(canon: str) -> set[str]:
 
 
 def _mpn_tokens(canon: str) -> set[str]:
-    """Modelové kódy (Sencor SVC 7811WH → svc7811wh po normalize; i bez mezery)."""
-    # po canonicalize zbývají tokeny; spojíme i „svc“+„7811wh“ styl
+    """Modelové kódy (Sencor SVC 7811WH → svc7811wh po normalize; i bez mezery).
+
+    Nespojujeme variantní tokeny (pro/air/max/…) s číslem – jinak „Pro 2“ a „Air 15“
+    dají slabé MPN pro2/air15 a spárují AirPods↔iPhone nebo M3↔M5.
+    """
     toks = canon.split()
     out = set(_MPN_RE.findall(canon.replace(" ", "")))  # celý řetězec bez mezer
     out |= set(_MPN_RE.findall(canon))
-    # dvojice: písmenný prefix + číselný kód vedle sebe
+    # dvojice: písmenný prefix + číselný kód vedle sebe (svc + 7811wh), ne pro/air/…
     for i, t in enumerate(toks[:-1]):
-        if t.isalpha() and len(t) <= 5 and any(c.isdigit() for c in toks[i + 1]):
+        if t.isalpha() and len(t) <= 5 and t not in _VARIANT_TOKENS and any(c.isdigit() for c in toks[i + 1]):
             out.add(t + toks[i + 1])
     return {x for x in out if len(x) >= 4}
 
 
 def _model_tokens(norm: str) -> set[str]:
-    """Výrazné modelové tokeny (čísla/kódy typu svc7811wh, 128gb, iphone15)."""
-    return {t for t in norm.split() if len(t) >= 3 and any(c.isdigit() for c in t)}
+    """Výrazné modelové tokeny (čísla/kódy typu svc7811wh, 128gb, iphone15, m3)."""
+    out = {t for t in norm.split() if len(t) >= 3 and any(c.isdigit() for c in t)}
+    # Apple Silicon m1–m5 má jen 2 znaky – jinak M3↔M3 2024 selže po zrušení slabého air15
+    out |= {f"m{g}" for g in re.findall(r"\bm([1-5])\b", norm)}
+    return out
+
+
+
+_CHIP_RE = re.compile(r"\bm([1-5])\b")
+# Vzájemně výlučné produktové řady – nesmí se párovat napříč.
+_LINE_TOKENS = (
+    "airpods", "iphone", "ipad", "macbook", "imac", "watch",
+    "pixel", "galaxy", "playstation", "xbox", "switch",
+)
+_LINE_TV = frozenset({"televize", "tv", "television"})
+_LINE_MONITOR = frozenset({"monitor", "monitoru"})
+
+
+def _apple_chips(canon: str) -> set[str]:
+    """Apple Silicon generace v názvu (m1–m5), prázdné když chybí."""
+    return set(_CHIP_RE.findall(canon))
+
+
+def _product_line(canon: str) -> str | None:
+    """Hrubá produktová řada pro odmítnutí AirPods↔iPhone, TV↔monitor apod."""
+    toks = set(canon.split())
+    compact = canon.replace(" ", "")
+    for line in _LINE_TOKENS:
+        if line in toks or (line != "watch" and line in compact):
+            return line
+        if line == "watch" and ("watch" in toks or "applewatch" in compact):
+            return "watch"
+    if toks & _LINE_MONITOR or "monitor" in compact:
+        return "monitor"
+    if toks & _LINE_TV:
+        return "tv"
+    # LG OLED55… bez slova televize – stále TV, ne monitor
+    if any(t.startswith("oled") or t.startswith("qled") for t in toks):
+        return "tv"
+    return None
+
+
+def offer_conflicts_product(product_name: str, offer_url: str, offer_title: str | None = None) -> bool:
+    """True = nabídka zjevně patří k jinému produktu (špatný desturl / přepsané URL)."""
+    other = offer_title or ""
+    if not other:
+        # hrubý název z URL path (istyle /products/foo-bar)
+        from urllib.parse import urlparse, unquote
+        path = unquote(urlparse(offer_url or "").path)
+        slug = path.rstrip("/").split("/")[-1]
+        other = slug.replace("-", " ")
+    if not other.strip():
+        return False
+    return not names_match(product_name, other) and _hard_conflict(product_name, other)
+
+
+def _hard_conflict(a: str, b: str) -> bool:
+    """Jasný konflikt řad/čipů (ne jen slabá neshoda názvu)."""
+    ca, cb = canonicalize_name(a), canonicalize_name(b)
+    la, lb = _product_line(ca), _product_line(cb)
+    if la and lb and la != lb:
+        return True
+    cha, chb = _apple_chips(ca), _apple_chips(cb)
+    if cha and chb and cha.isdisjoint(chb):
+        return True
+    return False
 
 
 def names_match(a: str, b: str) -> bool:
     """Konzervativní shoda: kanonický název (barvy CZ↔EN), kapacita, varianta, MPN.
-    Nikdy nepáruje jen podle značky. 15 ≠ 15 Plus, 128GB ≠ 256GB, černá ≠ bílá."""
+    Nikdy nepáruje jen podle značky. 15 ≠ 15 Plus, 128GB ≠ 256GB, černá ≠ bílá.
+    M3 ≠ M5, AirPods ≠ iPhone, televize ≠ monitor."""
     ca, cb = canonicalize_name(a), canonicalize_name(b)
     if not ca or not cb:
         return False
     if ca == cb:
         return True
+
+    # produktová řada a Apple Silicon – dřív než MPN (slabé air15/pro2 už ne)
+    la, lb = _product_line(ca), _product_line(cb)
+    if la and lb and la != lb:
+        return False
+    cha, chb = _apple_chips(ca), _apple_chips(cb)
+    if cha and chb and cha.isdisjoint(chb):
+        return False
 
     capa, capb = _capacity(ca), _capacity(cb)
     if capa and capb and capa != capb:

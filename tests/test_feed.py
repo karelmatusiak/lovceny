@@ -30,7 +30,8 @@ def test_paste_alza_url_is_pending_then_feed_fills_price():
     assert o.shop == "alza" and o.status == "pending" and o.price is None
 
     stats = apply_feed(db, "alza", feed.load(str(SAMPLE)))
-    assert stats == {"matched": 1, "created": 0, "attached": 0, "skipped": 1, "skipped_accessory": 0}
+    assert stats["matched"] == 1 and stats["created"] == 0 and stats["attached"] == 0 and stats["skipped"] == 1
+    assert stats.get("detached", 0) == 0 and stats.get("skipped_mismatch", 0) == 0
     db.refresh(o)
     assert float(o.price) == 18990 and o.status == "ok" and o.external_id == "RI045b3"
     assert o.product.name == "Apple iPhone 15 128GB černá"

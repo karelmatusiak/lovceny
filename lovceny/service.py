@@ -131,10 +131,10 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     Párování: URL → ITEM_ID → EAN nabídky obchodu → EAN produktu → konzervativní shoda názvu
     (barvy CZ↔EN, kapacita, varianta, MPN). create_missing jen když žádná shoda.
     """
-    from .shops.feed import canonicalize_name, names_match, strip_tracking
+    from .shops.feed import canonicalize_name, names_match, strip_tracking, offer_conflicts_product
     from .categories import BY_SLUG, accept_feed_item, classify, is_accessory_text
 
-    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0}
+    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0, "detached": 0, "reattached": 0, "skipped_mismatch": 0}
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
     by_url = {strip_tracking(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
@@ -181,6 +181,30 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         o = by_url.get(clean) or by_id.get(it.item_id)
         # EAN/name soft-match jen když položka projde whitelist + min. cenou
         accepted = accept_feed_item(it.name, it.category, it.price, url=it.url)
+        # Historicky špatně soft-matchnuté desturl (AirPods→iPhone): odpoj / přesuň
+        if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
+            correct = find_by_name(it.name) if accepted else None
+            # vyhoď z indexů před přesunem/smazáním
+            by_url.pop(strip_tracking(o.url), None)
+            if o.external_id:
+                by_id.pop(o.external_id, None)
+            if correct is not None and correct.id != o.product_id:
+                other = next((x for x in correct.offers if x.shop == shop_slug and x.id != o.id), None)
+                if other is not None:
+                    db.delete(o)
+                    o = other
+                    stats["detached"] += 1
+                else:
+                    o.product = correct
+                    stats["reattached"] += 1
+            else:
+                db.delete(o)
+                o = None
+                stats["detached"] += 1
+            if o is not None:
+                by_url[clean] = o
+                if o.external_id:
+                    by_id[o.external_id] = o
         if o is None and accepted:
             o = by_ean_offer.get(it.ean) if it.ean else None
         if o is None:
@@ -230,6 +254,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 continue
         else:
             stats["matched"] += 1
+        if it.name and offer_conflicts_product(o.product.name, clean, it.name):
+            stats["skipped_mismatch"] += 1
+            continue
         o.url = clean  # sjednotit bez UTM
         o.external_id = it.item_id or o.external_id
         if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
