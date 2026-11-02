@@ -52,7 +52,8 @@ class Shop:
         if not self.feed_url_env:
             return ""
         env = os.environ.get(self.feed_url_env)
-        if env is not None:
+        # Empty string (e.g. unset GitHub Actions secret) must not block feed_url_default.
+        if env is not None and env.strip():
             return env.strip()
         return (self.extra.get("feed_url_default") or "").strip()
 

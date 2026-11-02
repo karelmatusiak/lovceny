@@ -60,6 +60,16 @@ def test_status_labels_ehub_shops(monkeypatch):
     assert st == "ok" and "affiliate" in label.lower()
 
 
+def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
+    """GitHub Actions injects empty string for missing secrets; must not hide defaults."""
+    monkeypatch.setenv("ISTYLE_FEED_URL", "")
+    monkeypatch.setenv("SENCOR_FEED_URL", "")
+    assert get_shop("istyle").feed_url.startswith("https://")
+    assert get_shop("sencor").feed_url.startswith("https://")
+    monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
+    assert get_shop("istyle").feed_url == "https://example.test/istyle.xml"
+
+
 def test_parse_stream_and_strip_tracking():
     items = feed.load(str(FIXTURE))
     assert len(items) == 2
