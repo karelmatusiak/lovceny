@@ -132,9 +132,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     (barvy CZ↔EN, kapacita, varianta, MPN). create_missing jen když žádná shoda.
     """
     from .shops.feed import canonicalize_name, names_match, strip_tracking
-    from .categories import BY_SLUG, classify
+    from .categories import BY_SLUG, accept_feed_item, classify, is_accessory_text
 
-    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0}
+    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0}
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
     by_url = {strip_tracking(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
@@ -173,9 +173,20 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
 
     created = 0
     for it in items:
+        # Příslušenství / náhradní díly nikdy nepřipojovat ani nevytvářet (filtr ≠ vysavač).
+        if is_accessory_text(it.name, it.category):
+            stats["skipped_accessory"] += 1
+            continue
         clean = strip_tracking(it.url)
-        o = by_url.get(clean) or by_id.get(it.item_id) or (by_ean_offer.get(it.ean) if it.ean else None)
+        o = by_url.get(clean) or by_id.get(it.item_id)
+        # EAN/name soft-match jen když položka projde whitelist + min. cenou
+        accepted = accept_feed_item(it.name, it.category, it.price)
+        if o is None and accepted:
+            o = by_ean_offer.get(it.ean) if it.ean else None
         if o is None:
+            if not accepted:
+                stats["skipped"] += 1
+                continue
             prod = by_ean_prod.get(it.ean) if it.ean else None
             if prod is None:
                 prod = find_by_name(it.name)
@@ -196,8 +207,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                     if prod.ean:
                         by_ean_offer[prod.ean] = o
                     stats["attached"] += 1
-            elif create_missing and (max_create is None or created < max_create):
-                cat_slug, cat_label = clean_category_label(it.name, it.category)
+            elif create_missing and accepted and (max_create is None or created < max_create):
+                cat_slug = accepted
+                cat_label = BY_SLUG[cat_slug].name if cat_slug in BY_SLUG else None
                 prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean, image_url=it.image,
                                category=cat_label, category_slug=cat_slug)
                 o = Offer(product=prod, shop=shop_slug, url=clean)

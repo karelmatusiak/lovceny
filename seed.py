@@ -140,7 +140,6 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
     """
     from lovceny.shops import SHOPS, feed as feedmod
     from lovceny.service import apply_feed
-    from lovceny.categories import classify
 
     stats = {}
     targets = [
@@ -166,9 +165,10 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
         # 1) nejdřív napoj nabídky na EXISTUJÍCÍ katalog (bez vytváření duplicit)
         st_attach = apply_feed(db, slug, items, create_missing=False)
         # 2) teprve pak konzervativně vytvoř pár nových (jen bez shody)
+        from lovceny.categories import accept_feed_item
         picked = []
         for it in items:
-            cat = classify(it.name, it.category)
+            cat = accept_feed_item(it.name, it.category, it.price)
             if cat not in cats:
                 continue
             if slug == "istyle":
@@ -194,6 +194,85 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, dry_run=False) -> d
     return stats
 
 
+def retire_bad_feed_items(db, dry_run=False) -> dict:
+    """Odstraní nabídky/produkty z feed seedu, které jsou příslušenství, služba, nebo pod min. cenou.
+
+    Preferujeme smazání (jako retire_vestavne): bez nabídek produkt zmizí ze sitemap i /produkt.
+    """
+    from lovceny.categories import (
+        MIN_PRICE_CZK, accept_feed_item, is_accessory_text,
+    )
+    from lovceny.models import Product
+    from lovceny.shops import SHOPS, feed as feedmod
+    from lovceny.shops.feed import strip_tracking
+
+    stats = {"offers": 0, "products": 0, "reasons": []}
+    # URL z feedu, které dnes neprojdou accept (příslušenství / špatná kategorie / levné)
+    bad_urls: set[str] = set()
+    url_meta: dict[str, str] = {}
+    for slug in ("istyle", "sencor"):
+        shop = SHOPS.get(slug)
+        if not shop or not shop.feed_url:
+            continue
+        try:
+            items = feedmod.load(shop.feed_url)
+        except Exception as e:  # noqa: BLE001
+            stats["reasons"].append(f"feed {slug}: {e}")
+            continue
+        for it in items:
+            clean = strip_tracking(it.url)
+            if is_accessory_text(it.name, it.category) or accept_feed_item(it.name, it.category, it.price) is None:
+                bad_urls.add(clean)
+                url_meta[clean] = it.name
+
+    # Nabídky istyle/sencor s podezřelým URL (filtr, kryt, sklo, …) i bez feed hit
+    url_rx = (
+        "filtr", "sacek", "sacky", "kryt", "pouzdro", "obal", "sklo", "folie", "case",
+        "cover", "nahradni", "prislusenstvi", "comfort", "powerbank", "kabel", "adapter",
+    )
+    offers = db.scalars(select(Offer).where(Offer.shop.in_(("istyle", "sencor")))).all()
+    to_delete = []
+    for o in offers:
+        clean = strip_tracking(o.url)
+        low = (o.url or "").lower()
+        reason = None
+        if clean in bad_urls:
+            reason = f"feed-reject:{url_meta.get(clean, '')[:40]}"
+        elif any(k in low for k in url_rx):
+            reason = "url-keyword"
+        elif is_accessory_text(o.product.name if o.product else "", None):
+            reason = "product-name-accessory"
+        else:
+            # cena pod minimem kategorie u jediného shopu
+            slug = o.product.category_slug if o.product else None
+            min_p = MIN_PRICE_CZK.get(slug or "", 0)
+            if o.price is not None and min_p and float(o.price) < min_p:
+                reason = f"price<{min_p}"
+        if reason:
+            to_delete.append((o, reason))
+
+    if dry_run:
+        stats["offers"] = len(to_delete)
+        stats["reasons"] = [f"{o.shop} {o.product.name[:40]!r} {r} {float(o.price) if o.price else '-'}" for o, r in to_delete[:80]]
+        return stats
+
+    products = {}
+    for o, reason in to_delete:
+        products[o.product_id] = o.product
+        stats["reasons"].append(f"del offer {o.id} {o.shop} {o.product.name[:50]!r} ({reason})")
+        db.delete(o)
+        stats["offers"] += 1
+    db.flush()
+    for pid, prod in products.items():
+        db.refresh(prod)
+        if not prod.offers:
+            stats["reasons"].append(f"del product {pid} {prod.name[:50]!r}")
+            db.delete(prod)
+            stats["products"] += 1
+    db.commit()
+    return stats
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-demo", action="store_true")
@@ -205,6 +284,8 @@ def main(argv=None):
                     help="doplnit katalog z iStyle/Sencor Heureka feedů (konzervativně)")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
+    ap.add_argument("--retire-bad-feeds", action="store_true",
+                    help="smazat příslušenství/špatné nabídky z iStyle/Sencor feed seedu")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -212,6 +293,15 @@ def main(argv=None):
         n = db.execute(delete(PricePoint).where(PricePoint.is_demo.is_(True))).rowcount
         db.commit()
         print(f"Smazáno {n} demo bodů.")
+        return
+    if a.retire_bad_feeds:
+        st = retire_bad_feed_items(db, dry_run=a.dry_run)
+        print(f"Retire bad feeds: offers={st['offers']} products={st['products']}")
+        for line in st.get("reasons", [])[:100]:
+            print(" ", line)
+        if a.from_feeds:
+            fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, dry_run=a.dry_run)
+            print(f"Feed seed: {fs}")
         return
     items = [i for i in load_catalog() if not a.category or i["cat"] == a.category][:a.limit]
     print(f"Katalog: {len(items)} položek")

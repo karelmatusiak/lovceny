@@ -135,14 +135,114 @@ def _fold(s: str) -> str:
     return " " + re.sub(r"\s+", " ", s) + " "
 
 
-# Příslušenství nezařazujeme do hlavních kategorií (obal na iPhone není telefon).
-_ACCESSORY = ("obal", "kryt", "pouzdro", "sklo", "folie", "drzak", "kabel", "nabijeck", "remin", "stojan", "filtr", "nahradn", "sacek")
+# Příslušenství / náhradní díly – nezařazujeme do hlavních kategorií.
+# Stem prefixy (\b + stem): skl=sklo/skla, pouzdr=pouzdro/pouzdrem, …
+_ACCESSORY_NAME = (
+    "obal", "kryt", "sklo", "skla", "folie", "drzak", "kabel", "kabely",
+    "nabijeck", "remin", "stojan", "filtr", "nahradn", "sacek", "sacky",
+    "kartac", "adapter", "adaptor", "redukc", "cover", "strap",
+    "naramek", "reminek", "powerbank", "baterie na", "magsafe bater",
+    "prislusenstv", "nahradni dil", "cisteni airpods", "sada na cisteni",
+    "premiova sluzba", "istyle comfort", "sluzba istyle",
+)
+# Název vypadá jako „pouzdro/kryt/obal/sklo … na/pro …“ (ne AirPods s nabíjecím pouzdrem).
+_ACCESSORY_NAME_RX = re.compile(
+    r"(^|\s)(pouzdro|kryt|obal|sklo|folie|case)\s+(na|pro)\b"
+    r"|(^|\s)(ochranny\s+kryt|ochranne\s+sklo|textilni\s+sacek)\b"
+    r"|\b(pouzdro|kryt|obal)\s+pro\s+(iphone|ipad|macbook|airpods)\b",
+    re.I,
+)
+
+# CATEGORYTEXT / shop path – příslušenství a nesouvisející větve
+_ACCESSORY_CATEGORY = (
+    "prislusenstv", "pouzdra", "kryty", "folie", "skla", "kabely a konektor",
+    "baterie", "powerbank", "brasny", "batohy", "nahradni", "filtry",
+    "sacky", "kabel", "nabijeck", "adapter",
+)
+# Whitelist: feed CATEGORYTEXT musí obsahovat aspoň jeden hint pro cílovou kategorii.
+FEED_CATEGORY_WHITELIST: dict[str, tuple[str, ...]] = {
+    "telefony": ("mobilni telefony", "mobilni telefon", "smartphony", "telefony"),
+    "notebooky": ("notebooky", "notebook", "ultrabook"),
+    "sluchatka": ("sluchatk",),
+    "pracky": ("pracky", "pracka"),
+    "lednice": ("lednice", "chladnick", "mraznick", "mrazak"),
+    "kavovary": ("kavovar",),
+    "vysavace": ("vysavace", "vysavac", "roboticke vysavace"),
+    "konzole": ("herni konzole", "konzole", "playstation", "xbox", "nintendo"),
+    "chytre-hodinky": ("chytre hodinky", "smartwatch", "smart band", "fitness naramek"),
+    "fotoaparaty": ("fotoapar", "digitalni kamery", "akcni kamery"),
+    "televize": ("televize", "televizor", "led televize", "qled"),
+    "chytra-domacnost": ("chytra domacnost", "smart home", "osvetleni", "zasuvk"),
+}
+# Minimální věrohodná cena (Kč) – levnější feed položky do kategorie nebereme.
+MIN_PRICE_CZK: dict[str, float] = {
+    "telefony": 2000,
+    "notebooky": 5000,
+    "sluchatka": 500,
+    "pracky": 3000,
+    "lednice": 3000,
+    "kavovary": 800,
+    "vysavace": 500,
+    "konzole": 1000,
+    "chytre-hodinky": 500,
+    "fotoaparaty": 1500,
+    "televize": 1500,
+    "chytra-domacnost": 100,
+}
+
+
+def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
+    """True = příslušenství / náhradní díl / služba – ne hlavní produkt."""
+    n = _fold(name)
+    if _ACCESSORY_NAME_RX.search(n):
+        return True
+    if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
+        return True
+    c = _fold(shop_category or "")
+    if c.strip() and any(a in c for a in _ACCESSORY_CATEGORY):
+        return True
+    return False
+
+
+def feed_category_slug(shop_category: str | None) -> str | None:
+    """Mapuje Heureka CATEGORYTEXT na slug jen přes whitelist (bez tipování z názvu)."""
+    c = _fold(shop_category or "")
+    if not c.strip():
+        return None
+    if any(a in c for a in _ACCESSORY_CATEGORY):
+        return None
+    for slug, hints in FEED_CATEGORY_WHITELIST.items():
+        for h in hints:
+            if _fold(h).strip() in c:
+                return slug
+    return None
+
+
+def accept_feed_item(name: str, shop_category: str | None, price: float | None) -> str | None:
+    """Vrátí category_slug pokud feed položka smí vytvořit/připojit nabídku, jinak None.
+
+    Pravidla: ne příslušenství, CATEGORYTEXT whitelist → slug, cena ≥ MIN_PRICE, classify souhlasí.
+    """
+    if is_accessory_text(name, shop_category):
+        return None
+    if price is None or price <= 0:
+        return None
+    feed_slug = feed_category_slug(shop_category)
+    if feed_slug is None:
+        return None
+    guessed = classify(name, shop_category)
+    if guessed != feed_slug:
+        return None
+    min_p = MIN_PRICE_CZK.get(feed_slug, 0)
+    if price < min_p:
+        return None
+    return feed_slug
 
 
 def classify(name: str, shop_category: str | None = None) -> str | None:
-    n = _fold(name)
-    if any(re.search(r"\b" + a, n) for a in _ACCESSORY):
+    if is_accessory_text(name, shop_category):
         return None
+    n = _fold(name)
     hay = n + _fold(shop_category or "")
     for c in _CLASSIFY:
         for k in c.keywords:

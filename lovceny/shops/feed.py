@@ -167,9 +167,9 @@ def names_match(a: str, b: str) -> bool:
 
     mpn_a, mpn_b = _mpn_tokens(ca), _mpn_tokens(cb)
     if mpn_a and mpn_b:
-        if mpn_a & mpn_b:
+        # Jen přesná shoda množiny MPN – průnik (svc3001 ∩ filtr SVXD…svc3001) nestačí.
+        if mpn_a == mpn_b:
             return True
-        # obě mají MPN a žádný společný → jiné zboží
         return False
 
     # jádro bez barev/kapacity: stejné významné tokeny

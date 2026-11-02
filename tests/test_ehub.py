@@ -170,3 +170,77 @@ def test_product_page_clean_category_and_buy_label(client_db, monkeypatch):
     assert "Mobilní telefony" in html
     assert "Koupit za" in html and ("· iStyle" in html or "· Mironet" in html)
     assert "v obchodě" not in html.split("btn-buy")[1][:120]
+
+
+def test_names_match_rejects_shared_partial_mpn():
+    """Filtr SVXD … SVC 3001 nesmí matchnout vysavač SVC 3001 Orca (dřív průnik MPN)."""
+    assert not feed.names_match("Sencor SVC 3001 Orca", "Sencor SVXD 0200for SVC 3001")
+    assert not feed.names_match(
+        "MacBook Pro 16,2\", Apple M5 Pro 18jádrové CPU, 20jádrové GPU, 48GB, 1TB SSD, stříbrný",
+        "Ochranný kryt pro MacBook Pro 16\" Epico Slim Shell - matný průhledný",
+    )
+    assert feed.names_match("Sencor SVC 7811WH", "Sencor SVC 7811WH bílý")
+
+
+def test_accept_feed_item_orca_and_filter():
+    from lovceny.categories import accept_feed_item, is_accessory_text
+    vac_cat = "Heureka.cz | Bílé zboží | Malé spotřebiče | Vysavače"
+    acc_cat = "Heureka.cz | Bílé zboží | Malé spotřebiče | Příslušenství k malým spotřebičům"
+    assert accept_feed_item("Sencor SVC 3001 Orca", vac_cat, 3399) == "vysavace"
+    assert accept_feed_item("Sencor SVC 3001 Orca", vac_cat, 99) is None  # pod min. cenou
+    assert is_accessory_text("Sencor SVXD 0200for SVC 3001", acc_cat)
+    assert accept_feed_item("Sencor SVXD 0200for SVC 3001", acc_cat, 99) is None
+    assert accept_feed_item("Sencor SVC 190W", vac_cat, 499) is None  # < 500
+
+
+def test_orca_filter_never_attaches():
+    """Regrese: filtr pro Orca se nesmí připojit k vysavači ani přepsat cenu na 99 Kč."""
+    from lovceny.db import Base, engine
+    init_db()
+    Base.metadata.drop_all(bind=engine)
+    init_db()
+    db = SessionLocal()
+    vac = feed.FeedItem(
+        item_id="ORCA1",
+        name="Sencor SVC 3001 Orca",
+        url="https://www.sencor.cz/vysavac-viceucelovy-svc-3001-orca",
+        price=3399,
+        ean="8590669090037",
+        category="Heureka.cz | Bílé zboží | Malé spotřebiče | Vysavače",
+        in_stock=True,
+    )
+    filtr = feed.FeedItem(
+        item_id="FIL1",
+        name="Sencor SVXD 0200for SVC 3001",
+        url="https://www.sencor.cz/nahradni-filtr-svxd-0200",
+        price=99,
+        ean="8590669365340",
+        category="Heureka.cz | Bílé zboží | Malé spotřebiče | Příslušenství k malým spotřebičům",
+        in_stock=True,
+    )
+    st = apply_feed(db, "sencor", [vac], create_missing=True, max_create=5)
+    assert st["created"] == 1, st
+    p = db.query(Product).one()
+    assert float(p.offers[0].price) == 3399
+    st2 = apply_feed(db, "sencor", [filtr, vac], create_missing=True, max_create=5)
+    assert st2["skipped_accessory"] >= 1, st2
+    assert st2["created"] == 0
+    db.refresh(p)
+    o = p.offers[0]
+    assert "filtr" not in o.url
+    assert float(o.price) == 3399
+    assert db.query(Product).count() == 1
+    db.close()
+
+
+def test_retire_bad_feed_items_removes_filter_offer(client_db):
+    from seed import retire_bad_feed_items
+    c, db, make = client_db
+    p = make([99], name="Sencor SVC 3001 Orca", shop="sencor", category="vysavace")
+    o = p.offers[0]
+    o.url = "https://www.sencor.cz/nahradni-filtr-svxd-0200"
+    db.commit()
+    pid = p.id
+    st = retire_bad_feed_items(db, dry_run=False)
+    assert st["offers"] >= 1
+    assert db.get(Product, pid) is None or not db.get(Product, pid).offers
