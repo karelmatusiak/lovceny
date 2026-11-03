@@ -18,6 +18,8 @@ class Product(Base):
     category: Mapped[str | None] = mapped_column(String(200))
     # slug z lovceny/categories.py (SEO stránky /kategorie/…); None = nezařazeno
     category_slug: Mapped[str | None] = mapped_column(String(40), index=True)
+    # soft-retire: řádek zůstane kvůli 301 /produkt/<id> → kategorie; None = aktivní
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")

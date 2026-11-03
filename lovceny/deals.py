@@ -46,7 +46,8 @@ def _points_for(p: Product, allow_demo: bool) -> tuple[list, bool]:
 def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 500) -> list[DealRow]:
     allow = include_demo() if allow_demo is None else allow_demo
     products = db.scalars(
-        select(Product).options(selectinload(Product.offers).selectinload(Offer.points))
+        select(Product).where(Product.retired_at.is_(None))
+        .options(selectinload(Product.offers).selectinload(Offer.points))
         .order_by(Product.created_at.desc()).limit(limit_products)
     ).all()
     now = datetime.now(timezone.utc)

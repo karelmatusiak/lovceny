@@ -163,7 +163,8 @@ def price_history_thin(db) -> bool:
 def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     """Karty produktů s aspoň jednou cenou – bez ceny do výpisů nepatří."""
     from sqlalchemy.orm import selectinload
-    q = select(Product).options(selectinload(Product.offers).selectinload(Offer.points))
+    q = (select(Product).where(Product.retired_at.is_(None))
+         .options(selectinload(Product.offers).selectinload(Offer.points)))
     if order == "watched":
         watched_ids = [r[0] for r in db.execute(
             select(Watch.product_id, func.count(Watch.id).label("n"))
@@ -234,7 +235,10 @@ def home(request: Request, db=Depends(get_db)):
     from . import blackfriday as bfmod
     from .hero import hero_showcase
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
-    cat_counts = dict(db.execute(select(Product.category_slug, func.count(Product.id)).group_by(Product.category_slug)).all())
+    cat_counts = dict(db.execute(
+        select(Product.category_slug, func.count(Product.id))
+        .where(Product.retired_at.is_(None))
+        .group_by(Product.category_slug)).all())
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
         "thin_history": price_history_thin(db),
@@ -394,6 +398,16 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     p = db.get(Product, pid)
     if not p:
         raise HTTPException(404)
+    # Soft-retired: 301 na kategorii (nebo /), ať staré URL nepřijdou o SEO/uživatele.
+    if p.retired_at is not None:
+        cat = BY_SLUG.get(p.category_slug or "")
+        target = f"/kategorie/{cat.slug}" if cat else "/"
+        return RedirectResponse(target, status_code=301)
+    # Aktivní: špatný slug → kanonická URL (zachovat canonical chování).
+    if slug and slug != p.slug:
+        q = request.url.query
+        dest = f"/produkt/{p.id}-{p.slug}" + (f"?{q}" if q else "")
+        return RedirectResponse(dest, status_code=301)
     best, v = product_summary(p)
     last_known = last_known_offer(p.offers)
     offers = sort_offers_for_display(p.offers)
@@ -532,7 +546,7 @@ def resolve_compare(db, raw: str) -> list[Product]:
         p = db.get(Product, int(m.group(1))) if m else (
             db.scalar(select(Product).where(Product.slug == part).order_by(Product.id).limit(1))
             if re.match(r"^[a-z0-9-]{1,200}$", part) else None)
-        if p and all(x.id != p.id for x in out):
+        if p and p.retired_at is None and all(x.id != p.id for x in out):
             out.append(p)
     return out
 
@@ -688,7 +702,7 @@ def _cat_rows(db, c):
         out = []
         for pid, bid, v in cached:
             p = by_id.get(pid)
-            if not p:
+            if not p or p.retired_at is not None:
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
             if best is None:
@@ -699,7 +713,8 @@ def _cat_rows(db, c):
         assign_display_names([p for p, _, _ in out])
         return out
 
-    products = db.scalars(select(Product).where(Product.category_slug == c.slug)
+    products = db.scalars(select(Product).where(
+        Product.category_slug == c.slug, Product.retired_at.is_(None))
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     rows = []
     payload = []
@@ -750,7 +765,10 @@ CAT_VIEWS = {
 
 @app.get("/kategorie", response_class=HTMLResponse)
 def categories_index(request: Request, db=Depends(get_db)):
-    counts = dict(db.execute(select(Product.category_slug, func.count(Product.id)).group_by(Product.category_slug)).all())
+    counts = dict(db.execute(
+        select(Product.category_slug, func.count(Product.id))
+        .where(Product.retired_at.is_(None))
+        .group_by(Product.category_slug)).all())
     crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
     return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
                                                              "ld": [seo.breadcrumb_ld(crumbs)]})

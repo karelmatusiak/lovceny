@@ -289,7 +289,11 @@ def test_retire_bad_feed_items_removes_filter_offer(client_db):
     pid = p.id
     st = retire_bad_feed_items(db, dry_run=False)
     assert st["offers"] >= 1
-    assert db.get(Product, pid) is None or not db.get(Product, pid).offers
+    gone = db.get(Product, pid)
+    # soft-retire: řádek zůstane bez nabídek, nebo je retired
+    assert gone is None or (not gone.offers and gone.retired_at is not None) or not gone.offers
+    if gone is not None and not gone.offers:
+        assert gone.retired_at is not None
 
 
 def test_scw_window_cleaner_rejected():

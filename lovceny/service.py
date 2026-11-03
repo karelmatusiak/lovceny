@@ -351,6 +351,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             stats["detached"] += 1
             stats["skipped_mismatch"] += 1
             continue
+        if o.product.retired_at is not None:
+            o.product.retired_at = None  # feed znovu nabízí → vrať do katalogu
         o.url = clean  # sjednotit bez UTM
         o.external_id = it.item_id or o.external_id
         if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
@@ -445,7 +447,7 @@ def cleanup_watches(db: Session, now: datetime | None = None) -> dict:
 # ---------- vyhledávání podle názvu ----------
 def search_db(db: Session, q: str, limit: int = 30) -> list[Product]:
     from sqlalchemy import or_
-    stmt = select(Product)
+    stmt = select(Product).where(Product.retired_at.is_(None))
     for t in q.split():
         stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
     return list(db.scalars(stmt.limit(limit)).all())
@@ -456,7 +458,8 @@ def search_feed_offers(db: Session, q: str, limit: int = 30):
     from .shops.registry import SHOPS
     from .shops.search import SearchHit
     feed_slugs = [s.slug for s in SHOPS.values() if s.source == "feed"]
-    stmt = select(Offer).join(Product).where(Offer.shop.in_(feed_slugs), Offer.price.is_not(None))
+    stmt = select(Offer).join(Product).where(
+        Offer.shop.in_(feed_slugs), Offer.price.is_not(None), Product.retired_at.is_(None))
     for t in q.split():
         stmt = stmt.where(Product.name.ilike(f"%{t}%"))
     return [SearchHit(o.shop, o.product.name, float(o.price), get_shop(o.shop).affiliate_link(o.url),

@@ -197,7 +197,7 @@ def insights(db, now: float | None = None) -> dict[str, Insight]:
     c = _cache.get("all")
     if c and now - c[0] < CACHE_S:
         return c[1]
-    products = db.scalars(select(Product).where(Product.category_slug.is_not(None))
+    products = db.scalars(select(Product).where(Product.category_slug.is_not(None), Product.retired_at.is_(None))
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     by: dict[str, list] = {}
     for p in products:

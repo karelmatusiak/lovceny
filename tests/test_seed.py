@@ -56,7 +56,9 @@ def test_retire_vestavne_removes_dead_offers(client_db):
     db.add(Offer(product=mixed, shop="vestavne", url="https://www.vestavne-spotrebice.cz/y/", status="error"))
     db.commit()
     st = seed.retire_vestavne(db)
-    assert st["offers"] == 2 and st["products"] == 1  # pure vestavne product gone
-    assert db.get(Product, p.id) is None
+    assert st["offers"] == 2 and st["products"] == 1  # pure vestavne soft-retired
+    retired = db.get(Product, p.id)
+    assert retired is not None and retired.retired_at is not None
     assert db.get(Product, mixed.id) is not None
+    assert db.get(Product, mixed.id).retired_at is None
     assert not any(o.shop == "vestavne" for o in db.get(Product, mixed.id).offers)

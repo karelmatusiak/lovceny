@@ -91,7 +91,7 @@ def _candidates(db) -> list[HeroPick]:
     products = db.scalars(
         select(Product)
         .options(selectinload(Product.offers).selectinload(Offer.points))
-        .where(Product.image_url.isnot(None), Product.image_url != "")
+        .where(Product.image_url.isnot(None), Product.image_url != "", Product.retired_at.is_(None))
         .order_by(Product.created_at.desc())
         .limit(_SCAN)
     ).all()

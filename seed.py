@@ -108,6 +108,17 @@ def seed_catalog(db, items, dry_run=False, fetch=True) -> dict:
     return stats
 
 
+def soft_retire_product(prod) -> bool:
+    """Označ produkt jako retired (soft). Vrací True pokud byl právě označen.
+    Nabídky už musí být pryč – řádek zůstává kvůli 301 na kategorii.
+    """
+    from lovceny.models import now as utcnow
+    if prod.retired_at is not None:
+        return False
+    prod.retired_at = utcnow()
+    return True
+
+
 def retire_vestavne(db, dry_run=False) -> dict:
     """Odstraní nabídky vestavne-spotrebice.cz (ConnectTimeout z GitHub Actions) a osamělé produkty."""
     from sqlalchemy import or_
@@ -125,8 +136,7 @@ def retire_vestavne(db, dry_run=False) -> dict:
     from lovceny.models import Product
     for pid, prod in products.items():
         db.refresh(prod)
-        if not prod.offers:
-            db.delete(prod)
+        if not prod.offers and soft_retire_product(prod):
             stats["products"] += 1
     db.commit()
     return stats
@@ -247,7 +257,7 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, dry_ru
 def retire_bad_feed_items(db, dry_run=False) -> dict:
     """Odstraní příslušenství/špatné kategorie, čističe oken, barevné duplicity a převis capu.
 
-    Preferujeme smazání (jako retire_vestavne): bez nabídek produkt zmizí ze sitemap i /produkt.
+    Soft-retire: nabídky smažeme, produktový řádek zůstane s retired_at (301 /produkt → kategorie).
     """
     from lovceny.categories import (
         MIN_PRICE_CZK, accept_feed_item, category_url_conflict, is_accessory_text,
@@ -387,7 +397,7 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
         stats["products"] = len({p.id for p, _ in extra_products})
         stats["reasons"] = (
             [f"{o.shop} {o.product.name[:40]!r} {r}" for o, r in to_delete[:60]]
-            + [f"would-del product {p.id} {p.name[:50]!r} ({r})" for p, r in extra_products[:60]]
+            + [f"would-retire product {p.id} {p.name[:50]!r} ({r})" for p, r in extra_products[:60]]
         )
         return stats
 
@@ -406,9 +416,8 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     db.flush()
     for pid, prod in products.items():
         db.refresh(prod)
-        if not prod.offers:
-            stats["reasons"].append(f"del product {pid} {prod.name[:50]!r}")
-            db.delete(prod)
+        if not prod.offers and soft_retire_product(prod):
+            stats["reasons"].append(f"retire product {pid} {prod.name[:50]!r}")
             stats["products"] += 1
     db.flush()
 
@@ -424,9 +433,8 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
                 stats["offers"] += 1
         db.flush()
         db.refresh(fresh)
-        if not fresh.offers:
-            stats["reasons"].append(f"del product {fresh.id} {fresh.name[:50]!r} ({reason})")
-            db.delete(fresh)
+        if not fresh.offers and soft_retire_product(fresh):
+            stats["reasons"].append(f"retire product {fresh.id} {fresh.name[:50]!r} ({reason})")
             stats["products"] += 1
     # Otrávené EAN po už smazané nabídce (LG TV ← ASUS) – jen při hard conflict názvu
     for prod in list(db.scalars(select(Product)).all()):

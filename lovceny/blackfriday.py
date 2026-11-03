@@ -148,7 +148,8 @@ def rows(db, now: datetime | None = None, category: str = "", shop: str = "", al
     from .verdict import compute, daily_best
     now = now or datetime.now(timezone.utc)
     allow = include_demo() if allow_demo is None else allow_demo
-    q = select(Product).options(selectinload(Product.offers).selectinload(Offer.points))
+    q = (select(Product).where(Product.retired_at.is_(None))
+         .options(selectinload(Product.offers).selectinload(Offer.points)))
     if category:
         q = q.where(Product.category_slug == category)
     out = []
