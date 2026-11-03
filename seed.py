@@ -254,11 +254,12 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     )
     from lovceny.models import Product
     from lovceny.shops import SHOPS, feed as feedmod
-    from lovceny.shops.feed import strip_tracking, variant_family_key
+    from lovceny.shops.feed import offer_conflicts_product, strip_tracking, variant_family_key
 
     stats = {"offers": 0, "products": 0, "reasons": []}
     bad_urls: set[str] = set()
     url_meta: dict[str, str] = {}
+    ean_to_reject_names: dict[str, list[str]] = {}
     for slug in ("istyle", "sencor", "xm"):
         shop = SHOPS.get(slug)
         if not shop or not shop.feed_url:
@@ -275,6 +276,9 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             ) is None:
                 bad_urls.add(clean)
                 url_meta[clean] = it.name
+                if it.ean:
+                    url_meta[clean + "#ean"] = it.ean
+                    ean_to_reject_names.setdefault(it.ean, []).append(it.name)
 
     url_rx = (
         "filtr", "sacek", "sacky", "kryt", "pouzdro", "obal", "sklo", "folie", "case",
@@ -390,6 +394,12 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     products = {}
     for o, reason in to_delete:
         products[o.product_id] = o.product
+        # vyčisti EAN z feed-reject (LG TV ← ASUS EAN)
+        clean = strip_tracking(o.url)
+        rej_ean = url_meta.get(clean + "#ean")
+        if rej_ean and o.product.ean and o.product.ean == rej_ean:
+            o.product.ean = None
+            stats["reasons"].append(f"clear ean {rej_ean} on product {o.product_id}")
         stats["reasons"].append(f"del offer {o.id} {o.shop} {o.product.name[:50]!r} ({reason})")
         db.delete(o)
         stats["offers"] += 1
@@ -418,6 +428,17 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             stats["reasons"].append(f"del product {fresh.id} {fresh.name[:50]!r} ({reason})")
             db.delete(fresh)
             stats["products"] += 1
+    # Otrávené EAN po už smazané nabídce (LG TV ← ASUS) – jen při hard conflict názvu
+    for prod in list(db.scalars(select(Product)).all()):
+        if not prod.ean:
+            continue
+        for rname in ean_to_reject_names.get(prod.ean, []):
+            if offer_conflicts_product(prod.name or "", "", rname):
+                stats["reasons"].append(
+                    f"clear conflicting ean {prod.ean} on product {prod.id} vs {rname[:40]!r}"
+                )
+                prod.ean = None
+                break
     db.commit()
     return stats
 
