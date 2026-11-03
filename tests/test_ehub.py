@@ -420,3 +420,55 @@ def test_xm_product_page_ehub_rel(client_db, monkeypatch):
     assert "ehub.cz/system/scripts/click.php" in html
     assert "a_bid=0ff74973" in html
     assert "nofollow sponsored noopener" in html
+
+
+def test_product_line_oled_monitor_vs_tv():
+    """QD-OLED ProArt je monitor, OLED55… je TV – hard conflict / offer_conflicts."""
+    tv = "55\" LG OLED55B65LA černá televize"
+    mon = "ASUS ProArt/PA32UCDM/32''/QD-OLED/4K UHD/240Hz"
+    assert feed._product_line(feed.canonicalize_name(tv)) == "tv"
+    assert feed._product_line(feed.canonicalize_name(mon)) == "monitor"
+    assert feed.offer_conflicts_product(tv, "https://xm.cz/asus-proart-pa32ucdm-32-qd-oled_z1", mon)
+    assert not feed.names_match(tv, mon)
+
+
+def test_feed_category_slug_rejects_pc_parent_components():
+    from lovceny.categories import feed_category_slug, accept_feed_item
+    mon = "Heureka.cz | Elektronika | Počítače a notebooky | Monitory"
+    gpu = "Heureka.cz | Elektronika | Počítače a notebooky | Grafické karty"
+    nb = "Heureka.cz | Elektronika | Počítače a notebooky | Notebooky"
+    assert feed_category_slug(mon) is None
+    assert feed_category_slug(gpu) is None
+    assert feed_category_slug(nb) == "notebooky"
+    assert accept_feed_item("ASUS ProArt PA32UCDM", mon, 34146, url="https://xm.cz/asus-proart") is None
+    assert accept_feed_item("Lenovo ThinkPad X1", nb, 35000, url="https://xm.cz/thinkpad") == "notebooky"
+
+
+def test_apply_feed_skips_ean_mismatch_tv_monitor(client_db):
+    """EAN shoda nestačí, když feed položka je jasně jiný produkt (TV↔monitor)."""
+    from lovceny.shops.feed import FeedItem
+    from lovceny.service import apply_feed
+    from lovceny.models import Offer
+    c, db, make = client_db
+    tv = make([20637], name="55\" LG OLED55B65LA černá", shop="mironet", category="televize")
+    tv.ean = "4711387564714"  # EAN z ASUS monitoru – otrávená data
+    bad = Offer(
+        product=tv, shop="xm",
+        url="https://xm.cz/asus-proart-pa32ucdm-32-qd-oled-4k_z131267",
+        external_id="asus1", price=34146, status="ok", in_stock=True,
+    )
+    db.add(bad)
+    db.commit()
+    items = [FeedItem(
+        "asus1", "ASUS ProArt/PA32UCDM/32''/QD-OLED/4K UHD/240Hz",
+        "https://xm.cz/asus-proart-pa32ucdm-32-qd-oled-4k_z131267", 34146,
+        ean="4711387564714",
+        category="Heureka.cz | Elektronika | Počítače a notebooky | Monitory",
+        in_stock=True,
+    )]
+    st = apply_feed(db, "xm", items, create_missing=False)
+    db.refresh(tv)
+    urls = [o.url for o in tv.offers if o.shop == "xm"]
+    assert not urls, (urls, st)
+    assert st.get("detached", 0) >= 1
+    assert tv.ean is None  # otrávené EAN pryč

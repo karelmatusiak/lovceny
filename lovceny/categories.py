@@ -205,16 +205,27 @@ def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
 
 
 def feed_category_slug(shop_category: str | None) -> str | None:
-    """Mapuje Heureka CATEGORYTEXT na slug jen přes whitelist (bez tipování z názvu)."""
+    """Mapuje Heureka CATEGORYTEXT na slug jen přes whitelist (bez tipování z názvu).
+
+    Hint musí sedět na segment cesty (za `|`), ne jen jako podřetězec rodiče.
+    Jinak „Počítače a notebooky | Monitory/GPU“ spadne pod notebooky.
+    """
     c = _fold(shop_category or "")
     if not c.strip():
         return None
     if any(a in c for a in _ACCESSORY_CATEGORY):
         return None
+    segments = [s.strip() for s in c.split("|") if s.strip()]
     for slug, hints in FEED_CATEGORY_WHITELIST.items():
         for h in hints:
-            if _fold(h).strip() in c:
-                return slug
+            h2 = _fold(h).strip()
+            if not h2:
+                continue
+            for seg in segments:
+                # Prefix segmentu (sluchatk→sluchatka). Ne substring uprostřed
+                # („notebooky“ ∈ „pocitace a notebooky“).
+                if seg == h2 or seg.startswith(h2):
+                    return slug
     return None
 
 

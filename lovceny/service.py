@@ -256,6 +256,13 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             by_url.pop(strip_tracking(o.url), None)
             if o.external_id:
                 by_id.pop(o.external_id, None)
+            # otrávené EAN z chybného soft-match (LG TV ← ASUS EAN)
+            if o.product.ean and it.ean and o.product.ean == it.ean and (
+                correct is None or correct.id != o.product_id
+            ):
+                by_ean_prod.pop(it.ean, None)
+                by_ean_offer.pop(it.ean, None)
+                o.product.ean = None
             if correct is not None and correct.id != o.product_id:
                 other = next((x for x in correct.offers if x.shop == shop_slug and x.id != o.id), None)
                 if other is not None:
@@ -275,11 +282,19 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                     by_id[o.external_id] = o
         if o is None and accepted:
             o = by_ean_offer.get(it.ean) if it.ean else None
+            # EAN na nabídce jiného produktu, ale názvy kolidují → nevěřit EAN
+            if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
+                stats["skipped_mismatch"] += 1
+                o = None
         if o is None:
             if not accepted:
                 stats["skipped"] += 1
                 continue
             prod = by_ean_prod.get(it.ean) if it.ean else None
+            # EAN v katalogu nesmí přebít jasný konflikt názvů (LG TV ← ASUS monitor)
+            if prod is not None and it.name and offer_conflicts_product(prod.name, clean, it.name):
+                stats["skipped_mismatch"] += 1
+                prod = None
             if prod is None:
                 prod = find_by_name(it.name)
             if prod is not None:
@@ -323,6 +338,17 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         else:
             stats["matched"] += 1
         if it.name and offer_conflicts_product(o.product.name, clean, it.name):
+            # Nenechávat špatný desturl – odpoj (případně vyčisti EAN z feedu)
+            by_url.pop(strip_tracking(o.url), None)
+            by_url.pop(clean, None)
+            if o.external_id:
+                by_id.pop(o.external_id, None)
+            if o.product.ean and it.ean and o.product.ean == it.ean:
+                o.product.ean = None
+                by_ean_prod.pop(it.ean, None)
+                by_ean_offer.pop(it.ean, None)
+            db.delete(o)
+            stats["detached"] += 1
             stats["skipped_mismatch"] += 1
             continue
         o.url = clean  # sjednotit bez UTM

@@ -202,7 +202,7 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, dry_ru
     targets = [
         ("istyle", istyle_limit, ("telefony", "notebooky", "sluchatka", "chytre-hodinky", "fotoaparaty", "chytra-domacnost")),
         ("sencor", sencor_limit, ("vysavace", "kavovary", "televize", "chytra-domacnost")),
-        ("xm", xm_limit, ("telefony", "sluchatka", "chytre-hodinky", "notebooky", "vysavace", "kavovary")),
+        ("xm", xm_limit, ("telefony", "sluchatka", "chytre-hodinky", "vysavace", "kavovary")),  # bez notebooky: Heureka „Počítače a notebooky|*“ je plná monitorů/GPU
     ]
 
     def _apple_only(name: str) -> bool:

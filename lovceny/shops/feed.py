@@ -196,12 +196,13 @@ def _product_line(canon: str) -> str | None:
             return line
         if line == "watch" and ("watch" in toks or "applewatch" in compact):
             return "watch"
-    if toks & _LINE_MONITOR or "monitor" in compact:
+    # Monitory dřív než OLED panel (ASUS ProArt QD-OLED ≠ televize OLED55…)
+    if toks & _LINE_MONITOR or "monitor" in compact or "proart" in toks:
         return "monitor"
     if toks & _LINE_TV:
         return "tv"
-    # LG OLED55… bez slova televize – stále TV, ne monitor
-    if any(t.startswith("oled") or t.startswith("qled") for t in toks):
+    # Jen modelové kódy OLED55 / QLED65… – holé „oled“ je i u monitorů
+    if any(re.match(r"^(oled|qled)\d{2}", t) for t in toks):
         return "tv"
     return None
 
