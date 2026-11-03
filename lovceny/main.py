@@ -65,10 +65,28 @@ def assign_display_names(products):
     return products
 
 
+# Globální mapa short names (unikátní napříč katalogem). TTL + clear po fetch_prices.
+_DISPLAY_NAMES_TTL_S = 300
+_display_names_cache: tuple[float, dict[int, str]] | None = None
+
+
+def clear_display_names_cache() -> None:
+    global _display_names_cache
+    _display_names_cache = None
+
+
 def assign_all_display_names(db):
-    rows = db.scalars(select(Product)).all()
-    assign_display_names(rows)
-    return {p.id: getattr(p, "display_name", short_name(p.name)) for p in rows}
+    """id → unikátní short name. Cache 5 min; bez načítání celých Product ORM objektů na hit."""
+    import time
+    global _display_names_cache
+    now = time.monotonic()
+    if _display_names_cache and now - _display_names_cache[0] < _DISPLAY_NAMES_TTL_S:
+        return _display_names_cache[1]
+    rows = db.execute(select(Product.id, Product.name)).all()
+    shorts = uniquify_short_names([(n or "") for _, n in rows])
+    mapping = {int(pid): s for (pid, _), s in zip(rows, shorts)}
+    _display_names_cache = (now, mapping)
+    return mapping
 
 
 def dname(p):
@@ -421,8 +439,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     pts = [pt for o in p.offers for pt in o.points]
     ranges = build_chart(pts, verdict=v)
     cat = BY_SLUG.get(p.category_slug or "")
-    # unikátní short name napříč katalogem (levné – stovky řádků)
-    assign_all_display_names(db)
+    # unikátní short name napříč katalogem (mapa s TTL – ne SELECT * Product na každý request)
+    names = assign_all_display_names(db)
+    p.display_name = names.get(p.id) or short_name(p.name or "")
     dn = dname(p)
     crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(dn, f"/produkt/{p.id}-{p.slug}")]
     has_demo = any(pt.is_demo for pt in pts)
@@ -821,14 +840,24 @@ def robots_txt():
 
 # ---------- Obrázky produktů: proxy + zmenšení do WebP ----------
 def _image_proxy_response(w: int, u: str):
-    """Zmenšený WebP obrázek z povoleného obchodu. Chyba → přesměrování na originál (pokud je povolený)."""
+    """Zmenšený WebP z povoleného obchodu. Chyba → 1×1 placeholder (private, no-store), nikdy 302 na originál."""
     if w not in images.WIDTHS or not images.is_allowed(u):
         raise HTTPException(404)
     try:
         data = images.get(u, w)
     except images.ImageError as e:
-        logging.getLogger("lovceny.images").info("obrázek %s (%d): %s → originál", u[:120], w, e)
-        return RedirectResponse(u, 302, headers={"Cache-Control": "public, max-age=600"})
+        logging.getLogger("lovceny.images").info("obrázek %s (%d): %s → placeholder", u[:120], w, e)
+        # no-store: Cloudflare nesmí cachovat chybu (dřív se HIT-ovalo 302 na multi‑MB JPEG).
+        return Response(
+            images.PLACEHOLDER_WEBP,
+            media_type="image/webp",
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "default-src 'none'",
+                "X-Lovceny-Img": "placeholder",
+            },
+        )
     import hashlib
     return Response(data, media_type="image/webp", headers={
         "Cache-Control": "public, max-age=31536000, immutable", "ETag": '"' + hashlib.md5(data).hexdigest() + '"',

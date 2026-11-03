@@ -2,9 +2,10 @@
 
 Bezpečnost: stahujeme jen z hostitelů našich obchodů (domény z registry + jejich CDN), jen http(s),
 max. MAX_BYTES, timeout, redirect jen opět na povolený host, jen obrázky (Pillow ověří formát),
-ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě šablona/endpoint spadne na originální URL.
-Paměť (Render free 512 MiB): najednou jen IMG_CONCURRENCY resize (výchozí 1), malé limity bajtů/pixelů,
-Image.draft + thumbnail, close(), semafor kolem miss cesty. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
+ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě endpoint vrátí malý placeholder
+(Cache-Control: private, no-store) – nikdy 302 na originál (Planeo/Fast JPEG bývá i >3 MB).
+Paměť (Render free 512 MiB): najednou jen IMG_CONCURRENCY resize (výchozí 1), download max 8 MB
+(JPEG dekód přes Image.draft), close(), semafor kolem miss cesty. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
 """
 import hashlib
 import io
@@ -22,8 +23,15 @@ log = logging.getLogger("lovceny.images")
 WIDTHS = (80, 160, 320, 640)
 # Těsné limity: 1 velký Shopify JPEG (~1 MB) se v Pillow snadno nafoukne na desítky MB;
 # 4 souběžné PNG 6k×4k lokálně = ~760 MB RSS → OOM na free 512 MiB.
-MAX_BYTES = 2 * 1024 * 1024
+# Download cap: shop CDN JPEGs (Planeo/Fast) often 2–4 MB. Decode stays small via Image.draft.
+# Peak RSS stays low with IMG_CONCURRENCY=1; do not raise concurrency with this limit.
+MAX_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 8_000_000  # ~8 MP (např. 3500×2300)
+# 1×1 transparent WebP – error response that cards can show or hide; never cache at CF.
+PLACEHOLDER_WEBP = bytes.fromhex(
+    "524946464000000057454250565038580a00000010000000000000000000"
+    "414c504802000000000056503820180000003001009d012a010001000cc0ce25a400037000feec670000"
+)
 TIMEOUT = httpx.Timeout(6.0, connect=4.0)
 MAX_REDIRECTS = 3
 QUALITY = 78
@@ -129,7 +137,8 @@ def proxy_url(url: str | None, w: int) -> str:
 def srcset(url: str | None, px: int) -> dict | None:
     """Atributy <img> pro zobrazenou velikost px (CSS px): src (≈2×) + srcset šířek do ≥ 3× px.
     Nepovolený host → None (šablona použije originál).
-    fallback = lokální /img (když selže wsrv) nebo originál (když už je primární /img)."""
+    fallback = lokální /img když selže wsrv; prázdné když už je primární /img
+    (nikdy originál – multi‑MB JPEG z Planeo/Fast)."""
     if not url or not is_allowed(url):
         return None
     big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
@@ -141,7 +150,7 @@ def srcset(url: str | None, px: int) -> dict | None:
         "src": src,
         "srcset": ", ".join(f"{proxy_url(url, w)} {w}w" for w in ws),
         "sizes": f"{px}px",
-        "fallback": local if src != local else url,
+        "fallback": local if src != local else "",
         "orig": url,
     }
 
@@ -171,7 +180,7 @@ def robots_ok(url: str, client: httpx.Client) -> bool:
 
 def _download(url: str, client: httpx.Client | None = None) -> bytes:
     own = client is None
-    c = client or httpx.Client(timeout=TIMEOUT, headers={"User-Agent": USER_AGENT, "Accept": "image/*"})
+    c = client or httpx.Client(timeout=TIMEOUT, headers={"User-Agent": USER_AGENT, "Accept": "image/*,*/*;q=0.8", "Accept-Language": "cs,en;q=0.5"})
     try:
         for _ in range(MAX_REDIRECTS + 1):
             if not is_allowed(url):
@@ -210,13 +219,20 @@ def resize_webp(data: bytes, w: int) -> bytes:
     try:
         im = Image.open(io.BytesIO(data))
         # JPEG: dekóduj hned ve zmenšeném měřítku (méně RAM než full decode + resize)
-        try:
-            im.draft("RGB", (w, w * 4))
-        except Exception:
-            pass
-        # size je u většiny formátů dostupné bez plného dekódování
+        # size z hlavičky (bez plného dekódování) – ochrana proti dekompresní bombě
         if im.width * im.height > MAX_PIXELS:
             raise ImageError("příliš mnoho pixelů")
+        fmt = (im.format or "").upper()
+        if fmt == "JPEG":
+            # draft → load dekóduje hned v cílovém měřítku (Planeo/Fast multi‑MB JPEG, nízká RAM)
+            try:
+                im.draft("RGB", (w, w * 4))
+            except Exception:
+                pass
+            try:
+                im.load()
+            except Exception as e:
+                raise ImageError(f"neplatný obrázek: {type(e).__name__}") from e
         im = ImageOps.exif_transpose(im)
         if im.mode not in ("RGB", "RGBA"):
             im = im.convert("RGBA" if ("transparency" in im.info or im.mode in ("LA", "PA", "P")) else "RGB")

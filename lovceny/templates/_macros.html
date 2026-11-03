@@ -48,7 +48,7 @@
 {%- endmacro %}
 {% macro shop_img(url, px=60, priority=false, alt="") -%}
 {%- set a = img_attrs(url, px) -%}
-{%- if a -%}<img src="{{ a.src }}" srcset="{{ a.srcset }}" sizes="{{ a.sizes }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %} data-fallback="{{ a.fallback }}" data-orig="{{ a.orig }}" onerror="this.onerror=null;this.removeAttribute('srcset');this.src=this.dataset.fallback||this.dataset.orig||'';">
+{%- if a -%}<img src="{{ a.src }}" srcset="{{ a.srcset }}" sizes="{{ a.sizes }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %}{% if a.fallback %} data-fallback="{{ a.fallback }}"{% endif %} data-orig="{{ a.orig }}" onerror="this.onerror=null;this.removeAttribute('srcset');if(this.dataset.fallback){this.src=this.dataset.fallback}else{this.style.visibility='hidden';this.removeAttribute('src')}">
 {%- else -%}<img src="{{ url }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %} referrerpolicy="no-referrer" data-orig="{{ url }}" onerror="this.onerror=null;this.style.visibility='hidden';">
 {%- endif -%}
 {%- endmacro %}

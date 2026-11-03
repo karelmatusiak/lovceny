@@ -79,7 +79,7 @@ def test_srcset_attrs():
     assert images.srcset(None, 60) is None
     planeo = images.srcset("https://data.planeo.cz/pics/1/2.jpg", 60)
     assert planeo["src"].startswith("/img/160.webp?u=")
-    assert planeo["fallback"].startswith("https://data.planeo.cz/")
+    assert planeo["fallback"] == ""  # nikdy originál (multi‑MB JPEG)
 
 
 def test_resize_to_webp_keeps_ratio_and_no_upscale():
@@ -183,7 +183,10 @@ def test_endpoint_rejects_and_falls_back(client_db, monkeypatch):
         raise images.ImageError("HTTP 500")
     monkeypatch.setattr(images, "get", boom)
     r = client.get("/img/160", params={"u": OK_URL}, follow_redirects=False)
-    assert r.status_code == 302 and r.headers["location"] == OK_URL  # originál
+    assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
+    assert "no-store" in r.headers["cache-control"] and "private" in r.headers["cache-control"]
+    assert r.headers.get("x-lovceny-img") == "placeholder"
+    assert r.content == images.PLACEHOLDER_WEBP
 
 
 def test_templates_use_srcset(client_db):
@@ -252,3 +255,29 @@ def test_concurrency_serializes_misses(monkeypatch):
         th.join()
     assert not errs
     assert peak == 1, peak
+
+
+def test_large_jpeg_draft_resizes_under_raised_cap(monkeypatch):
+    """Planeo/Fast JPEG >2 MB: dřív ImageError příliš velký; teď draft → malý WebP."""
+    b = io.BytesIO()
+    # šum → soubor >2 MB (dřívější MAX_BYTES), stále < nový 8 MB cap
+    Image.effect_noise((3200, 2400), 128).convert("RGB").save(b, "JPEG", quality=92)
+    data = b.getvalue()
+    assert len(data) > 2 * 1024 * 1024
+    assert len(data) < images.MAX_BYTES
+    out = images.resize_webp(data, 160)
+    im = Image.open(io.BytesIO(out))
+    assert im.format == "WEBP" and im.width == 160
+    assert len(out) < 80_000
+
+
+def test_planeo_template_has_no_orig_fallback(client_db):
+    client, db, make = client_db
+    p = make([1000, 990])
+    p.image_url = "https://mc-static.fast.eu/pics/1/2.jpg"
+    db.commit()
+    html = client.get(f"/produkt/{p.id}").text
+    assert 'src="/img/' in html and "wsrv.nl" not in html
+    # data-fallback atribut chybí (prázdný fallback) – žádný originál
+    assert "data-fallback=\"https://mc-static.fast.eu" not in html
+    assert "data-fallback=\"https://data.planeo" not in html

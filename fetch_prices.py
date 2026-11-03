@@ -135,11 +135,15 @@ def main(argv=None):
         db.rollback()
         log.error("Úklid cenových glitchů selhal: %s", e)
     try:
-        from lovceny import catcache
+        from lovceny import catcache, deals, hero
+        from lovceny.main import clear_display_names_cache
         catcache.clear()
-        log.info("Vyprázdněna cache kategorií")
+        deals.clear_cache()
+        hero.clear_cache()
+        clear_display_names_cache()
+        log.info("Vyprázdněny cache kategorií, slev, hero a display names")
     except Exception as e:  # noqa: BLE001
-        log.error("Vyprázdnění cache kategorií selhalo: %s", e)
+        log.error("Vyprázdnění cache selhalo: %s", e)
     log.info("SOUHRN: %s", dict(report))
     db.close()
     return 1 if report and all(k.endswith(("error", "blocked")) for k in report) else 0
