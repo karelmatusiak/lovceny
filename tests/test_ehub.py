@@ -1,4 +1,4 @@
-"""eHUB affiliate wrapping + Heureka feed matching for iStyle/Sencor."""
+"""eHUB affiliate wrapping + Heureka feed matching for iStyle/Sencor/XM.cz."""
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
 
@@ -39,22 +39,30 @@ def test_shop_affiliate_link_ehub(monkeypatch):
     istyle = get_shop("istyle")
     sencor = get_shop("sencor")
     smarty = get_shop("smarty")
+    xm = get_shop("xm")
     url = "https://istyle.cz/products/iphone-15"
     wrapped = istyle.affiliate_link(url)
     assert "ehub.cz" in wrapped and "a_bid=92ecd9a4" in wrapped and "desturl=" in wrapped
     assert "a_bid=67b5afc3" in sencor.affiliate_link("https://www.sencor.cz/x")
     assert "a_bid=1651aa06" in smarty.affiliate_link("https://www.smarty.cz/x")
+    xm_u = "https://xm.cz/apple-iphone-15_z53756/?id_variation=49121"
+    assert "a_bid=0ff74973" in xm.affiliate_link(xm_u)
+    assert "desturl=" in xm.affiliate_link(xm_u)
     monkeypatch.setenv("EHUB_AID", "")
     assert istyle.affiliate_link(url) == url
+    assert xm.affiliate_link(xm_u) == xm_u
     assert not istyle.affiliate_active
 
 
 def test_status_labels_ehub_shops(monkeypatch):
     monkeypatch.delenv("ISTYLE_FEED_URL", raising=False)
     monkeypatch.delenv("SENCOR_FEED_URL", raising=False)
+    monkeypatch.delenv("XM_FEED_URL", raising=False)
     st, label = get_shop("istyle").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("sencor").status_label()
+    assert st == "ok" and "feed" in label
+    st, label = get_shop("xm").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("smarty").status_label()
     assert st == "ok" and "affiliate" in label.lower()
@@ -64,10 +72,14 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     """GitHub Actions injects empty string for missing secrets; must not hide defaults."""
     monkeypatch.setenv("ISTYLE_FEED_URL", "")
     monkeypatch.setenv("SENCOR_FEED_URL", "")
+    monkeypatch.setenv("XM_FEED_URL", "")
     assert get_shop("istyle").feed_url.startswith("https://")
     assert get_shop("sencor").feed_url.startswith("https://")
+    assert get_shop("xm").feed_url.startswith("https://xm.cz/")
     monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
     assert get_shop("istyle").feed_url == "https://example.test/istyle.xml"
+    monkeypatch.setenv("XM_FEED_URL", "https://example.test/xm.xml")
+    assert get_shop("xm").feed_url == "https://example.test/xm.xml"
 
 
 def test_parse_stream_and_strip_tracking():
@@ -117,7 +129,7 @@ def test_apply_feed_attach_by_ean_and_create():
 def test_obchody_shows_ehub_partners(client_db):
     c, db, make = client_db
     html = c.get("/obchody").text
-    assert "iStyle" in html and "Sencor" in html and "Smarty" in html
+    assert "iStyle" in html and "Sencor" in html and "Smarty" in html and "XM.cz" in html
     assert "oficiální feed" in html
     assert "affiliate odkazy" in html  # Smarty zdroj
 
@@ -334,3 +346,77 @@ def test_pick_feed_create_items_caps_and_collapses():
     picked2 = pick_feed_create_items(items, ("vysavace",))
     assert len(picked2) == FEED_MAX_PER_BRAND_CAT
     assert min(float(p.price) for p in picked2) >= 2499
+
+
+def test_xm_shop_registry_and_click_wrapper(monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    monkeypatch.delenv("XM_FEED_URL", raising=False)
+    xm = get_shop("xm")
+    assert xm is not None and xm.name == "XM.cz" and xm.ehub_bid == "0ff74973"
+    assert xm.source == "feed" and xm.status == "ok"
+    assert "xm.cz" in xm.domains
+    assert xm.feed_url.startswith("https://xm.cz/feed/")
+    dest = "https://xm.cz/apple-iphone-15_z53756/?id_variation=49121"
+    wrapped = xm.affiliate_link(dest)
+    assert wrapped.startswith("https://ehub.cz/system/scripts/click.php?")
+    q = parse_qs(urlparse(wrapped).query)
+    assert q["a_aid"] == ["667205fc"]
+    assert q["a_bid"] == ["0ff74973"]
+    assert unquote(q["desturl"][0]) == dest
+
+
+def test_apply_feed_xm_attach_by_ean():
+    init_db()
+    from lovceny.db import Base, engine
+    Base.metadata.drop_all(bind=engine)
+    init_db()
+    db = SessionLocal()
+    p = Product(name="Apple iPhone 15 128GB Blue", slug=slugify("iphone-15-xm-ean"), ean="0195949036576")
+    db.add(Offer(product=p, shop="mironet", url="https://www.mironet.cz/iphone-15-xm-ean",
+                 status="ok", price=17990, in_stock=True))
+    db.commit()
+    item = feed.FeedItem(
+        item_id="53756_49121",
+        name="Apple iPhone 15 barva Blue paměť 128 GB",
+        url="https://xm.cz/apple-iphone-15_z53756/?id_variation=49121",
+        price=17483,
+        ean="0195949036576",
+        category="Heureka.cz | Elektronika | Mobily, tablety, nositelná elektronika | Mobilní telefony",
+        in_stock=True,
+    )
+    st = apply_feed(db, "xm", [item])
+    assert st["attached"] == 1, st
+    o = db.query(Offer).filter(Offer.shop == "xm").one()
+    assert float(o.price) == 17483 and o.product_id == p.id
+    assert o.in_stock is True
+    # accessory must never attach / create
+    acc = feed.FeedItem(
+        item_id="461_1987",
+        name="Originální Xiaomi Redmi 4 16 GB flipcase barva Černá",
+        url="https://xm.cz/originalni-xiaomi-redmi-4-16-gb-flipcase_z461/?id_variation=1987",
+        price=319,
+        ean="8595633310876",
+        category="Heureka.cz | Elektronika | Mobily, tablety, nositelná elektronika | Příslušenství k mobilům | Pouzdra, skla, fólie | Pouzdra a kryty na mobilní telefony",
+        in_stock=True,
+    )
+    st2 = apply_feed(db, "xm", [acc], create_missing=True, max_create=5)
+    assert st2["skipped_accessory"] >= 1, st2
+    assert st2["created"] == 0
+    assert db.query(Offer).filter(Offer.shop == "xm").count() == 1
+    db.close()
+
+
+def test_xm_product_page_ehub_rel(client_db, monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    c, db, make = client_db
+    p = make([17483], name="Apple iPhone 15 128GB Blue XM page", shop="xm", category="telefony")
+    o = p.offers[0]
+    # unique URL (offers.url is globally unique; prior tests may reuse XM sample URLs)
+    o.url = "https://xm.cz/apple-iphone-15-page-test_z99901/?id_variation=99901"
+    o.in_stock = True
+    db.commit()
+    html = c.get(f"/produkt/{p.id}").text
+    assert "XM.cz" in html
+    assert "ehub.cz/system/scripts/click.php" in html
+    assert "a_bid=0ff74973" in html
+    assert "nofollow sponsored noopener" in html
