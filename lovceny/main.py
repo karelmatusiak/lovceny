@@ -118,6 +118,13 @@ add_compression(app)
 @app.on_event("startup")
 def _startup():
     init_db()
+    # Obnov soft-tombstony za hard-delete před soft-retire (301 /produkt → kategorie).
+    from .retire_tombstones import restore_tombstones
+    db = SessionLocal()
+    try:
+        restore_tombstones(db)
+    finally:
+        db.close()
 
 
 def get_db():
@@ -392,8 +399,8 @@ def preview(request: Request, url: str = "", db=Depends(get_db)):
                                                           "noindex": True}, headers={"X-Robots-Tag": "noindex"})
 
 
-@app.get("/produkt/{pid:int}-{slug}", response_class=HTMLResponse)
-@app.get("/produkt/{pid:int}", response_class=HTMLResponse)
+@app.api_route("/produkt/{pid:int}-{slug}", methods=["GET", "HEAD"], response_class=HTMLResponse)
+@app.api_route("/produkt/{pid:int}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str = "", db=Depends(get_db)):
     p = db.get(Product, pid)
     if not p:
