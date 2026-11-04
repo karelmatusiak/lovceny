@@ -35,8 +35,10 @@ def test_obchody_meta_and_wait_badge(client_db):
 def test_footer_sidlo(client_db):
     c, db, make = client_db
     home = c.get("/").text
-    assert "U Hřiště 267/16" in home and "747 71 Brumovice" in home
-    assert "IČO 30210453" in home
+    assert "Brumovice" not in home and "Hřiště" not in home
+    assert "IČO 30210453" in home and 'href="/kontakt"' in home
+    about = c.get("/o-nas").text
+    assert "U Hřiště 267/16" in about and "747 71 Brumovice" in about and "neplátce DPH" in about
 
 
 def test_single_shop_coverage_copy(client_db):
