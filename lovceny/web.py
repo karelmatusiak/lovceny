@@ -5,11 +5,17 @@ from functools import lru_cache
 from pathlib import Path
 
 STATIC_DIR = Path(__file__).parent / "static"
-DEFAULT_PUBLIC_URL = "https://lovceny.onrender.com"
+# Kanonická produkční doména – SEO (canonical, og:url, JSON-LD, sitemap) sem vždy.
+CANONICAL_PUBLIC_URL = "https://lovceny.cz"
+DEFAULT_PUBLIC_URL = CANONICAL_PUBLIC_URL
 
 
 def public_url() -> str:
-    return (os.environ.get("PUBLIC_URL") or DEFAULT_PUBLIC_URL).rstrip("/")
+    """Absolutní veřejná URL. Legacy onrender host přepisujeme na lovceny.cz."""
+    raw = (os.environ.get("PUBLIC_URL") or DEFAULT_PUBLIC_URL).rstrip("/")
+    if not raw or "onrender.com" in raw.lower():
+        return CANONICAL_PUBLIC_URL
+    return raw
 
 
 def canonical(path: str, query: str = "") -> str:

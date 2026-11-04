@@ -139,11 +139,12 @@ def _fold(s: str) -> str:
 # Stem prefixy (\b + stem): skl=sklo/skla, pouzdr=pouzdro/pouzdrem, …
 _ACCESSORY_NAME = (
     "obal", "kryt", "sklo", "skla", "folie", "drzak", "kabel", "kabely",
-    "nabijeck", "remin", "stojan", "filtr", "nahradn", "sacek", "sacky",
+    "nabijeck", "remin", "stojan", "podstavec", "filtr", "nahradn", "sacek", "sacky",
     "kartac", "adapter", "adaptor", "redukc", "cover", "strap",
     "naramek", "reminek", "powerbank", "baterie na", "magsafe bater",
-    "prislusenstv", "nahradni dil", "cisteni airpods", "sada na cisteni",
+    "prislusenstv", "nahradni dil", "cisteni", "sada na cisteni",
     "premiova sluzba", "istyle comfort", "sluzba istyle",
+    "taska", "brasna", "batoh", "pouzdro na", "pouzdro pro",
 )
 # Název vypadá jako „pouzdro/kryt/obal/sklo … na/pro …“ (ne AirPods s nabíjecím pouzdrem).
 _ACCESSORY_NAME_RX = re.compile(

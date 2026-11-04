@@ -543,7 +543,7 @@ ACCESSORY_WORDS = ("pouzdro", "obal", "kryt", "fólie", "folie", "sklo", "ochran
                    "redukce", "stylus", "ochrana", "panzerglass", "bumper", "silikonov", "quickfit", "tvrzen", "magsafe", "popruh", "náramek pro", "nálepk", "flip", "case")
 
 
-ACCESSORY_WORDS_EXTRA = ("stojan", "sklicko", "lcd displej", "displej +", "nahradni dil", "dotykova plocha", "dotykove sklo", "odvapn", "pohlcovac", "miska", "nahradni", "sacky", "filtr ", "filtry",
+ACCESSORY_WORDS_EXTRA = ("stojan", "podstavec", "cisteni", "sada na cisteni", "sklicko", "lcd displej", "displej +", "nahradni dil", "dotykova plocha", "dotykove sklo", "odvapn", "pohlcovac", "miska", "nahradni", "sacky", "filtr ", "filtry",
                          "nabijeci stanice", "dobijeci stanice", "sada prislusenstvi", "prislusenstvi", "baterie pro",
                          "hadice", "drzak", "odvapnovac", "cistic", "cistici", "batoh", "backpack", "live cards",
                          "darkova karta", "charging", "taska", "brasna", "stolek", "sul ", "sul do", "tablety", "kapsle",

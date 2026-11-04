@@ -22,7 +22,7 @@ services:
       - key: EMAIL_FROM_NAME
         value: Lovceny
       - key: PUBLIC_URL
-        value: https://lovceny.onrender.com   # po napojení domény změnit na https://lovceny.cz
+        value: https://lovceny.cz
       # Web Push (upozornění v prohlížeči). Bez obou klíčů je funkce skrytá.
       - key: VAPID_PUBLIC_KEY
         sync: false

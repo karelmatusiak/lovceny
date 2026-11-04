@@ -59,7 +59,7 @@ def test_rows_verdicts_lowest_and_filters(client_db, monkeypatch):
     assert plain.id not in rs
     h = client.get("/black-friday").text
     assert "BF nejnizsi televize" in h and "Nejnižší naměřená cena" in h and "Za 30 dní bylo levněji" in h
-    assert "§ 12a" in h and '"@type":"FAQPage"' in h and 'rel="canonical" href="https://lovceny.onrender.com/black-friday"' in h
+    assert "§ 12a" in h and '"@type":"FAQPage"' in h and 'rel="canonical" href="https://lovceny.cz/black-friday"' in h
     assert "27. listopadu 2026" in h or "Black Friday" in h
     assert all(b not in h.lower() for b in BANNED)
     f = client.get("/black-friday?kategorie=sluchatka").text

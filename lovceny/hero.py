@@ -17,7 +17,8 @@ from sqlalchemy.orm import selectinload
 from .models import Product, Offer, Watch
 from .verdict import compute, MIN_DAYS, Verdict
 from .deals import _points_for, include_demo
-from .availability import best_buyable_offer
+from .availability import best_buyable_offer, offer_is_buyable
+from .categories import is_accessory_text
 
 HERO_LIMIT = 4
 HERO_TTL_S = 90
@@ -101,6 +102,8 @@ def _candidates(db) -> list[HeroPick]:
     for p in products:
         if not (p.image_url or "").strip():
             continue
+        if is_accessory_text(p.name or "", p.category):
+            continue
         best = best_buyable_offer(p.offers)
         if not best:
             continue
@@ -120,6 +123,9 @@ def _candidates(db) -> list[HeroPick]:
                 v.median90 = median(vals) if v.median90 is None and len(vals) >= 2 else v.median90
         badge = _badge_for(cur, v, hist_n)
         score = _score(cur, v, hist_n, watches.get(p.id, 0))
+        n_shops = len({o.shop for o in p.offers if offer_is_buyable(o) and o.price is not None})
+        if n_shops >= 2:
+            score += 18.0  # preferuj hlavní produkty ve více obchodech
         out.append(HeroPick(p, best, v, badge, score))
     return out
 
@@ -143,6 +149,8 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
         for c in cached:
             p = by_id.get(c["id"])
             if not p or not (p.image_url or "").strip():
+                continue
+            if is_accessory_text(p.name or "", p.category):
                 continue
             best = best_buyable_offer(p.offers)
             if not best:

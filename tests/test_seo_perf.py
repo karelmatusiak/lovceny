@@ -20,7 +20,7 @@ def test_category_pages_unique_titles_and_meta(client_db):
             d = re.search(r'<meta name="description" content="(.*?)">', r.text).group(1)
             assert t not in titles and d not in descs
             titles.add(t), descs.add(d)
-            assert f'<link rel="canonical" href="https://lovceny.onrender.com/kategorie/{c.slug}{suffix}">' in r.text
+            assert f'<link rel="canonical" href="https://lovceny.cz/kategorie/{c.slug}{suffix}">' in r.text
             assert 'property="og:title"' in r.text and 'property="og:url"' in r.text
             types = {o["@type"] for o in _ld(r.text)}
             assert "BreadcrumbList" in types
@@ -71,10 +71,10 @@ def test_sitemap_and_robots(client_db):
     p = make([100], name="Sitemap test výrobek")
     sm = client.get("/sitemap.xml")
     assert sm.headers["content-type"].startswith("application/xml")
-    assert f"https://lovceny.onrender.com/produkt/{p.id}-{p.slug}" in sm.text
-    assert "https://lovceny.onrender.com/kategorie/pracky/ve-sleve" in sm.text
+    assert f"https://lovceny.cz/produkt/{p.id}-{p.slug}" in sm.text
+    assert "https://lovceny.cz/kategorie/pracky/ve-sleve" in sm.text
     rb = client.get("/robots.txt").text
-    assert "Sitemap: https://lovceny.onrender.com/sitemap.xml" in rb and "Disallow: /hledat" in rb and "Disallow: /api/" in rb
+    assert "Sitemap: https://lovceny.cz/sitemap.xml" in rb and "Disallow: /hledat" in rb and "Disallow: /api/" in rb
 
 
 def test_search_and_compare_are_noindex(client_db):

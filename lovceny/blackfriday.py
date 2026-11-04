@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from .categories import is_accessory_text
 from .models import Product, Offer, PushTopicSubscription, TopicSend
 from .util import czk
 from .availability import offer_is_buyable
@@ -154,6 +155,8 @@ def rows(db, now: datetime | None = None, category: str = "", shop: str = "", al
         q = q.where(Product.category_slug == category)
     out = []
     for p in db.scalars(q).all():
+        if is_accessory_text(p.name or "", p.category):
+            continue
         cands = [o for o in p.offers if offer_is_buyable(o) and o.status == "ok" and (not require_fresh or _fresh(o, now))]
         best = min(cands, key=lambda o: float(o.price), default=None)
         if not best or (shop and best.shop != shop):

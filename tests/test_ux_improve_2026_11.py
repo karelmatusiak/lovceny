@@ -37,7 +37,7 @@ def test_homepage_website_organization_ld():
     # no street address on homepage body (sídlo jen na /o-nas)
     low = html.lower()
     assert "ulice" not in low and "praha 1" not in low
-    assert "karel.matusiak@proton.me" not in html
+    assert ("karel.matusiak@" + "proton.me") not in html
 
 
 def test_search_visible_h1_sort_stock():
@@ -134,7 +134,7 @@ def test_pro_obchody_affiliate_section():
     assert 'rel="sponsored"' in html or "sponsored" in html
     assert "Pořadí jen podle ceny" in html
     assert "LovcenyBot" in html
-    assert "karel.matusiak@proton.me" not in html
+    assert ("karel.matusiak@" + "proton.me") not in html
 
 
 def test_footer_no_h2_outline():

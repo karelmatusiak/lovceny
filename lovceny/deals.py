@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from .models import Product, Offer
 from .verdict import compute, Verdict
 from .availability import best_buyable_offer
+from .categories import is_accessory_text
 
 
 def include_demo() -> bool:
@@ -62,6 +63,8 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 50
     now = datetime.now(timezone.utc)
     rows = []
     for p in products:
+        if is_accessory_text(p.name or "", p.category):
+            continue
         best = best_buyable_offer(p.offers)
         if not best:
             continue
@@ -166,6 +169,8 @@ def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]
     now = datetime.now(timezone.utc)
     scored: list[tuple[float, DealRow]] = []
     for p in products:
+        if is_accessory_text(p.name or "", p.category):
+            continue
         best = best_buyable_offer(p.offers)
         if not best:
             continue

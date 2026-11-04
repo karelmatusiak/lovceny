@@ -203,14 +203,19 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
             products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
     else:
         products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
-    out = []
+    from .categories import is_accessory_text
+    from .availability import offer_is_buyable
+    scored = []
     for p in products:
+        if is_accessory_text(p.name or "", p.category):
+            continue
         best, v = product_summary(p)
         if best is None:
             continue
-        out.append((p, best, v))
-        if len(out) >= limit:
-            break
+        n_shops = len({o.shop for o in p.offers if offer_is_buyable(o) and o.price is not None})
+        scored.append((0 if n_shops >= 2 else 1, p, best, v))
+    scored.sort(key=lambda x: x[0])
+    out = [(p, best, v) for _, p, best, v in scored[:limit]]
     assign_display_names([p for p, _, _ in out])
     return out
 

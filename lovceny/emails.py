@@ -13,7 +13,8 @@ _env.filters["czk"] = czk
 
 
 def public_url() -> str:
-    return os.environ.get("PUBLIC_URL", "https://lovceny.onrender.com").rstrip("/")
+    from .web import public_url as _public_url
+    return _public_url()
 
 
 @dataclass

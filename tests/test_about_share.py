@@ -18,12 +18,12 @@ def test_share_button_on_product(client_db):
     client, _, make = client_db
     p = make([1200, 1000], name="Sdílený telefon Alfa")
     html = client.get(f"/produkt/{p.id}").text
-    canon = f"https://lovceny.onrender.com/produkt/{p.id}-{p.slug}"
+    canon = f"https://lovceny.cz/produkt/{p.id}-{p.slug}"
     assert 'class="share"' in html and f'data-share-url="{canon}"' in html and "Kopírovat odkaz" in html
     assert "https://wa.me/?text=" in html and "fb-messenger://share/?link=" in html
     assert "https://x.com/intent/post?text=" in html and "mailto:?subject=" in html
     wa = re.search(r'href="(https://wa\.me/[^"]+)"', html).group(1)
-    assert "Sdílený telefon Alfa" in unquote(wa) and "lovceny.onrender.com" in unquote(wa)
+    assert "Sdílený telefon Alfa" in unquote(wa) and "lovceny.cz" in unquote(wa)
     assert "share.js" in html
 
 
@@ -45,7 +45,7 @@ def test_about_page_content_and_faq_ld(client_db):
     for s in ("Poctivé ceny", "Žádné placené pozice", "Jak vzniká verdikt", "Heureky a Zboží.cz", "Jak vyděláváme",
               "affiliate", "nikdy neovlivní", "Časté dotazy", "Napiš nám", 'action="/kontakt"'):
         assert s in html, s
-    assert '<link rel="canonical" href="https://lovceny.onrender.com/o-nas">' in html
+    assert '<link rel="canonical" href="https://lovceny.cz/o-nas">' in html
     faq = next(d for d in _ld(html) if d.get("@type") == "FAQPage")
     assert len(faq["mainEntity"]) >= 6
     q = faq["mainEntity"][0]
