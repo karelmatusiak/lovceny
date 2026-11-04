@@ -149,3 +149,51 @@ def real_deals(db, *, top: int = 40, fake_limit: int = 20) -> dict:
         "fakes": [_row_payload(r) for r in fakes],
     })
     return {"buys": buys, "fakes": fakes, "include_demo": allow}
+
+
+def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]:
+    """Produkty blízko 90denního minima (pro prázdný /slevy fallback).
+
+    Samostatný sken (ne product_rows) – ten filtruje jen buy/fake. Sem patří i
+    verdikt Počkej, pokud je cena do max_over nad min90. Kupuj vynecháváme.
+    """
+    allow = include_demo()
+    products = db.scalars(
+        select(Product).where(Product.retired_at.is_(None))
+        .options(selectinload(Product.offers).selectinload(Offer.points))
+        .order_by(Product.created_at.desc()).limit(500)
+    ).all()
+    now = datetime.now(timezone.utc)
+    scored: list[tuple[float, DealRow]] = []
+    for p in products:
+        best = best_buyable_offer(p.offers)
+        if not best:
+            continue
+        pts, saw_demo = _points_for(p, allow)
+        v = compute(pts, float(best.price),
+                    float(best.original_price) if best.original_price else None, now=now)
+        if v.code == "buy":
+            continue
+        mn = v.min90
+        if mn is None:
+            continue
+        cur = float(best.price)
+        base = float(mn)
+        if base <= 0:
+            continue
+        over = max(0.0, (cur / base) - 1.0)
+        if over > max_over:
+            continue
+        md = float(v.median90 or 0)
+        save = max(0.0, md - cur) if md else 0.0
+        pct = (save / md * 100) if md else 0.0
+        scored.append((over, DealRow(p, best, v, save, pct, has_demo=saw_demo and allow)))
+    scored.sort(key=lambda x: (x[0], -x[1].savings_pct, -x[1].savings_czk))
+    out = [r for _, r in scored[:limit]]
+    if out:
+        from .names import uniquify_short_names
+        shorts = uniquify_short_names([r.product.name or "" for r in out])
+        for r, s in zip(out, shorts):
+            r.product.display_name = s
+    return out
+

@@ -447,7 +447,9 @@ def cleanup_watches(db: Session, now: datetime | None = None) -> dict:
 # ---------- vyhledávání podle názvu ----------
 def search_db(db: Session, q: str, limit: int = 30) -> list[Product]:
     from sqlalchemy import or_
-    stmt = select(Product).where(Product.retired_at.is_(None))
+    from sqlalchemy.orm import selectinload
+    stmt = (select(Product).where(Product.retired_at.is_(None))
+            .options(selectinload(Product.offers)))
     for t in q.split():
         stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
     return list(db.scalars(stmt.limit(limit)).all())

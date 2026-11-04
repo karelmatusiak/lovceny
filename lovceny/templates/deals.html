@@ -55,12 +55,41 @@
     <div class="empty-ico" aria-hidden="true">🏷️</div>
     <h2 class="h3">Zatím tu žádné skutečné slevy nejsou</h2>
     <p>Verdikt <b>Kupuj</b> dáváme až po týdnu sledování ceny u minima. To je v pořádku – radši žádný žebříček než marketingové „slevy“.</p>
-    <p>Mezitím se podívej na produkty, které už hlídáme, nebo přidej vlastní odkaz z e-shopu.</p>
+    <p>Mezitím ukážeme produkty blízko 90denního minima, nejsledovanější a nejnovější – nebo přidej vlastní odkaz z e-shopu.</p>
     <p class="empty-actions">
       <a class="btn btn-primary" href="/#hledat">Přidat produkt</a>
       <a class="btn btn-ghost" href="/kategorie">Procházet kategorie</a>
     </p>
   </div>
+  {% if near %}
+  <div class="empty-suggest">
+    <h2 class="h3">Blízko 90denního minima</h2>
+    <p class="sub">Ještě nemají verdikt Kupuj, ale aktuální cena je do 12&nbsp;% nad minimem za 90 dní. {{ rank_link() }}</p>
+    <div class="deals-list">
+    {% for r in near %}
+      <article class="card deal-row">
+        <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+          <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
+          <div class="deal-info">
+            <div class="p-name sm">{{ dname(r.product) }}</div>
+            <div class="deal-meta">{{ badge(r.verdict) }}</div>
+          </div>
+          <div class="deal-prices">
+            <b class="pc-price">{{ r.best.price|czk }}</b>
+            {% if r.verdict.min90 %}<span class="deal-was">minimum {{ r.verdict.min90|czk }}</span>{% endif %}
+          </div>
+        </a>
+        <div class="deal-act">
+        {{ cmp_button(r.product) }}
+        {% if r.best and r.best.in_stock is not false %}{% set s = get_shop(r.best.shop) %}
+        <a class="btn btn-shop-sm" href="{{ s.affiliate_link(r.best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  </div>
+  {% endif %}
   {% if watched or newest %}
   {% if watched %}
   <div class="empty-suggest">

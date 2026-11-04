@@ -269,6 +269,7 @@ def home(request: Request, db=Depends(get_db)):
         "thin_history": price_history_thin(db),
         "hero_picks": hero_showcase(db),
         "cat_counts": cat_counts,
+        "ld": [seo.website_ld(), seo.organization_ld()],
     })
 
 
@@ -288,6 +289,10 @@ def kontakt_get():
 def deals_page(request: Request, db=Depends(get_db)):
     data = real_deals(db)
     assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
+    near = []
+    if not data.get("buys"):
+        from . import deals as dealsmod
+        near = dealsmod.near_minima(db, limit=12)
     return tpl.TemplateResponse(request, "deals.html", {
         **data,
         "push_key": pushmod.public_key() if pushmod.enabled() else "",
@@ -295,6 +300,7 @@ def deals_page(request: Request, db=Depends(get_db)):
         "thin_history": price_history_thin(db),
         "newest": priced_product_cards(db, limit=6, order="new"),
         "watched": priced_product_cards(db, limit=6, order="watched"),
+        "near": near,
     })
 
 
@@ -309,7 +315,8 @@ def cookies(request: Request):
 
 
 @app.get("/hledat", response_class=HTMLResponse)
-def search(request: Request, q: str = "", zive: int = 0, db=Depends(get_db)):
+def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
+           skladem: str = "", db=Depends(get_db)):
     q = q.strip()
     if not q:
         return RedirectResponse("/", 303)
@@ -321,12 +328,37 @@ def search(request: Request, q: str = "", zive: int = 0, db=Depends(get_db)):
             return tpl.TemplateResponse(request, "search.html", {"q": q, "results": [], "error": msg, "noindex": True}, status_code=422)
         r = f"/produkt/{prod.id}-{prod.slug}"
         return RedirectResponse(r + (f"?msg={msg}" if msg else ""), 303)
-    results = [(p, *product_summary(p)) for p in search_db(db, q)]
-    results = [r for r in results if r[1] is not None]  # bez ceny nepatří do výpisu
+    products = search_db(db, q)
+    assign_display_names(products)
+    results = []
+    for p in products:
+        best, v = product_summary(p)
+        # Do výsledků i OOS (poslední cena) – bez CTA „Do obchodu“ v šabloně.
+        display = best or last_known_offer(p.offers)
+        if display is not None:
+            results.append((p, display, v))
+    only_stock = skladem in ("1", "ano", "true")
+    if only_stock:
+        results = [(p, b, v) for p, b, v in results if b.in_stock is not False]
+    if razeni == "cena-desc":
+        results.sort(key=lambda r: (
+            r[1].in_stock is False,
+            -(float(r[1].price) if r[1].price is not None else 0),
+        ))
+    else:
+        results.sort(key=lambda r: (
+            r[1].in_stock is False,
+            float(r[1].price) if r[1].price is not None else 1e18,
+        ))
+        razeni = "cena" if razeni != "cena" else razeni
     request.state.an = {"kind": "search", "query": q, "results": len(results)}
     # Málo shod v DB → živé hledání v obchodech. Bez JS (?zive=1) se načte rovnou, jinak přes fetch.
     want_live = len(results) < LIVE_THRESHOLD
-    ctx = {"q": q, "results": results, "error": None, "want_live": want_live, "noindex": True}
+    ctx = {
+        "q": q, "results": results, "error": None, "want_live": want_live, "noindex": True,
+        "razeni": "cena-desc" if razeni == "cena-desc" else "cena",
+        "skladem": only_stock,
+    }
     if want_live and zive:
         ctx.update(_live_ctx(db, q))
     return tpl.TemplateResponse(request, "search.html", ctx)
@@ -802,7 +834,8 @@ def categories_index(request: Request, db=Depends(get_db)):
 
 @app.get("/kategorie/{slug}", response_class=HTMLResponse)
 @app.get("/kategorie/{slug}/{view}", response_class=HTMLResponse)
-def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
+def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
+             znacka: str = "", od: str = "", do: str = "", skladem: str = ""):
     c = _cat_or_404(slug)
     if view not in CAT_VIEWS:
         raise HTTPException(404)
@@ -811,20 +844,51 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db)):
         rows = _ve_sleve_rows(rows)
     else:
         rows = [r for r in rows if r[1] is not None]
+    from .names import guess_brand
+    brands = sorted({b for b in (guess_brand(p.name or "") for p, _, _ in rows) if b})
+    brand = (znacka or "").strip()
+    if brand:
+        rows = [(p, o, v) for p, o, v in rows if guess_brand(p.name or "") == brand]
+    def _f(s):
+        try:
+            return float(str(s).replace(",", ".").replace(" ", ""))
+        except (TypeError, ValueError):
+            return None
+    pmin, pmax = _f(od), _f(do)
+    if pmin is not None:
+        rows = [(p, o, v) for p, o, v in rows if o and float(o.price) >= pmin]
+    if pmax is not None:
+        rows = [(p, o, v) for p, o, v in rows if o and float(o.price) <= pmax]
+    only_stock = skladem in ("1", "ano", "true")
+    if only_stock:
+        rows = [(p, o, v) for p, o, v in rows if o and o.in_stock is not False]
     if view == "nejlevnejsi":
         rows = rows[:20]
-    t, d = CAT_VIEWS[view]
+    title_t, desc_t = CAT_VIEWS[view]
     fmt = {"name": c.name, "name_l": c.name[:1].lower() + c.name[1:], "gen": c.gen}
     path = f"/kategorie/{slug}" + (f"/{view}" if view else "")
     crumbs = [("Lovceny", "/"), (c.name, f"/kategorie/{slug}")] + ([({"nejlevnejsi": "Nejlevnější", "ve-sleve": "Ve slevě"}[view], path)] if view else [])
     priced = [float(b.price) for _, b, _ in rows if b]
     from .categories import CATEGORY_INTROS
+    from urllib.parse import urlencode
+    fq = {}
+    if brand:
+        fq["znacka"] = brand
+    if od.strip():
+        fq["od"] = od.strip()
+    if do.strip():
+        fq["do"] = do.strip()
+    if only_stock:
+        fq["skladem"] = "1"
+    filter_qs = ("?" + urlencode(fq)) if fq else ""
     return tpl.TemplateResponse(request, "category.html", {
         "c": c, "view": view, "rows": rows, "crumbs": crumbs, "canonical_path": path,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
-        "page_title": t.format(**fmt), "page_desc": d.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
+        "page_title": title_t.format(**fmt), "page_desc": desc_t.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
         "thin_history": price_history_thin(db),
         "cat_intro": CATEGORY_INTROS.get(slug) if not view else None,
+        "brands": brands, "filter_brand": brand, "filter_od": od.strip(), "filter_do": do.strip(),
+        "filter_skladem": only_stock, "filter_qs": filter_qs, "filters_active": bool(fq),
         "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(rows, path)]})
 
 

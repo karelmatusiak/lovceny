@@ -2,9 +2,23 @@
 {% block title %}Hledání: {{ q }} | Lovceny{% endblock %}
 {% block description %}Ceny a historie pro „{{ q }}“ v českých e-shopech. Poctivé srovnání bez placených pozic – Kupuj, nebo počkat.{% endblock %}
 {% block body %}<section style="padding-top:24px"><div class="wrap">
-  <h1 class="sr-only">Výsledky hledání: {{ q }}</h1>
-  <form class="search" action="/hledat" method="get" style="margin:0 0 32px"><label><input name="q" value="{{ q }}" aria-label="Hledat" placeholder="Např. levná televize do 8 tisíc"></label><button class="btn btn-primary">Prověřit cenu</button></form>
-  <p class="ai-hint" style="margin:-24px 0 24px">✨ Rozumíme i běžné řeči – napiš třeba „tichá pračka do 10 tisíc“.</p>
+  <h1 class="page-h1 search-h1">Výsledky pro „{{ q }}“</h1>
+  <form class="search search-toolbar" action="/hledat" method="get" style="margin:0 0 16px">
+    <label><input name="q" value="{{ q }}" aria-label="Hledat" placeholder="Např. levná televize do 8 tisíc"></label>
+    <button class="btn btn-primary">Prověřit cenu</button>
+  </form>
+  <form class="filters search-filters" action="/hledat" method="get" aria-label="Filtrovat výsledky">
+    <input type="hidden" name="q" value="{{ q }}">
+    <label class="filt-label">Řazení
+      <select name="razeni" onchange="this.form.submit()">
+        <option value="cena"{% if razeni != 'cena-desc' %} selected{% endif %}>Nejlevnější napřed</option>
+        <option value="cena-desc"{% if razeni == 'cena-desc' %} selected{% endif %}>Nejdražší napřed</option>
+      </select>
+    </label>
+    <label class="filt-check"><input type="checkbox" name="skladem" value="1"{% if skladem %} checked{% endif %} onchange="this.form.submit()"> Jen skladem</label>
+    <noscript><button class="btn btn-ghost btn-sm" type="submit">Použít</button></noscript>
+  </form>
+  <p class="ai-hint" style="margin:0 0 24px">✨ Rozumíme i běžné řeči – napiš třeba „tichá pračka do 10 tisíc“.</p>
   {% if error %}<div class="notice warn">{{ error }} Podporujeme: {% for s in SHOPS.values() %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
   {% if results %}<h2>Sledujeme pro „{{ q }}“</h2><p class="sub rank-sub">Řazeno podle ceny, bez placených pozic. {{ rank_link() }}</p><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>{% endif %}
   {% if want_live and not error %}

@@ -55,6 +55,25 @@
 </div></aside>
 {% endif %}
 
+{% if deals %}
+<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
+  <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
+  <div class="teaser-grid">{% for r in deals %}
+    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+      <div class="p-name sm">{{ dname(r.product) }}</div>
+      {{ badge(r.verdict) }}
+      <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>
+      {% if r.savings_czk > 0 %}<small>ušetříš {{ r.savings_czk|czk }} oproti obvyklé ceně</small>{% endif %}
+      {% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}
+    </a>{% endfor %}
+  </div>
+</div></section>
+{% else %}
+<section class="deals-teaser deals-teaser-quiet" style="padding-top:24px" aria-label="Slevy dne"><div class="wrap">
+  <p class="teaser-empty-quiet"><span class="expect-badge">Slevy dne</span> Až budeme mít aspoň týden historie, ukážeme nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></p>
+</div></section>
+{% endif %}
+
 <section class="home-cats" aria-labelledby="home-cats-h"><div class="wrap">
   <div class="teaser-head"><div><div class="eyebrow">Kategorie</div><h2 id="home-cats-h">Co hlídáme</h2></div>
     <a class="btn btn-ghost" href="/kategorie">Všechny kategorie →</a></div>
@@ -65,6 +84,13 @@
   {% endfor %}
   </ul>
 </div></section>
+
+{% if cards %}
+<section style="padding-top:24px"><div class="wrap">
+  <div class="eyebrow">Právě sledujeme</div><h2>Naposledy přidané produkty</h2>
+  <div class="grid">{% for p, best, v in cards %}{{ pcard(p, best, v) }}{% endfor %}</div>
+</div></section>
+{% endif %}
 
 <section class="how-brief" aria-labelledby="how-h"><div class="wrap">
   <div class="eyebrow">Jak to funguje</div>
@@ -85,32 +111,6 @@
     <button class="btn btn-primary" type="submit"><span aria-hidden="true">🔎</span> Ověřit slevu</button>
   </form>
 </div></div></section>
-
-{% if deals %}
-<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
-  <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
-  <div class="teaser-grid">{% for r in deals %}
-    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-      <div class="p-name sm">{{ dname(r.product) }}</div>
-      {{ badge(r.verdict) }}
-      <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>
-      {% if r.savings_czk > 0 %}<small>ušetříš {{ r.savings_czk|czk }} oproti obvyklé ceně</small>{% endif %}
-      {% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}
-    </a>{% endfor %}
-  </div>
-</div></section>
-{% else %}
-<section class="deals-teaser deals-teaser-quiet" style="padding-top:24px" aria-label="Slevy dne"><div class="wrap">
-  <p class="teaser-empty-quiet"><span class="expect-badge">Slevy dne</span> Až budeme mít aspoň týden historie, ukážeme nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></p>
-</div></section>
-{% endif %}
-
-{% if cards %}
-<section style="padding-top:24px"><div class="wrap">
-  <div class="eyebrow">Právě sledujeme</div><h2>Naposledy přidané produkty</h2>
-  <div class="grid">{% for p, best, v in cards %}{{ pcard(p, best, v) }}{% endfor %}</div>
-</div></section>
-{% endif %}
 
 <section id="nezavislost"><div class="wrap"><div class="promise" id="metodika">
   <div><div class="eyebrow">Proč nám věřit</div><h2>Pořadí si nikdo nekoupí.</h2>

@@ -1,12 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Pro e-shopy – jak funguje LovcenyBot – Lovceny{% endblock %}
-{% block description %}Informace pro e-shopy: jak funguje robot LovcenyBot, co ukládáme a jak požádat o opravu údajů nebo vyřazení obchodu.{% endblock %}
+{% block title %}Pro e-shopy – spolupráce a LovcenyBot – Lovceny{% endblock %}
+{% block description %}Informace pro e-shopy: affiliate spolupráce, jak Lovceny posílá návštěvníky, robot LovcenyBot a oprava údajů. Kontakt: info@lovceny.cz.{% endblock %}
 {% block og_title %}Pro e-shopy – Lovceny{% endblock %}
 {% block body %}
 <section class="legal-page"><div class="wrap prose">
   <div class="eyebrow">Pro e-shopy</div>
   <h1>Pro e-shopy</h1>
-  <p class="sub">Lovceny je nezávislý hlídač cen. Na tvůj obchod posíláme zákazníky, nic za to nechceme a nikomu neprodáváme pořadí.</p>
+  <p class="sub">Lovceny je nezávislý hlídač cen elektroniky. Na tvůj obchod posíláme návštěvníky, kteří už porovnali historii ceny. Pořadí nabídek si nikdo nekoupí – řadíme jen podle ceny.</p>
+
+  <h2 id="spoluprace">Affiliate spolupráce</h2>
+  <p>Pokud máš affiliate program (nebo chceš Lovceny zařadit do sítě jako eHUB), napiš na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>. Shrnutí podmínek:</p>
+  <ul>
+    <li><b>Pořadí jen podle ceny.</b> Affiliate odkaz nemá vliv na pořadí ani na verdikt Kupuj/Počkej. Placené pozice nemáme a mít nebudeme.</li>
+    <li><b>Označení odkazů.</b> Provizní odkazy označujeme atributem <code>rel="sponsored"</code> (případně i nofollow) a ve veřejných textech píšeme, že odkaz může být provizní.</li>
+    <li><b>Co posíláme.</b> Návštěvníky z detailu produktu a z výpisů (kategorie, slevy, hledání). Necílíme remarketing ani nevkládáme reklamní bannery do výsledků.</li>
+    <li><b>Data.</b> Ukládáme cenu, název, URL a čas měření – ne recenze ani obsah tvých stránek. Podrobnosti níže.</li>
+    <li><b>Kontakt.</b> Obchodní i technické dotazy: <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>. Formulář: <a href="/o-nas?tema=spoluprace#kontakt">O nás → spolupráce</a>.</li>
+  </ul>
+  <p><a class="btn btn-primary btn-sm" href="mailto:info@lovceny.cz?subject=Affiliate%20spoluprace%20Lovceny">Napsat na info@lovceny.cz</a>
+     <a class="btn btn-ghost btn-sm" href="/o-nas?tema=spoluprace#kontakt">Kontaktní formulář</a></p>
 
   <h2 id="bot">Jak funguje náš robot</h2>
   <ul>

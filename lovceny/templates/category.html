@@ -8,10 +8,33 @@
   <p class="lead cat-lead">{% if view == 'nejlevnejsi' %}Nejlevnější {{ c.gen }}, které sledujeme – seřazeno jen podle aktuální nejnižší ceny napříč obchody.{% elif view == 've-sleve' %}Jen produkty, jejichž cena je teď u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, sem nezařazujeme.{% else %}{{ c.lead }}{% endif %}</p>
   {{ season_hint(c.slug) }}
   <nav class="cat-tabs" aria-label="Pohled na kategorii">
-    <a href="/kategorie/{{ c.slug }}"{% if not view %} aria-current="page"{% endif %}>Vše</a>
-    <a href="/kategorie/{{ c.slug }}/nejlevnejsi"{% if view == 'nejlevnejsi' %} aria-current="page"{% endif %}>Nejlevnější</a>
-    <a href="/kategorie/{{ c.slug }}/ve-sleve"{% if view == 've-sleve' %} aria-current="page"{% endif %}>Ve slevě</a>
+    <a href="/kategorie/{{ c.slug }}{{ filter_qs }}"{% if not view %} aria-current="page"{% endif %}>Vše</a>
+    <a href="/kategorie/{{ c.slug }}/nejlevnejsi{{ filter_qs }}"{% if view == 'nejlevnejsi' %} aria-current="page"{% endif %}>Nejlevnější</a>
+    <a href="/kategorie/{{ c.slug }}/ve-sleve{{ filter_qs }}"{% if view == 've-sleve' %} aria-current="page"{% endif %}>Ve slevě</a>
   </nav>
+  <form class="filters cat-filters" method="get" action="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}" aria-label="Filtrovat produkty">
+    {% if brands %}
+    <label class="filt-label">Značka
+      <select name="znacka" onchange="this.form.submit()">
+        <option value="">Všechny značky</option>
+        {% for b in brands %}
+        <option value="{{ b }}"{% if filter_brand == b %} selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="filt-label">Cena od
+      <input type="number" name="od" inputmode="decimal" min="0" step="1" placeholder="Kč" value="{{ filter_od or '' }}" aria-label="Cena od">
+    </label>
+    <label class="filt-label">Cena do
+      <input type="number" name="do" inputmode="decimal" min="0" step="1" placeholder="Kč" value="{{ filter_do or '' }}" aria-label="Cena do">
+    </label>
+    <label class="filt-check"><input type="checkbox" name="skladem" value="1"{% if filter_skladem %} checked{% endif %} onchange="this.form.submit()"> Jen skladem</label>
+    <button class="btn btn-ghost btn-sm" type="submit">Filtrovat</button>
+    {% if filters_active %}
+    <a class="btn-link" href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">Zrušit filtry</a>
+    {% endif %}
+  </form>
 </div></section>
 {% if thin_history %}
 <aside class="expect-note expect-note-quiet" role="status"><div class="wrap">
@@ -24,17 +47,18 @@
   <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v) }}{% endfor %}</div>
   {% else %}
   <div class="card chart-empty cat-empty">
-    {% if view == 've-sleve' %}<p><b>Teď tu nic skutečně ve slevě není.</b> Žádný produkt z kategorie není u svého 90denního minima. To je taky užitečná informace: nespěchej.</p>
+    {% if filters_active %}<p><b>Žádný produkt neodpovídá filtrům.</b> Uprav značku nebo cenu, nebo <a href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">zruš filtry</a>.</p>
+    {% elif view == 've-sleve' %}<p><b>Teď tu nic skutečně ve slevě není.</b> Žádný produkt z kategorie není u svého 90denního minima. To je taky užitečná informace: nespěchej.</p>
     {% else %}<p><b>V této kategorii zatím nic nesledujeme.</b> Vyhledej konkrétní model a začneme ho hlídat.</p>{% endif %}
     <p style="margin-top:14px"><a class="btn btn-ghost" href="/#hledat">Vyhledat produkt</a></p>
   </div>
   {% endif %}
   {% if cat_intro %}
-  <details class="cat-intro">
-    <summary>Více o kategorii {{ c.name }}</summary>
+  <div class="cat-intro" id="o-kategorii">
+    <h2 class="h3">O kategorii {{ c.name }}</h2>
     {% for para in cat_intro %}<p>{{ para }}</p>{% endfor %}
     <p class="cat-intro-tip"><a href="/kdy-nakupovat{% if c.slug %}#{{ c.slug }}{% endif %}">Tip: kdy se vyplatí nakupovat →</a></p>
-  </details>
+  </div>
   {% endif %}
   <div class="bw-cat" id="hlidat-rozpocet">
     <div class="bw-cat-text"><div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>

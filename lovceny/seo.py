@@ -104,3 +104,35 @@ def robots_txt() -> str:
         "Disallow: /img/",
         "Disallow: /offline",
         f"Sitemap: {public_url()}/sitemap.xml", ""])
+
+
+def website_ld() -> dict:
+    """WebSite + SearchAction for homepage (Google sitelinks search box)."""
+    return {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Lovceny",
+        "url": _abs("/"),
+        "inLanguage": "cs-CZ",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": _abs("/hledat") + "?q={search_term_string}",
+            },
+            "query-input": "required name=search_term_string",
+        },
+    }
+
+
+def organization_ld() -> dict:
+    """Organization – no street address (contact only via /o-nas#kontakt)."""
+    return {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Lovceny",
+        "url": _abs("/"),
+        "email": "info@lovceny.cz",
+        "logo": _abs("/static/brand/logo.svg"),
+    }
+

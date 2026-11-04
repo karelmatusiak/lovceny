@@ -297,6 +297,39 @@ def _trim_first_segment(seg: str) -> str:
     return _clean_ws(s)
 
 
+
+_KNOWN_BRANDS = frozenset({
+    "Apple", "Samsung", "Xiaomi", "Huawei", "Honor", "Sony", "LG", "Bosch",
+    "Siemens", "Electrolux", "Whirlpool", "Miele", "Gorenje", "Candy", "Beko",
+    "AEG", "Philips", "Panasonic", "Canon", "Nikon", "Fujifilm", "Hisense",
+    "TCL", "Sharp", "Lenovo", "ASUS", "Acer", "HP", "Dell", "MSI", "Razer",
+    "Nintendo", "Microsoft", "Google", "OnePlus", "Oppo", "Realme", "Nothing",
+    "Dyson", "Rowenta", "DeLonghi", "Nespresso", "Krups", "Tefal", "Braun",
+    "KitchenAid", "Garmin", "Polar", "Fitbit", "Amazfit", "Epson", "Brother",
+    "Logitech", "HyperX", "SteelSeries", "Corsair", "JBL", "Bose", "Sennheiser",
+    "GoPro", "DJI", "Meta", "Sencor", "ETA", "Concept", "Banquet", "Remington",
+    "Oral-B", "iRobot", "Roborock", "TrueLife", "Niceboy", "Lamax",
+})
+_BRAND_BY_FOLD = {b.casefold(): b for b in _KNOWN_BRANDS}
+
+
+def guess_brand(name: str) -> str | None:
+    """Guess brand from product name (first token / known list). For filters only."""
+    if not name:
+        return None
+    tokens = name.strip().replace("\u00a0", " ").split()
+    if not tokens:
+        return None
+    # Multi-word brands first (Oral-B, DeLonghi as one token already)
+    t0 = tokens[0].strip(".,;:()[]")
+    hit = _BRAND_BY_FOLD.get(t0.casefold())
+    if hit:
+        return hit
+    # HP/LG etc. already covered; try stripping trademark marks
+    t0 = t0.rstrip("™®")
+    return _BRAND_BY_FOLD.get(t0.casefold())
+
+
 def short_name(name: str, *, max_len: int = 78) -> str:
     """Brand + model + klíčová varianta; bez výčtu specifikací."""
     raw = _clean_ws(name)

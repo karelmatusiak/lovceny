@@ -8,16 +8,17 @@ from lovceny.main import app
 def test_nav_simplified_links():
     init_db()
     html = TestClient(app).get("/").text
-    # Main nav links (panel)
-    assert 'href="/kategorie"' in html
-    assert 'href="/slevy"' in html
-    assert 'href="/kdy-nakupovat"' in html
-    assert 'href="/o-nas"' in html
+    # Main nav: Kategorie | Hledat | Slevy | O nás (+ CTA)
+    nav = html.split('class="nav-links"', 1)[1].split("</div>", 1)[0]
+    assert 'href="/kategorie"' in nav
+    assert 'href="/#hledat"' in nav and "Hledat" in nav
+    assert 'href="/slevy"' in nav
+    assert 'href="/o-nas"' in nav
+    assert 'href="/kdy-nakupovat"' not in nav  # přesunuto do patičky
+    assert 'href="/kdy-nakupovat"' in html  # zůstává ve footeru / obsahu
     assert ">Prověřit cenu<" in html or ">Prověřit cenu</a>" in html
-    # Ověř slevu not duplicated in nav panel as primary CTA
     assert 'class="btn btn-verify"' not in html
     assert 'class="nav-verify"' not in html
-    # Still reachable from footer + hero alt link
     assert html.count('href="/over-slevu"') >= 2
     assert "nebo ověř slevu z odkazu" in html
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
@@ -39,16 +40,18 @@ def test_home_category_tiles():
     assert "Slevy dne" in html
 
 
-def test_category_intro_collapsible():
+def test_category_intro_visible():
     init_db()
     html = TestClient(app).get("/kategorie/telefony").text
     assert "cat-intro" in html
-    assert "Více o kategorii" in html
+    assert "O kategorii" in html
+    assert "<details" not in html.split("cat-intro", 1)[1].split("bw-cat", 1)[0]
     assert "Sledujeme ceny mobilů" in html or "mobilů" in html
     assert 'href="/kdy-nakupovat#telefony"' in html
+    assert "cat-filters" in html
     # Not on filtered view
     html2 = TestClient(app).get("/kategorie/telefony/nejlevnejsi").text
-    assert "cat-intro" not in html2 or "Více o kategorii" not in html2
+    assert "cat-intro" not in html2
 
 
 def test_search_meta_description():
