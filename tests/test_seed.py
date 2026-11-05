@@ -12,7 +12,8 @@ def test_catalog_is_valid_and_broad():
     assert cats == set(BY_SLUG)  # každá kategorie má produkty
     for i in items:
         s = shop_for_url(i["url"])
-        assert s and s.can_scrape, i  # jen obchody, které čtení dovolují
+        # scrape teď, nebo feed s nastavenou URL (4Home po přepnutí na Dognet)
+        assert s and (s.can_scrape or (s.source == "feed" and s.feed_url)), i
         assert i["name"].strip()
         assert "vestavne-spotrebice.cz" not in i["url"], i  # GH Actions ConnectTimeout
 

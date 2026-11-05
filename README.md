@@ -46,6 +46,9 @@ Alza a Datart jsou nastavené jako `source="feed"`. Vložený odkaz z Alzy/Datar
 - **Affiliate odkazy**: `ALZA_AFFILIATE_ID` přidá k odkazům `?idp=<ID>`; `DATART_AFFILIATE_ID` analogicky (název parametru upravte v registry podle podmínek programu). Na pořadí ani verdikt to nemá vliv.
 - Test: `tests/test_feed.py`.
 
+### Dognet (Electronic-star, 4Home, Electrolux, Dyson)
+Odkazy jdou přes `https://go.dognet.com/?chid=…&url=`. Výchozí kanál Lovceny.cz je v kódu (`9CFqgvpQ`); `DOGNET_CHID` ho přepíše a prázdná hodnota obalení vypne. Feed URL mají veřejný default (`ELECTRONICSTAR_FEED_URL`, `FOURHOME_FEED_URL`, `ELECTROLUX_FEED_URL`, `DYSON_FEED_URL`). 4Home je Google Shopping XML použitý jen jako katalog srovnávače – ne jako zdroj pro Google Shopping / CSS. Dyson stahuje stránky TradeDoubler feedu, dokud nejsou prázdné. Seed (`--from-feeds`) bere jen pračky, lednice, kávovary a vysavače a vynechává filtry, sáčky, kabely a kryty. Allegro (kampaň 493) v tomhle kroku není: feed má stovky tisíc položek. Mall a CZC zůstávají blokované. Test: `tests/test_dognet.py`.
+
 ### Živé hledání v obchodech (`lovceny/shops/search.py`)
 Když text v DB najde méně než 4 produkty, stránka `/hledat` hned zobrazí načítání a přes `/hledat/zive?q=` (bez JS `?zive=1`)
 prohledá obchody s `searcher` v registry – souběžně, timeout 8 s/obchod, cache 10 min v paměti, ≥ 2 s mezi dotazy na doménu.
@@ -57,7 +60,7 @@ robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy
 | Softcom | ✅ `/eshop/default.asp?cls=stoitems&fulltext=` – detail čteme z HTML (bez JSON-LD) |
 | Svět počítačů | ✅ `/hledani/?q=` – detail JSON-LD |
 | AB-COM | ✅ `/hledani?q=` – detail přes meta tagy; URL musí končit „/“ (`trailing_slash`) |
-| 4Home | ✅ `/hledat/?q=` – kuchyň a domácí spotřebiče, detail JSON-LD |
+| 4Home | feed (Dognet, Google XML jako katalog) – živé hledání už nevoláme |
 | Vestavné spotřebiče | ✅ `/search/?search_value=` – vestavné spotřebiče; kategorie je jen v URL (`match_slug`) |
 | ETA | ✅ `/shop/vyhledavani/?q=` – značkový e-shop ETA/Gorenje/Hyundai, detail z HTML |
 | Onlineshop.cz | ✅ `/vyhledavani/?q=` – bereme běžnou cenu, ne cenu se slevovým kódem; detail JSON-LD (v4) |
@@ -72,10 +75,11 @@ robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy
 | Penta | ❌ `Disallow: /` pro ostatní roboty |
 | Conrad, TS Bohemia, Smarty, eBerry, BScom, Euroking, Mader, Lenovo, Xiaomi (mi.com), Tefal, Allegro/Mall, Megapixel (Anubis) | ❌ ochrana proti botům (403 / Cloudflare) |
 | SlevyElektro, Sporilek, Tipa, K24, Comfor, Garmin, Huawei, Apple | ❌ výsledky hledání jen přes JS / interní API – neobcházíme |
-| Dyson.cz | ❌ robots.txt zakazuje `/catalogsearch/` |
+| Dyson.cz | feed přes Dognet (TradeDoubler); živé `/catalogsearch/` robots zakazuje |
 | ProMobily, FotoŠkoda, iSpace, Elektrospot, Počítárna, GigaComputer, LevnaPC | ❌ vyhledávání zakazuje robots.txt |
 | Kuma | ❌ HTTP 429 |
-| iWant, Electronic-star | ❌ ochrana proti botům |
+| iWant | ❌ ochrana proti botům |
+| Electronic-star | feed přes Dognet (Heureka XML); živé stahování stránek ne |
 | Planeo | ❌ `/vyhledavani*` zakázáno v robots.txt (sledování produktů funguje dál) |
 | Xzone | ❌ `?term=` zakázáno v robots.txt |
 | Suntech | ❌ `Disallow: /` |

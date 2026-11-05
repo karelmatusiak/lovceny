@@ -9,23 +9,34 @@ XML se parsuje streamovaně (iterparse) – feedy iStyle/Sencor/XM.cz/EVOLVEO ma
 from __future__ import annotations
 
 import csv
+import html
 import io
+import logging
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 
 import httpx
 
 from ..util import normalize_url
 from ..availability import parse_delivery_date
 
-# Tracking parametry z feedů (Heureka UTM apod.) – pro párování a desturl je odřízneme.
+log = logging.getLogger("lovceny.feed")
+
+# Tracking parametry z feedů (Heureka UTM, FeedOptimise fo_*) – pro párování je odřízneme.
 _TRACKING_KEYS = frozenset({
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
     "gclid", "fbclid", "msclkid", "mc_cid", "mc_eid",
+    "fo_c", "fo_k", "fo_s", "fo_m", "fo_v",
 })
+
+# TradeDoubler products.xml je stránkovaný. Strop, ať omylem neseženeme celý Allegro katalog.
+TD_MAX_PAGES = 25
+_TD_PAGED = re.compile(r"api\.tradedoubler\.com/.+;page=\d+", re.I)
+_TD_INNER_URL = re.compile(r"url\(([^)]+)\)", re.I)
+_MONEY_RE = re.compile(r"[-+]?\d[\d\s\u00a0]*(?:[.,]\d+)?")
 
 
 @dataclass
@@ -375,26 +386,345 @@ def parse_csv(text: str) -> list[FeedItem]:
     return [i for i in (_from_row(r) for r in csv.DictReader(io.StringIO(text), dialect=dialect)) if i]
 
 
-def load(source: str) -> list[FeedItem]:
-    """source = URL nebo cesta k souboru. Velké XML jde přes stream."""
+def _local(tag: str) -> str:
+    return tag.split("}")[-1].lower()
+
+
+def _strip_bom(raw: bytes) -> bytes:
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw[3:]
+    return raw
+
+
+def _money(value) -> float | None:
+    """„899 CZK“, „1 299,50 CZK“ i holé „1290.0“."""
+    if value is None:
+        return None
+    text = str(value).replace("\xa0", " ").strip()
+    if not text:
+        return None
+    m = _MONEY_RE.search(text)
+    return _f(m.group(0)) if m else None
+
+
+def _in_stock_from_text(value: str | None, *, missing: bool | None = None) -> bool | None:
+    if value is None or str(value).strip() == "":
+        return missing
+    av = re.sub(r"\s+", " ", str(value).strip().lower().replace("_", " ").replace("-", " "))
+    if av in ("in stock", "instock", "available", "1", "true", "yes", "skladem"):
+        return True
+    if av in ("out of stock", "outofstock", "unavailable", "0", "false", "no",
+              "nedostupne", "nedostupné", "vyprodano", "preorder", "backorder"):
+        return False
+    return missing
+
+
+def normalize_category(text: str | None) -> str | None:
+    """Sjednotí „A > B“ / HTML entity na cestu se „|“ (whitelist kategorií)."""
+    if not text:
+        return None
+    s = html.unescape(html.unescape(str(text))).strip()
+    if not s:
+        return None
+    s = s.replace(">", "|")
+    s = re.sub(r"\s*\|\s*", " | ", s)
+    s = re.sub(r"\s+", " ", s).strip(" |")
+    return s or None
+
+
+def unwrap_tradedoubler_url(url: str) -> str:
+    """pdt.tradedoubler.com/click?…url(https%3A%2F%2Fshop%2Fprodukt) → cílová URL."""
+    m = _TD_INNER_URL.search(url or "")
+    if not m:
+        return url
+    return unquote(m.group(1))
+
+
+def _clean_product_url(url: str) -> str:
+    return normalize_url(strip_tracking(unwrap_tradedoubler_url(url)))
+
+
+def _detect_format(head: bytes) -> str:
+    h = head.lower()
+    if b"urn:com:tradedoubler" in h or b"<productheader" in h:
+        return "tradedoubler"
+    if b"<productfeed" in h:
+        return "feedoptimise"
+    if b"base.google.com/ns/1.0" in h or (b"<rss" in h and b"<channel" in h):
+        return "google"
+    if b"<shopitem" in h or b"<shop>" in h:
+        return "heureka"
+    if h.lstrip().startswith(b"<"):
+        return "xml"
+    return "csv"
+
+
+def _as_stream(source):
+    if isinstance(source, (bytes, bytearray)):
+        return io.BytesIO(source)
+    return source
+
+
+def parse_google_xml(source) -> list[FeedItem]:
+    """Google Shopping RSS (g:id, title, link, g:price, g:availability, …).
+
+    Používáme ho jen jako katalog pro srovnávač. Ne pro Google Shopping / CSS / placenou reklamu.
+    """
+    out: list[FeedItem] = []
+    for _event, el in ET.iterparse(_as_stream(source), events=("end",)):
+        if _local(el.tag) != "item":
+            continue
+        direct = {}
+        for c in list(el):
+            key = _local(c.tag)
+            direct.setdefault(key, c)
+        link = (direct["link"].text or "").strip() if "link" in direct and direct["link"].text else ""
+        price = _money(direct["price"].text if "price" in direct else None)
+        sale = _money(direct["sale_price"].text if "sale_price" in direct else None)
+        if not link or (price is None and sale is None):
+            el.clear()
+            continue
+        original = None
+        if sale is not None and price is not None and sale < price:
+            original, price = price, sale
+        elif price is None:
+            price = sale
+        title = (direct["title"].text or "").strip() if "title" in direct and direct["title"].text else ""
+        item_id = (direct["id"].text or "").strip() if "id" in direct and direct["id"].text else None
+        image = (direct["image_link"].text or "").strip() if "image_link" in direct and direct["image_link"].text else None
+        gtin = (direct["gtin"].text or "").strip() if "gtin" in direct and direct["gtin"].text else None
+        cat = None
+        for key in ("product_type", "google_product_category"):
+            node = direct.get(key)
+            if node is not None and (node.text or "").strip():
+                cat = node.text
+                break
+        avail = direct["availability"].text if "availability" in direct else None
+        clean = _clean_product_url(link)
+        out.append(FeedItem(
+            item_id=item_id or None,
+            name=title or clean,
+            url=clean,
+            price=price,
+            ean=gtin or None,
+            image=image or None,
+            category=normalize_category(cat),
+            original_price=original,
+            in_stock=_in_stock_from_text(avail, missing=None),
+        ))
+        el.clear()
+    return out
+
+
+def parse_feedoptimise_xml(source) -> list[FeedItem]:
+    """FeedOptimise productFeed (Electrolux a podobné „Other“ feedy)."""
+    out: list[FeedItem] = []
+    for _event, el in ET.iterparse(_as_stream(source), events=("end",)):
+        if _local(el.tag) != "product":
+            continue
+        name = url = image = ean = price_s = prev = avail = ""
+        cat = None
+        for c in list(el):
+            t = _local(c.tag)
+            txt = (c.text or "").strip()
+            if t == "name":
+                name = txt
+            elif t in ("producturl", "url"):
+                url = txt
+            elif t in ("imageurl", "imgurl"):
+                image = txt
+            elif t == "availability":
+                avail = txt
+            elif t == "price":
+                price_s = txt
+            elif t == "previousprice":
+                prev = txt
+            elif t == "ean":
+                ean = txt
+            elif t == "categories":
+                for cc in list(c):
+                    if _local(cc.tag) == "category" and not cat:
+                        cat = cc.attrib.get("name") or (cc.text or "")
+        price = _money(price_s)
+        if not url or price is None:
+            el.clear()
+            continue
+        original = _money(prev)
+        if original is not None and original <= price:
+            original = None
+        clean = _clean_product_url(url)
+        out.append(FeedItem(
+            item_id=(el.attrib.get("id") or None),
+            name=name or clean,
+            url=clean,
+            price=price,
+            ean=ean or None,
+            image=image or None,
+            category=normalize_category(cat),
+            original_price=original,
+            in_stock=_in_stock_from_text(avail, missing=None),
+        ))
+        el.clear()
+    return out
+
+
+def _td_product(el) -> FeedItem | None:
+    name = image = ean = url = ""
+    cat = None
+    item_id = None
+    price = None
+    avail = None
+    avail_seen = False
+    for c in el.iter():
+        t = _local(c.tag)
+        txt = (c.text or "").strip()
+        if t == "name" and not name and txt:
+            name = txt
+        elif t == "productimage" and not image and txt:
+            image = txt
+        elif t == "ean" and not ean and txt:
+            ean = txt
+        elif t == "category" and not cat:
+            cat = c.attrib.get("name") or txt
+        elif t == "producturl" and not url and txt:
+            url = txt
+        elif t == "field" and (c.attrib.get("name") or "").lower() == "availability":
+            avail_seen = True
+            avail = txt
+        elif t == "field" and (c.attrib.get("name") or "").lower() in ("gtin", "ean") and not ean and txt:
+            ean = txt
+        elif t == "offer" and not item_id:
+            item_id = c.attrib.get("sourceProductId") or c.attrib.get("id")
+        elif t == "price" and txt:
+            got = _money(txt)
+            if got is not None:
+                price = got
+    if not url or price is None:
+        return None
+    clean = _clean_product_url(url)
+    # Položka ve feedu bez explicitní dostupnosti bereme jako skladem (katalog ji nabízí).
+    stock = _in_stock_from_text(avail if avail_seen else None, missing=True)
+    return FeedItem(
+        item_id=item_id,
+        name=name or clean,
+        url=clean,
+        price=price,
+        ean=ean or None,
+        image=image or None,
+        category=normalize_category(cat),
+        in_stock=stock,
+    )
+
+
+def parse_tradedoubler(data: bytes | str) -> tuple[list[FeedItem], int | None]:
+    """Jedna stránka TradeDoubler products.xml. Vrací (položky, totalHits)."""
+    raw = data.encode() if isinstance(data, str) else data
+    raw = _strip_bom(raw)
+    items: list[FeedItem] = []
+    total: int | None = None
+    for _event, el in ET.iterparse(io.BytesIO(raw), events=("end",)):
+        t = _local(el.tag)
+        if t == "totalhits":
+            try:
+                total = int((el.text or "").strip())
+            except ValueError:
+                total = None
+            continue
+        if t != "product":
+            continue
+        it = _td_product(el)
+        if it:
+            items.append(it)
+        el.clear()
+    return items, total
+
+
+def _http_get(url: str) -> bytes:
+    try:
+        with httpx.stream("GET", url, timeout=120, follow_redirects=True) as r:
+            r.raise_for_status()
+            chunks = []
+            total = 0
+            for chunk in r.iter_bytes():
+                chunks.append(chunk)
+                total += len(chunk)
+                if total > 80 * 1024 * 1024:  # 80 MB strop
+                    raise RuntimeError(f"feed příliš velký ({total} B)")
+            return b"".join(chunks)
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"stažení feedu selhalo: {e}") from e
+
+
+def _read_source(source: str) -> bytes:
     if source.startswith(("http://", "https://")):
+        return _http_get(source)
+    with open(source, "rb") as f:
+        return f.read()
+
+
+def _is_td_paged(source: str) -> bool:
+    return source.startswith(("http://", "https://")) and bool(_TD_PAGED.search(source))
+
+
+def _load_tradedoubler_paged(url: str) -> list[FeedItem]:
+    m_size = re.search(r";pageSize=(\d+)", url, re.I)
+    page_size = int(m_size.group(1)) if m_size else 100
+    items: list[FeedItem] = []
+    total: int | None = None
+    for page in range(1, TD_MAX_PAGES + 1):
+        page_url = re.sub(r";page=\d+", f";page={page}", url, count=1, flags=re.I)
+        batch, hits = parse_tradedoubler(_http_get(page_url))
+        if total is None:
+            total = hits
+        if not batch:
+            break
+        items.extend(batch)
+        if total is not None and page * page_size >= total:
+            break
+        if len(batch) < page_size:
+            break
+    return items
+
+
+def parse_bytes(raw: bytes) -> list[FeedItem]:
+    """Rozpozná Heureka / Google RSS / FeedOptimise / TradeDoubler / CSV."""
+    raw = _strip_bom(raw)
+    if not raw.lstrip().startswith(b"<"):
+        return parse_csv(raw.decode("utf-8-sig"))
+    kind = _detect_format(raw[:8000])
+    if kind == "google":
+        return parse_google_xml(raw)
+    if kind == "feedoptimise":
+        return parse_feedoptimise_xml(raw)
+    if kind == "tradedoubler":
+        return parse_tradedoubler(raw)[0]
+    if kind == "csv":
+        return parse_csv(raw.decode("utf-8-sig"))
+    return parse_xml_stream(io.BytesIO(raw))
+
+
+def load(source: str) -> list[FeedItem]:
+    """source = URL nebo cesta k souboru. Velké XML jde přes stream.
+
+    TradeDoubler URL s `;page=` stáhne stránky, dokud nejsou prázdné nebo totalHits nesedí
+    (nejvýš TD_MAX_PAGES).
+    """
+    if _is_td_paged(source):
+        return _load_tradedoubler_paged(source)
+    return parse_bytes(_read_source(source))
+
+
+def load_shop(shop) -> list[FeedItem]:
+    """Načte feed obchodu. Veřejná záloha (feed_url_fallback) jen když není env override."""
+    sources = shop.feed_sources()
+    if not sources:
+        raise RuntimeError("feed URL není nastaven")
+    errors: list[str] = []
+    for i, src in enumerate(sources):
         try:
-            with httpx.stream("GET", source, timeout=120, follow_redirects=True) as r:
-                r.raise_for_status()
-                # stahujeme do temp bufferu po částech; pro typ feedu potřebujeme začátek
-                chunks = []
-                total = 0
-                for chunk in r.iter_bytes():
-                    chunks.append(chunk)
-                    total += len(chunk)
-                    if total > 80 * 1024 * 1024:  # 80 MB strop
-                        raise RuntimeError(f"feed příliš velký ({total} B)")
-                raw = b"".join(chunks)
-        except httpx.HTTPError as e:
-            raise RuntimeError(f"stažení feedu selhalo: {e}") from e
-    else:
-        raw = open(source, "rb").read()
-    head = raw.lstrip()[:200]
-    if head.startswith(b"<"):
-        return parse_xml_stream(io.BytesIO(raw))
-    return parse_csv(raw.decode("utf-8-sig"))
+            return load(src)
+        except Exception as e:  # noqa: BLE001 – další URL je záloha
+            errors.append(str(e))
+            if i + 1 < len(sources):
+                log.warning("feed %s selhal (%s), zkouším zálohu", src, e)
+    raise RuntimeError(errors[-1] if errors else "feed selhal")

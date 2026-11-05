@@ -47,6 +47,17 @@ services:
         sync: false
       - key: EVOLVEO_FEED_URL
         sync: false
+      # Dognet (Electronic-star, 4Home, Electrolux, Dyson). Prázdné DOGNET_CHID = vypnuto; jinak výchozí chid v kódu.
+      - key: DOGNET_CHID
+        sync: false
+      - key: ELECTRONICSTAR_FEED_URL
+        sync: false
+      - key: FOURHOME_FEED_URL
+        sync: false
+      - key: ELECTROLUX_FEED_URL
+        sync: false
+      - key: DYSON_FEED_URL
+        sync: false
       # AI hledání – Google Gemini, jen FREE tier (klíč z AI Studia bez billingu). Bez klíče běží hledání bez AI.
       - key: GEMINI_API_KEY
         sync: false

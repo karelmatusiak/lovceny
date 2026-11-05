@@ -145,6 +145,8 @@ _ACCESSORY_NAME = (
     "prislusenstv", "nahradni dil", "cisteni", "sada na cisteni",
     "premiova sluzba", "istyle comfort", "sluzba istyle",
     "taska", "brasna", "batoh", "pouzdro na", "pouzdro pro",
+    # anglické feedy (Dyson / Google): filtr, kabel – ne „HEPA“ v názvu vysavače
+    "filter", "cable",
 )
 # Název vypadá jako „pouzdro/kryt/obal/sklo … na/pro …“ (ne AirPods s nabíjecím pouzdrem).
 _ACCESSORY_NAME_RX = re.compile(
@@ -192,6 +194,11 @@ MIN_PRICE_CZK: dict[str, float] = {
 }
 
 
+def _stem_at_word(text: str, stem: str) -> bool:
+    """Stem na začátku slova. „kabel“ nesedí na „bezkabelové“."""
+    return re.search(r"(^| )"+re.escape(stem), text) is not None
+
+
 def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     """True = příslušenství / náhradní díl / služba – ne hlavní produkt."""
     n = _fold(name)
@@ -200,7 +207,7 @@ def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
         return True
     c = _fold(shop_category or "")
-    if c.strip() and any(a in c for a in _ACCESSORY_CATEGORY):
+    if c.strip() and any(_stem_at_word(c, a) for a in _ACCESSORY_CATEGORY):
         return True
     return False
 
@@ -214,9 +221,10 @@ def feed_category_slug(shop_category: str | None) -> str | None:
     c = _fold(shop_category or "")
     if not c.strip():
         return None
-    if any(a in c for a in _ACCESSORY_CATEGORY):
+    if any(_stem_at_word(c, a) for a in _ACCESSORY_CATEGORY):
         return None
-    segments = [s.strip() for s in c.split("|") if s.strip()]
+    segments = [s.strip() for s in re.split(r"[|>]", c) if s.strip()]
+    found = None
     for slug, hints in FEED_CATEGORY_WHITELIST.items():
         for h in hints:
             h2 = _fold(h).strip()
@@ -225,9 +233,24 @@ def feed_category_slug(shop_category: str | None) -> str | None:
             for seg in segments:
                 # Prefix segmentu (sluchatk→sluchatka). Ne substring uprostřed
                 # („notebooky“ ∈ „pocitace a notebooky“).
-                if seg == h2 or seg.startswith(h2):
-                    return slug
-    return None
+                # U vysavačů navíc celé slovo: „Bezkabelové vysavače“, „Tyčový vysavač“.
+                word = h2 in ("vysavac", "vysavace") and re.search(
+                    rf"(^| ){re.escape(h2)}( |$)", seg
+                )
+                if seg == h2 or seg.startswith(h2) or word:
+                    found = slug
+                    break
+            if found:
+                break
+        if found:
+            break
+    # Rodič „Chladničky“ / „Lednice“ nesmí vtáhnout vinotéku, minibar ani zrací skříň.
+    # „Vysavače listí“ není domácí vysavač.
+    if found == "lednice" and re.search(r"vinotek|zrani|napoj|minibar|autochlad", c):
+        return None
+    if found == "vysavace" and re.search(r"listi|jezerkov", c):
+        return None
+    return found
 
 
 # URL / název sanity: feed CATEGORYTEXT bývá špatně (čistič oken v „Robotické vysavače“).
@@ -273,6 +296,12 @@ def accept_feed_item(
         return None
     feed_slug = feed_category_slug(shop_category)
     if feed_slug is None:
+        return None
+    blob = _fold(name) + " " + _fold(shop_category or "")
+    # Nápojové / zrací skříně nejsou domácí lednice; průmyslový vysavač není tyčový/robot.
+    if feed_slug == "lednice" and re.search(r"vinotek|zrani|napoj|minibar|autochlad", blob):
+        return None
+    if feed_slug == "vysavace" and re.search(r"prumysl", blob):
         return None
     if category_url_conflict(feed_slug, name, url):
         return None

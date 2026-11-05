@@ -47,7 +47,12 @@ def main(argv=None):
         if a.shop and slug != a.shop:
             continue
         try:
-            st = apply_feed(db, slug, feedmod.load(src))
+            shop = SHOPS.get(slug)
+            if shop and src == shop.feed_url:
+                items = feedmod.load_shop(shop)
+            else:
+                items = feedmod.load(src)
+            st = apply_feed(db, slug, items)
             log.info("feed %s: %s", slug, st)
             report[f"{slug}:feed_ok"] += st["matched"]
             stats.add(slug, "ok", 200)

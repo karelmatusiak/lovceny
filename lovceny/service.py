@@ -199,12 +199,22 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     Párování: URL → ITEM_ID → EAN nabídky obchodu → EAN produktu → konzervativní shoda názvu
     (barvy CZ↔EN, kapacita, varianta, MPN). create_missing jen když žádná shoda.
     """
-    from .shops.feed import canonicalize_name, names_match, strip_tracking, offer_conflicts_product
+    from .shops.feed import canonicalize_name, names_match, offer_conflicts_product, strip_tracking
     from .categories import BY_SLUG, accept_feed_item, classify, is_accessory_text
+
+    shop = get_shop(shop_slug)
+    trail = bool(shop and shop.trailing_slash)
+
+    def clean_url(raw: str) -> str:
+        """strip tracking + sjednocení lomítka (4Home a další trailing_slash obchody)."""
+        u = normalize_url(strip_tracking(raw or ""))
+        if trail and shop is not None:
+            return shop.canonical_url(u)
+        return u
 
     stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0, "detached": 0, "reattached": 0, "skipped_mismatch": 0}
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
-    by_url = {strip_tracking(o.url): o for o in offers}
+    by_url = {clean_url(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
     by_ean_offer = {o.product.ean: o for o in offers if o.product.ean}
     products = list(db.scalars(select(Product)).all())
@@ -245,7 +255,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if is_accessory_text(it.name, it.category):
             stats["skipped_accessory"] += 1
             continue
-        clean = strip_tracking(it.url)
+        clean = clean_url(it.url)
         o = by_url.get(clean) or by_id.get(it.item_id)
         # EAN/name soft-match jen když položka projde whitelist + min. cenou
         accepted = accept_feed_item(it.name, it.category, it.price, url=it.url)
@@ -253,7 +263,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
             correct = find_by_name(it.name) if accepted else None
             # vyhoď z indexů před přesunem/smazáním
-            by_url.pop(strip_tracking(o.url), None)
+            by_url.pop(clean_url(o.url), None)
             if o.external_id:
                 by_id.pop(o.external_id, None)
             # otrávené EAN z chybného soft-match (LG TV ← ASUS EAN)
@@ -339,7 +349,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             stats["matched"] += 1
         if it.name and offer_conflicts_product(o.product.name, clean, it.name):
             # Nenechávat špatný desturl – odpoj (případně vyčisti EAN z feedu)
-            by_url.pop(strip_tracking(o.url), None)
+            by_url.pop(clean_url(o.url), None)
             by_url.pop(clean, None)
             if o.external_id:
                 by_id.pop(o.external_id, None)

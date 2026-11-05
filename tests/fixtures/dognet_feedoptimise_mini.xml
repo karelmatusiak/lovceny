@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<productFeed version="2.0">
+  <product id="949280001">
+    <name><![CDATA[Electrolux EW6F1495 pračka předem plněná]]></name>
+    <productURL><![CDATA[https://www.electrolux.cz/laundry/washing-machines/ew6f1495/?fo_c=3998&fo_k=abc&fo_s=tdgb]]></productURL>
+    <imageURL><![CDATA[https://www.electrolux.cz/services/eml/washer.jpg]]></imageURL>
+    <availability><![CDATA[in stock]]></availability>
+    <categories><category name="Péče o prádlo &amp;gt; Pračky &amp;gt; Pračky hluboké předem plněné"/></categories>
+    <price><![CDATA[12990]]></price>
+    <previousPrice><![CDATA[14990]]></previousPrice>
+    <ean><![CDATA[7333394000001]]></ean>
+    <brand><![CDATA[Electrolux]]></brand>
+  </product>
+  <product id="949280002">
+    <name><![CDATA[Electrolux náhradní filtr pračky]]></name>
+    <productURL><![CDATA[https://www.electrolux.cz/laundry/accessories/filter/]]></productURL>
+    <availability><![CDATA[out of stock]]></availability>
+    <categories><category name="Péče o prádlo &amp;gt; Pračky &amp;gt; Příslušenství"/></categories>
+    <price><![CDATA[399]]></price>
+  </product>
+</productFeed>
