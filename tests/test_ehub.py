@@ -1,4 +1,4 @@
-"""eHUB affiliate wrapping + Heureka feed matching for iStyle/Sencor/XM.cz/EVOLVEO."""
+"""eHUB affiliate wrapping + Heureka/Shoptet feed matching for iStyle/Sencor/XM.cz/EVOLVEO/Počítače24."""
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
 
@@ -52,10 +52,15 @@ def test_shop_affiliate_link_ehub(monkeypatch):
     evo_u = "https://eshop.evolveo.cz/evolveo-bonepro--bezdratova-sluchatka/"
     assert "a_bid=f89ce7c7" in evolveo.affiliate_link(evo_u)
     assert "desturl=" in evolveo.affiliate_link(evo_u)
+    p24 = get_shop("pocitace24")
+    p24_u = "https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14/"
+    assert "a_bid=8f4cb4de" in p24.affiliate_link(p24_u)
+    assert "desturl=" in p24.affiliate_link(p24_u)
     monkeypatch.setenv("EHUB_AID", "")
     assert istyle.affiliate_link(url) == url
     assert xm.affiliate_link(xm_u) == xm_u
     assert evolveo.affiliate_link(evo_u) == evo_u
+    assert p24.affiliate_link(p24_u) == p24_u
     assert not istyle.affiliate_active
 
 
@@ -64,6 +69,7 @@ def test_status_labels_ehub_shops(monkeypatch):
     monkeypatch.delenv("SENCOR_FEED_URL", raising=False)
     monkeypatch.delenv("XM_FEED_URL", raising=False)
     monkeypatch.delenv("EVOLVEO_FEED_URL", raising=False)
+    monkeypatch.delenv("POCITACE24_FEED_URL", raising=False)
     st, label = get_shop("istyle").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("sencor").status_label()
@@ -71,6 +77,8 @@ def test_status_labels_ehub_shops(monkeypatch):
     st, label = get_shop("xm").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("evolveo").status_label()
+    assert st == "ok" and "feed" in label
+    st, label = get_shop("pocitace24").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("smarty").status_label()
     assert st == "ok" and "affiliate" in label.lower()
@@ -82,16 +90,20 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("SENCOR_FEED_URL", "")
     monkeypatch.setenv("XM_FEED_URL", "")
     monkeypatch.setenv("EVOLVEO_FEED_URL", "")
+    monkeypatch.setenv("POCITACE24_FEED_URL", "")
     assert get_shop("istyle").feed_url.startswith("https://")
     assert get_shop("sencor").feed_url.startswith("https://")
     assert get_shop("xm").feed_url.startswith("https://xm.cz/")
     assert get_shop("evolveo").feed_url.startswith("https://feeds.mergado.com/evolveo-cz-heureka")
+    assert get_shop("pocitace24").feed_url == "https://www.pocitace24.cz/universal.xml"
     monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
     assert get_shop("istyle").feed_url == "https://example.test/istyle.xml"
     monkeypatch.setenv("XM_FEED_URL", "https://example.test/xm.xml")
     assert get_shop("xm").feed_url == "https://example.test/xm.xml"
     monkeypatch.setenv("EVOLVEO_FEED_URL", "https://example.test/evolveo.xml")
     assert get_shop("evolveo").feed_url == "https://example.test/evolveo.xml"
+    monkeypatch.setenv("POCITACE24_FEED_URL", "https://example.test/pocitace24.xml")
+    assert get_shop("pocitace24").feed_url == "https://example.test/pocitace24.xml"
 
 
 def test_parse_stream_and_strip_tracking():
@@ -142,6 +154,7 @@ def test_obchody_shows_ehub_partners(client_db):
     c, db, make = client_db
     html = c.get("/obchody").text
     assert "iStyle" in html and "Sencor" in html and "Smarty" in html and "XM.cz" in html and "EVOLVEO" in html
+    assert "Počítače24" in html
     assert "oficiální feed" in html
     assert "affiliate odkazy" in html  # Smarty zdroj
 
@@ -540,6 +553,102 @@ def test_evolveo_feed_categories_skip_accessories_and_notebooks():
         "EVOLVEO BonePro, bezdrátová sluchátka na lícní kosti", headphones, 1990,
         url="https://eshop.evolveo.cz/bonepro/",
     ) == "sluchatka"
+
+
+P24_FIXTURE = Path(__file__).parent / "fixtures" / "pocitace24_universal_mini.xml"
+
+
+def test_pocitace24_shop_registry_and_click_wrapper(monkeypatch):
+    from lovceny.shops import shop_for_url
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    monkeypatch.delenv("POCITACE24_FEED_URL", raising=False)
+    shop = get_shop("pocitace24")
+    assert shop is not None and shop.name == "Počítače24" and shop.ehub_bid == "8f4cb4de"
+    assert shop.source == "feed" and shop.status == "ok"
+    assert shop.domains == ["pocitace24.cz"]
+    assert shop.feed_url == "https://www.pocitace24.cz/universal.xml"
+    assert "XML feedu" in shop.note and "eHUB" in shop.note
+    assert shop_for_url("https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14/") is shop
+    assert shop_for_url("https://pocitace24.cz/produkt") is shop
+    dest = "https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14/"
+    wrapped = shop.affiliate_link(dest)
+    assert wrapped.startswith("https://ehub.cz/system/scripts/click.php?")
+    q = parse_qs(urlparse(wrapped).query)
+    assert q["a_aid"] == ["667205fc"]
+    assert q["a_bid"] == ["8f4cb4de"]
+    assert unquote(q["desturl"][0]) == dest
+
+
+def test_parse_pocitace24_universal_xml():
+    """Shoptet „Ostatní“: PRODUCT místo PRODUCTNAME, GTIN-14, bez ITEM_ID."""
+    items = feed.load(str(P24_FIXTURE))
+    assert len(items) == 6
+    nb, pc, oos, cable, bag, mon = items
+    assert nb.name == "Lenovo ThinkPad E14" and nb.price == 8999
+    assert nb.item_id is None
+    assert nb.ean == "8596701837424"  # GTIN-14 s úvodní nulou → EAN-13
+    assert "utm_source" not in nb.url
+    assert nb.url == "https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14/"
+    assert nb.image.startswith("https://cdn.myshoptet.com/")
+    from lovceny import images
+    assert images.is_allowed(nb.image)
+    assert nb.category == "Repasované notebooky" and nb.in_stock is True
+    assert pc.name.startswith("Lenovo ThinkCentre") and pc.ean == "0884116191230"
+    assert pc.category == "Repasované počítče" and pc.in_stock is True
+    assert oos.in_stock is False and oos.price == 1990
+    assert cable.price == 119 and bag.name.startswith("Brašna")
+    assert mon.category.startswith("Monitory")
+
+
+def test_pocitace24_feed_keeps_pcs_and_notebooks_drops_accessories():
+    from lovceny.categories import accept_feed_item
+    items = {it.name: it for it in feed.load(str(P24_FIXTURE))}
+    assert accept_feed_item(
+        items["Lenovo ThinkPad E14"].name, items["Lenovo ThinkPad E14"].category,
+        items["Lenovo ThinkPad E14"].price, url=items["Lenovo ThinkPad E14"].url,
+    ) == "notebooky"
+    assert accept_feed_item(
+        "Lenovo ThinkPad E14", "Repasované notebooky", 4990,
+        url="https://www.pocitace24.cz/repasovane-notebooky/levny/",
+    ) is None  # pod minimem notebooků
+    assert accept_feed_item(
+        items["Lenovo ThinkCentre M900 Tiny"].name, items["Lenovo ThinkCentre M900 Tiny"].category,
+        items["Lenovo ThinkCentre M900 Tiny"].price, url=items["Lenovo ThinkCentre M900 Tiny"].url,
+    ) == "pocitace"
+    assert accept_feed_item(
+        items["Dell OptiPlex 990 SFF"].name, items["Dell OptiPlex 990 SFF"].category, 1990,
+        url=items["Dell OptiPlex 990 SFF"].url,
+    ) == "pocitace"
+    for name in (
+        "Kabel C-TECH patchcord Cat6, UTP, šedý, 2m",
+        'Brašna na notebook 15,6"',
+        'Monitor Dell P2416Db (24", matný)',
+    ):
+        it = items[name]
+        assert accept_feed_item(it.name, it.category, it.price, url=it.url) is None
+
+
+def test_pocitace24_product_page_ehub_rel_and_oos(client_db, monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    c, db, make = client_db
+    p = make([8999], name="Lenovo ThinkPad E14 Počítače24", shop="pocitace24", category="notebooky")
+    o = p.offers[0]
+    o.url = "https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14-page/"
+    o.in_stock = True
+    db.commit()
+    html = c.get(f"/produkt/{p.id}").text
+    assert "Počítače24" in html
+    assert "ehub.cz/system/scripts/click.php" in html
+    assert "a_bid=8f4cb4de" in html
+    assert "nofollow sponsored noopener" in html
+    assert 'class="btn btn-shop"' in html
+    o.in_stock = False
+    db.commit()
+    html_oos = c.get(f"/produkt/{p.id}").text
+    assert "Není skladem" in html_oos
+    assert 'class="btn btn-shop"' not in html_oos
+    assert "Odkaz do obchodu" in html_oos
+    assert "a_bid=8f4cb4de" in html_oos
 
 
 def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):

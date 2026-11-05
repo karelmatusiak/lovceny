@@ -203,15 +203,16 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
 
 # Obchody, jejichž katalog držíme z feedu (retire špatných nabídek i seed).
 FEED_CATALOG_SHOPS = (
-    "istyle", "sencor", "xm", "evolveo",
+    "istyle", "sencor", "xm", "evolveo", "pocitace24",
     "electronicstar", "4home", "electrolux", "dyson",
 )
 
 
 def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolveo_limit=25,
+                    pocitace24_limit=25,
                     electronicstar_limit=25, fourhome_limit=25, electrolux_limit=25, dyson_limit=25,
                     dry_run=False) -> dict:
-    """Konzervativně přidá produkty z Heureka / Dognet feedů.
+    """Konzervativně přidá produkty z Heureka, eHUB a Dognet feedů.
 
     accept_feed_item + sloučení barev + FEED_MAX_PER_BRAND_CAT na značku/kategorii.
     Příslušenství (filtry, sáčky, kabely, kryty) do seedu nepatří.
@@ -226,6 +227,8 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
         ("xm", xm_limit, ("telefony", "sluchatka", "chytre-hodinky", "vysavace", "kavovary")),  # bez notebooky: Heureka „Počítače a notebooky|*“ je plná monitorů/GPU
         # bez notebooky/televize: ve feedu nejsou (podložky, zdroje, antény, TV příslušenství). Telefony jen nad min. cenou.
         ("evolveo", evolveo_limit, ("sluchatka", "chytra-domacnost", "telefony")),
+        # universal.xml: notebooky + stolní/repasované počítače. Kabely, brašny, monitory a software ne.
+        ("pocitace24", pocitace24_limit, ("notebooky", "pocitace")),
         # Dognet: jen kategorie, které Lovceny umí (pračky, lednice, kávovary, vysavače).
         ("electronicstar", electronicstar_limit, ("kavovary", "lednice", "vysavace")),
         ("4home", fourhome_limit, ("vysavace", "kavovary", "pracky", "lednice")),
@@ -478,7 +481,7 @@ def main(argv=None):
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--from-feeds", action="store_true",
-                    help="doplnit katalog z Heureka/Dognet feedů (iStyle, Sencor, XM, EVOLVEO, Electronic-star, 4Home, Electrolux, Dyson)")
+                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, Electronic-star, 4Home, Electrolux, Dyson)")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
@@ -499,7 +502,8 @@ def main(argv=None):
         if a.from_feeds:
             fs = seed_from_feeds(
                 db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-                evolveo_limit=a.feed_limit, electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
+                evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
+                electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
                 electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit, dry_run=a.dry_run)
             print(f"Feed seed: {fs}")
         return
@@ -512,7 +516,8 @@ def main(argv=None):
     if a.from_feeds:
         fs = seed_from_feeds(
             db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-            evolveo_limit=a.feed_limit, electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
+            evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
+            electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
             electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit, dry_run=a.dry_run)
         print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:

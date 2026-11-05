@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SHOP>
+<SHOPITEM>
+  <PRODUCT>Lenovo ThinkPad E14</PRODUCT>
+  <DESCRIPTION>Repasovaný notebook</DESCRIPTION>
+  <URL>https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14/?utm_source=ehub</URL>
+  <IMGURL>https://cdn.myshoptet.com/usr/www.pocitace24.cz/user/shop/orig/e14.jpg</IMGURL>
+  <PRICE>7438</PRICE>
+  <PRICE_VAT>8999</PRICE_VAT>
+  <VAT>21</VAT>
+  <MANUFACTURER>Lenovo</MANUFACTURER>
+  <CATEGORYTEXT>Repasované notebooky</CATEGORYTEXT>
+  <EAN>08596701837424</EAN>
+  <PRODUCTNO></PRODUCTNO>
+  <DELIVERY_DATE>0</DELIVERY_DATE>
+</SHOPITEM>
+<SHOPITEM>
+  <PRODUCT>Lenovo ThinkCentre M900 Tiny</PRODUCT>
+  <DESCRIPTION>Repasovaný stolní počítač</DESCRIPTION>
+  <URL>https://www.pocitace24.cz/repasovane-pocitace/lenovo-thinkcentre-m900-tiny/</URL>
+  <IMGURL>https://cdn.myshoptet.com/usr/www.pocitace24.cz/user/shop/orig/m900.jpg</IMGURL>
+  <PRICE>3298</PRICE>
+  <PRICE_VAT>3990</PRICE_VAT>
+  <VAT>21</VAT>
+  <MANUFACTURER>Lenovo</MANUFACTURER>
+  <CATEGORYTEXT>Repasované počítče</CATEGORYTEXT>
+  <EAN>0884116191230</EAN>
+  <PRODUCTNO></PRODUCTNO>
+  <DELIVERY_DATE>0</DELIVERY_DATE>
+</SHOPITEM>
+<SHOPITEM>
+  <PRODUCT>Dell OptiPlex 990 SFF</PRODUCT>
+  <URL>https://www.pocitace24.cz/repasovane-pocitace/dell-optiplex-990-sff/</URL>
+  <IMGURL>https://cdn.myshoptet.com/usr/www.pocitace24.cz/user/shop/orig/990.jpg</IMGURL>
+  <PRICE_VAT>1990</PRICE_VAT>
+  <CATEGORYTEXT>Repasované počítče</CATEGORYTEXT>
+  <DELIVERY_DATE>-1</DELIVERY_DATE>
+</SHOPITEM>
+<SHOPITEM>
+  <PRODUCT>Kabel C-TECH patchcord Cat6, UTP, šedý, 2m</PRODUCT>
+  <URL>https://www.pocitace24.cz/lan-kabely/kabel-c-tech-patchcord/</URL>
+  <IMGURL>https://cdn.myshoptet.com/usr/www.pocitace24.cz/user/shop/orig/kabel.jpg</IMGURL>
+  <PRICE_VAT>119</PRICE_VAT>
+  <CATEGORYTEXT>Příslušenství | Kabely a redukce | LAN kabely</CATEGORYTEXT>
+  <EAN>8594125013509</EAN>
+  <DELIVERY_DATE>0</DELIVERY_DATE>
+</SHOPITEM>
+<SHOPITEM>
+  <PRODUCT>Brašna na notebook 15,6"</PRODUCT>
+  <URL>https://www.pocitace24.cz/brasny/brasna-na-notebook/</URL>
+  <PRICE_VAT>499</PRICE_VAT>
+  <CATEGORYTEXT>Příslušenství | Brašny</CATEGORYTEXT>
+  <DELIVERY_DATE>0</DELIVERY_DATE>
+</SHOPITEM>
+<SHOPITEM>
+  <PRODUCT>Monitor Dell P2416Db (24", matný)</PRODUCT>
+  <URL>https://www.pocitace24.cz/monitory/monitor-dell-p2416db/</URL>
+  <PRICE_VAT>2660</PRICE_VAT>
+  <CATEGORYTEXT>Monitory | Repasované monitory</CATEGORYTEXT>
+  <DELIVERY_DATE>0</DELIVERY_DATE>
+</SHOPITEM>
+</SHOP>
