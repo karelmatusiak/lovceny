@@ -71,7 +71,7 @@ def periods(year: int | None = None) -> list[Period]:
                ("sluchatka", "chytra-domacnost", "vysavace", "chytre-hodinky"), "☀️"),
         Period("skola", "Zpátky do školy (back-to-school)", (8, 9), "srpen a začátek září",
                "Obchody cílí na studenty – akce bývají na notebooky, tablety a sluchátka.",
-               ("notebooky", "sluchatka"), "🎒"),
+               ("notebooky", "pocitace", "sluchatka"), "🎒"),
         Period("iphone", "Představení nových iPhonů", (9,), "obvykle září",
                "Apple představuje nové iPhony a Apple Watch typicky v září. Starší modely pak v obchodech často zlevňují "
                "a některé se doprodávají.", ("telefony", "chytre-hodinky"), "🍏"),
@@ -82,7 +82,7 @@ def periods(year: int | None = None) -> list[Period]:
                f"letos v pátek {bf.day}. {bf.month}. {bf.year}; akce často trvají celý listopad",
                "Největší slevová akce roku napříč kategoriemi. Pozor: některé „slevy“ se počítají z dříve zvýšené ceny – "
                "porovnej s nejnižší cenou za posledních 30 dní.",
-               ("televize", "notebooky", "sluchatka", "konzole", "vysavace", "kavovary", "chytra-domacnost",
+               ("televize", "notebooky", "pocitace", "sluchatka", "konzole", "vysavace", "kavovary", "chytra-domacnost",
                 "fotoaparaty", "chytre-hodinky", "telefony", "pracky", "lednice"), "🏷️"),
         Period("cyber-monday", "Cyber Monday", (11, 12), f"letos v pondělí {cm.day}. {cm.month}. {cm.year}",
                "Pondělí po Black Friday – pokračování akcí, hlavně v e-shopech s elektronikou.",
@@ -98,6 +98,7 @@ CATEGORY_TIPS = {
     "telefony": "U telefonů se často vyplatí počkat na zářijové představení nových modelů (iPhone) nebo únorové (Samsung Galaxy S) – starší modely pak bývají levnější.",
     "televize": "Televize bývají nejlevnější kolem Black Friday a na jaře, kdy přicházejí nové řady a loňské modely zlevňují.",
     "notebooky": "U notebooků se často vyplatí akce „zpátky do školy“ (srpen–září) a Black Friday.",
+    "pocitace": "U stolních počítačů se často vyplatí Black Friday a akce zpátky do školy (srpen–září), kdy obchody zlevňují repasované i nové sestavy.",
     "sluchatka": "Sluchátka často zlevňují na Black Friday a při letních akcích typu Prime Day (červenec).",
     "pracky": "U praček se často vyplatí Black Friday a povánoční výprodeje (leden).",
     "lednice": "U lednic se často vyplatí Black Friday a povánoční výprodeje (leden).",

@@ -23,6 +23,11 @@ CATEGORIES: list[Category] = [
     Category("notebooky", "Notebooky", "notebooků",
              "Notebooky pro práci, školu i hraní: MacBook, Lenovo, ASUS, HP, Acer a další. Řazeno jen podle ceny.",
              ("notebook", "macbook", "ideapad", "thinkpad", "vivobook", "zenbook", "aspire", "inspiron", "latitude", "probook", "elitebook", "tuf gaming", "laptop"), "💻"),
+    Category("pocitace", "Stolní počítače", "stolních počítačů",
+             "Stolní počítače a repasované kancelářské sestavy. U každé konfigurace vidíš historii ceny a verdikt, jestli kupovat hned, nebo počkat.",
+             ("thinkcentre", "optiplex", "prodesk", "elitedesk", "thinkstation", "pc24 gaming",
+              "stolni pocitac", "stolni pocitace", "repasovane pocitce", "repasovane pocitace",
+              "precision tower"), "🖥️"),
     Category("sluchatka", "Sluchátka", "sluchátek",
              "Bezdrátová i drátová sluchátka – AirPods, Sony, JBL, Bose, Samsung. Historie ceny ukáže, kdy byla nejlevnější.",
              ("sluchatk", "airpods", "jbl tune", "jbl live", "jbl tour", "buds", "headphone", "earbuds", "wh-1000", "wf-1000", "quietcomfort"), "🎧"),
@@ -56,7 +61,7 @@ CATEGORIES: list[Category] = [
 ]
 # pořadí v menu/na stránkách (klasifikace jde v pořadí CATEGORIES – specifičtější dřív)
 _ORDER = ["telefony", "televize", "notebooky", "sluchatka", "pracky", "lednice", "kavovary", "vysavace",
-          "konzole", "chytre-hodinky", "fotoaparaty", "chytra-domacnost"]
+          "konzole", "chytre-hodinky", "fotoaparaty", "chytra-domacnost", "pocitace"]
 _CLASSIFY = list(CATEGORIES)
 CATEGORIES = sorted(CATEGORIES, key=lambda c: _ORDER.index(c.slug))
 
@@ -76,6 +81,11 @@ CATEGORY_INTROS: dict[str, tuple[str, ...]] = {
         'Sledujeme notebooky pro práci, školu i hraní – od MacBooků po běžné Windowsové řady. U každého kusu vidíš ceny v obchodech a vývoj v čase.',
         'Notebooky se často liší konfigurací (RAM, disk, displej); proto u nás porovnávej konkrétní model, ne jen značku. Verdikt Kupuj dáme, až máme aspoň týden historie.',
         'Často se vyplatí akce „zpátky do školy“ (srpen–září) a Black Friday. Tip na sezóny: Kdy nakupovat.',
+    ),
+    'pocitace': (
+        'Sledujeme stolní počítače a repasované kancelářské sestavy z českých e-shopů, které nám dávají oficiální feed. U každého kusu vidíš cenu, historii a verdikt.',
+        'Sestavy se liší procesorem, pamětí a diskem – porovnávej konkrétní konfiguraci, ne jen řadu. Kabely, brašny a drobné příslušenství do téhle kategorie nebereme.',
+        'Často se vyplatí Black Friday a akce zpátky do školy. Tip na sezóny: Kdy nakupovat.',
     ),
     'sluchatka': (
         'Hlídáme bezdrátová i drátová sluchátka – AirPods, Sony, JBL, Bose a další – a ukazujeme, kdy byla cena nejnižší.',
@@ -165,7 +175,10 @@ _ACCESSORY_CATEGORY = (
 # Whitelist: feed CATEGORYTEXT musí obsahovat aspoň jeden hint pro cílovou kategorii.
 FEED_CATEGORY_WHITELIST: dict[str, tuple[str, ...]] = {
     "telefony": ("mobilni telefony", "mobilni telefon", "smartphony", "telefony"),
-    "notebooky": ("notebooky", "notebook", "ultrabook"),
+    "notebooky": ("notebooky", "notebook", "ultrabook", "repasovane notebooky"),
+    # Počítače24 ve feedu píše „Repasované počítče“ (překlep). Ne „počítače“ samotné –
+    # jinak by sedělo i na rodiče „Počítače a notebooky“.
+    "pocitace": ("repasovane pocitce", "repasovane pocitace", "stolni pocitace", "stolni pocitac"),
     "sluchatka": ("sluchatk",),
     "pracky": ("pracky", "pracka"),
     "lednice": ("lednice", "chladnick", "mraznick", "mrazak"),
@@ -181,6 +194,7 @@ FEED_CATEGORY_WHITELIST: dict[str, tuple[str, ...]] = {
 MIN_PRICE_CZK: dict[str, float] = {
     "telefony": 2000,
     "notebooky": 5000,
+    "pocitace": 1500,
     "sluchatka": 500,
     "pracky": 3000,
     "lednice": 3000,

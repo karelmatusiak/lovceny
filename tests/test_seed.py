@@ -9,7 +9,8 @@ def test_catalog_is_valid_and_broad():
     assert 60 <= len(items) <= 200
     assert len({i["url"] for i in items}) == len(items)
     cats = {i["cat"] for i in items}
-    assert cats == set(BY_SLUG)  # každá kategorie má produkty
+    # Stolní počítače plní feed Počítače24 (--from-feeds), ne scrape katalog.
+    assert cats == set(BY_SLUG) - {"pocitace"}
     for i in items:
         s = shop_for_url(i["url"])
         # scrape teď, nebo feed s nastavenou URL (4Home po přepnutí na Dognet)

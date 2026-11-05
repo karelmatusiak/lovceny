@@ -1,7 +1,9 @@
-"""Import oficiálního produktového feedu (Heureka XML formát, případně CSV).
+"""Import oficiálního produktového feedu (Heureka XML, Shoptet „Ostatní“, případně CSV).
 
 Heureka XML:
 <SHOP><SHOPITEM><ITEM_ID/><PRODUCTNAME/><URL/><PRICE_VAT/><EAN/>…</SHOPITEM></SHOP>
+Shoptet universal.xml (eHUB formát „Ostatní“, např. Počítače24): stejný kořen SHOP/SHOPITEM,
+ale název je v PRODUCT (ne PRODUCTNAME), ITEM_ID chybí a EAN bývá GTIN-14 s úvodní nulou.
 CSV: hlavička se stejnými názvy sloupců (ITEM_ID,PRODUCTNAME,URL,PRICE_VAT,EAN).
 
 XML se parsuje streamovaně (iterparse) – feedy iStyle/Sencor/XM.cz/EVOLVEO mají i desítky MB.
@@ -319,6 +321,29 @@ def _f(v):
         return None
 
 
+def _ean13_checksum_ok(s: str) -> bool:
+    if len(s) != 13 or not s.isdigit():
+        return False
+    digits = [int(c) for c in s]
+    total = sum(d * (3 if i % 2 == 0 else 1) for i, d in enumerate(reversed(digits[:-1])))
+    return (10 - (total % 10)) % 10 == digits[-1]
+
+
+def _clean_ean(raw: str | None) -> str | None:
+    """EAN z feedu. Shoptet universal.xml posílá platné EAN-13 jako GTIN-14 s úvodní nulou."""
+    s = re.sub(r"\s+", "", (raw or "").strip())
+    if not s:
+        return None
+    if len(s) == 14 and s.startswith("0") and s.isdigit() and _ean13_checksum_ok(s[1:]):
+        return s[1:]
+    return s
+
+
+def _item_id(r: dict) -> str | None:
+    """ITEM_ID (Heureka). Shoptet „Ostatní“ ho nemá – když je vyplněné, použije se PRODUCTNO."""
+    return (r.get("ITEM_ID") or r.get("PRODUCTNO") or "").strip() or None
+
+
 def _from_row(r: dict) -> FeedItem | None:
     r = {k.upper(): (v or "").strip() for k, v in r.items() if k}
     price = _f(r.get("PRICE_VAT"))
@@ -338,11 +363,11 @@ def _from_row(r: dict) -> FeedItem | None:
         elif str(dd).strip() == "":
             in_stock = False  # chybějící DELIVERY_DATE i AVAILABILITY → nedostupné
     return FeedItem(
-        item_id=r.get("ITEM_ID") or None,
+        item_id=_item_id(r),
         name=r.get("PRODUCTNAME") or r.get("PRODUCT") or url,
         url=strip_tracking(url),
         price=price,
-        ean=(r.get("EAN") or None) or None,
+        ean=_clean_ean(r.get("EAN")),
         image=r.get("IMGURL") or None,
         category=r.get("CATEGORYTEXT") or None,
         original_price=_f(r.get("PRICE_VAT_ORIGINAL")),

@@ -76,7 +76,7 @@
       <p class="fair">Seřazeno výhradně podle ceny (bez dopravy), nikdo za pořadí neplatí. {{ rank_link() }}</p>
       {% if offers|length <= 1 %}
       {% set n_ok = SHOPS.values()|selectattr('can_scrape')|list|length %}
-      <p class="coverage-note">Zatím tu máme cenu z jednoho obchodu. Katalog postupně rozšiřujeme – ceny teď čteme z {{ cz_count(n_ok, "e-shopu", "e-shopů", "e-shopů") }} (viz <a href="/obchody">Hlídané obchody</a>). Affiliate partnerství (např. eHUB u iStyle, Sencor, Smarty) označujeme u odkazů – na pořadí nemá vliv.</p>
+      <p class="coverage-note">Zatím tu máme cenu z jednoho obchodu. Katalog postupně rozšiřujeme – ceny teď čteme z {{ cz_count(n_ok, "e-shopu", "e-shopů", "e-shopů") }} (viz <a href="/obchody">Hlídané obchody</a>). Affiliate partnerství (např. eHUB u iStyle, Sencor, Smarty, Počítače24) označujeme u odkazů – na pořadí nemá vliv.</p>
       {% endif %}
       {{ affiliate_note() }}
     </div>
