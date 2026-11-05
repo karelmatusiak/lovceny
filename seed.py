@@ -146,6 +146,10 @@ def retire_vestavne(db, dry_run=False) -> dict:
 
 # Max nových feed produktů na (značka, kategorie) – ať Vysavače nejsou plné 20× Sencor barev.
 FEED_MAX_PER_BRAND_CAT = 6
+# Allegro má v jedné kategorii desítky reálných konfigurací jedné značky (RAM/disk u notebooků).
+# Strop 20 pořád brání tomu, aby Apple nebo HP zaplnily celý seed.
+ALLEGRO_BRAND_CAP = 20
+ALLEGRO_SEED_LIMIT = 500
 
 
 # Obecná slova na začátku názvu („Notebook Hp…“) nejsou značka.
@@ -155,7 +159,9 @@ _GENERIC_PRODUCT_WORDS = frozenset({
     "tycovy", "roboticky", "kavovar", "automaticky", "pakovy", "sluchatka", "tablet",
     "pocitac", "stolni", "chytry", "chytre", "hodinky", "akumulatorovy", "bezdratovy",
     "bezdratova", "bezdratove", "dratova", "dratove", "novy", "nova", "nove", "herni",
-    "prenosna", "prenosny", "mala", "male", "maly",
+    "prenosna", "prenosny", "mala", "male", "maly", "panske", "damske", "bluetooth",
+    "pro", "max", "plus", "mini", "ultra", "lite", "air", "vykonny", "vykonna",
+    "silny", "silna", "sportovni", "originalni", "usi",
 })
 _KNOWN_BRANDS = (
     "samsung", "xiaomi", "redmi", "lenovo", "asus", "acer", "dell", "huawei", "motorola",
@@ -264,16 +270,23 @@ FEED_CATALOG_SHOPS = (
 
 
 def allegro_seed_limit(feed_limit: int) -> int:
-    """Výchozí --feed-limit 25 nechá Allegro na 60 (víc kategorií). Jiné číslo platí i pro něj."""
+    """Výchozí --feed-limit 25 nechá Allegro na 500. Jiné číslo platí i pro něj."""
     if feed_limit == 25:
-        return 60
+        return ALLEGRO_SEED_LIMIT
     return feed_limit
+
+
+def brand_cap_for_shops(shops: set[str]) -> int:
+    """Allegro smí víc kusů na značku. Ostatní feedové obchody zůstávají na malém stropu."""
+    if shops == {"allegro"}:
+        return ALLEGRO_BRAND_CAP
+    return FEED_MAX_PER_BRAND_CAT
 
 
 def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolveo_limit=25,
                     pocitace24_limit=25,
                     electronicstar_limit=25, fourhome_limit=25, electrolux_limit=25, dyson_limit=25,
-                    allegro_limit=60,
+                    allegro_limit=ALLEGRO_SEED_LIMIT,
                     dry_run=False) -> dict:
     """Konzervativně přidá produkty z Heureka, eHUB a Dognet feedů.
 
@@ -297,7 +310,7 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
         ("4home", fourhome_limit, ("vysavace", "kavovary", "pracky", "lednice")),
         ("electrolux", electrolux_limit, ("pracky", "lednice", "kavovary", "vysavace")),
         ("dyson", dyson_limit, ("vysavace",)),
-        # Allegro: krátké TD dotazy, po filtru kategorií desítky přístrojů napříč katalogem.
+        # Allegro: stejné krátké TD dotazy, po filtru stovky přístrojů (strop na značku drží rozmanitost).
         ("allegro", allegro_limit, (
             "telefony", "notebooky", "pocitace", "televize", "pracky", "lednice",
             "kavovary", "vysavace", "sluchatka", "chytre-hodinky", "konzole",
@@ -330,7 +343,7 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
         bf = _apple_only if slug == "istyle" else None
         picked = pick_feed_create_items(
             items, cats, brand_filter=bf,
-            max_per_brand_cat=4 if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,
+            max_per_brand_cat=ALLEGRO_BRAND_CAP if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,
             prefer_ean=slug == "allegro",
             spread_categories=slug == "allegro",
         )
@@ -480,11 +493,15 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
         cap_groups.setdefault((cat, brand), []).append(p)
 
     for (cat, brand), group in cap_groups.items():
-        if len(group) <= FEED_MAX_PER_BRAND_CAT:
+        shops = set()
+        for p in group:
+            shops |= {o.shop for o in surviving_offers.get(p.id, [])}
+        cap = brand_cap_for_shops(shops)
+        if len(group) <= cap:
             continue
         ranked = sorted(group, key=_max_price, reverse=True)
-        for p in ranked[FEED_MAX_PER_BRAND_CAT:]:
-            extra_products.append((p, f"cap:{cat}/{brand}>{FEED_MAX_PER_BRAND_CAT}"))
+        for p in ranked[cap:]:
+            extra_products.append((p, f"cap:{cat}/{brand}>{cap}"))
 
     if dry_run:
         stats["offers"] = len(to_delete)
