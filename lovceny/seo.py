@@ -35,7 +35,8 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
     d = {"@context": "https://schema.org", "@type": "Product", "name": getattr(p, "display_name", None) or short_name(p.name),
          "url": _abs(f"/produkt/{p.id}-{p.slug}")}
     if p.image_url:
-        d["image"] = p.image_url
+        from .images import normalize_allegro_image
+        d["image"] = normalize_allegro_image(p.image_url)
     if p.ean:
         d["gtin13" if len(p.ean) == 13 else "gtin"] = p.ean
     from .categories import BY_SLUG

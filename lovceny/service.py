@@ -23,6 +23,18 @@ def client() -> PoliteClient:
     return _client
 
 
+def _assign_image(product: Product, incoming: str | None) -> None:
+    """Doplní chybějící obrázek. Allegro /original/ (a /s1024+/) přepíše na /s512/ i když už URL máme."""
+    from .images import normalize_allegro_image
+    if product.image_url:
+        fixed = normalize_allegro_image(product.image_url)
+        if fixed and fixed != product.image_url:
+            product.image_url = fixed
+        return
+    if incoming:
+        product.image_url = normalize_allegro_image(incoming)
+
+
 def _name_from_url(url: str) -> str:
     from urllib.parse import urlparse
     part = [p for p in urlparse(url).path.split("/") if p]
@@ -152,7 +164,7 @@ def _update_offer(db: Session, offer: Offer):
     p = offer.product
     if res.name and (p.name == _name_from_url(offer.url)):
         p.name, p.slug = res.name, slugify(res.name)
-    p.image_url = p.image_url or res.image
+    _assign_image(p, res.image)
     p.ean = p.ean or res.ean
     p.category = p.category or res.category
     if not p.category_slug:
@@ -327,8 +339,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             elif create_missing and accepted and (max_create is None or created < max_create):
                 cat_slug = accepted
                 cat_label = BY_SLUG[cat_slug].name if cat_slug in BY_SLUG else None
-                prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean, image_url=it.image,
+                prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean,
                                category=cat_label, category_slug=cat_slug)
+                _assign_image(prod, it.image)
                 o = Offer(product=prod, shop=shop_slug, url=clean)
                 db.add(o)
                 db.flush()
@@ -368,7 +381,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
             o.product.name, o.product.slug = it.name, slugify(it.name)
         o.product.ean = o.product.ean or it.ean
-        o.product.image_url = o.product.image_url or it.image
+        _assign_image(o.product, it.image)
         if not o.product.category_slug:
             slug, label = clean_category_label(o.product.name, it.category)
             o.product.category_slug = slug

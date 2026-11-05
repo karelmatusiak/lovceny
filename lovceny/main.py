@@ -47,6 +47,7 @@ tpl.env.globals["public_url"] = public_url
 tpl.env.globals["CATEGORIES"] = CATEGORIES
 tpl.env.filters["tojson_ld"] = seo.jsonld
 tpl.env.globals["img_attrs"] = images.srcset
+tpl.env.globals["img_canon"] = images.normalize_allegro_image
 tpl.env.filters["fromjson"] = json.loads
 from . import seasons  # noqa: E402
 tpl.env.globals["season_tip"] = seasons.category_tip

@@ -83,6 +83,125 @@ def test_srcset_attrs():
     assert planeo["fallback"] == ""  # nikdy originál (multi‑MB JPEG)
 
 
+ALLEGRO_ORIG = "https://a.allegroimg.com/original/11aa22/abcd/sluchatka.jpg"
+ALLEGRO_S256 = "https://a.allegroimg.com/s256/11aa22/abcd/sluchatka.jpg"
+ALLEGRO_S512 = "https://a.allegroimg.com/s512/11aa22/abcd/sluchatka.jpg"
+
+
+def test_allegro_srcset_uses_sized_cdn_not_wsrv_or_local():
+    """Karty berou s256/s512 přímo z CDN. wsrv na allegroimg 404uje, /img by stáhl /original/."""
+    assert images.wsrv_blocked(ALLEGRO_ORIG)
+    assert images.is_allegro_cdn(ALLEGRO_ORIG)
+    assert not images.is_allegro_cdn("https://allegroimg.com.evil.com/original/x")
+    assert not images.is_allegro_cdn("https://notallegroimg.com/original/x")
+
+    card = images.srcset(ALLEGRO_ORIG, 120)  # pcard v kategorii
+    assert card["src"] == ALLEGRO_S256
+    assert card["srcset"] == f"{ALLEGRO_S256} 320w, {ALLEGRO_S512} 640w"
+    assert card["sizes"] == "120px"
+    assert card["fallback"] == ""  # onerror nesmí spadnout na /img
+    assert card["orig"] == ALLEGRO_S512
+    assert "wsrv.nl" not in card["src"] + card["srcset"]
+    assert "/img/" not in card["src"] + card["srcset"]
+    assert "/original/" not in card["src"] + card["srcset"] + card["orig"]
+
+    # detail / malé karty (60 px): srcset končí na 320 → jen s256
+    detail = images.srcset(ALLEGRO_ORIG, 60)
+    assert detail["src"] == ALLEGRO_S256
+    assert detail["srcset"] == f"{ALLEGRO_S256} 320w"
+    assert detail["fallback"] == ""
+    assert detail["orig"] == ALLEGRO_S512
+
+    # už zmenšené i větší rendice, query string zůstane
+    assert images.normalize_allegro_image(ALLEGRO_S256) == ALLEGRO_S256
+    assert images.normalize_allegro_image(
+        "https://a.allegroimg.com/s1024/11aa22/abcd/x.jpg?rule=1"
+    ) == "https://a.allegroimg.com/s512/11aa22/abcd/x.jpg?rule=1"
+    assert images.allegro_sized_url(
+        "https://allegroimg.com/ORIGINAL/11aa22/abcd/x.jpg", "s128"
+    ) == "https://allegroimg.com/s128/11aa22/abcd/x.jpg"
+    # bez size slotu: přímá URL, pořád bez wsrv a bez /img
+    bare = "https://a.allegroimg.com/files/x.jpg"
+    assert images.proxy_url(bare, 160) == bare
+    assert images.normalize_allegro_image(OK_URL) == OK_URL
+    # Planeo/Fast se nemění
+    assert images.proxy_url("https://mc-static.fast.eu/pics/1.jpg", 160).startswith("/img/160.webp?u=")
+    assert images.proxy_url(OK_URL, 160).startswith("https://wsrv.nl/?url=")
+
+
+def test_allegro_get_downloads_sized_rendition_not_original():
+    original = "https://a.allegroimg.com/original/abc"
+    sized = "https://a.allegroimg.com/s256/abc"
+    c, calls = serve({sized: httpx.Response(200, content=_jpeg(), headers={"content-type": "image/jpeg"})})
+    data = images.get(original, 160, client=c)
+    assert Image.open(io.BytesIO(data)).width == 160
+    assert sized in calls
+    assert original not in calls
+
+    images.clear_failures()
+    wide = "https://a.allegroimg.com/s512/abc"
+    c2, calls2 = serve({wide: httpx.Response(200, content=_jpeg(800, 600), headers={"content-type": "image/jpeg"})})
+    assert images.get(original, 640, client=c2)
+    assert wide in calls2
+    assert original not in calls2
+
+
+def test_allegro_templates_skip_wsrv_and_local_proxy(client_db):
+    client, db, make = client_db
+    p = make([6990], name="Sluchátka Allegro XM5", category="sluchatka")
+    p.image_url = ALLEGRO_ORIG
+    db.commit()
+    html = client.get(f"/produkt/{p.id}").text
+    assert ALLEGRO_S256 in html
+    assert ALLEGRO_S512 in html  # og:image / JSON-LD / data-orig, ne /original/
+    assert "/original/" not in html
+    assert "wsrv.nl" not in html
+    assert '"/img/' not in html
+    assert "data-fallback=" not in html  # onerror nespouští lokální /img
+    assert "onerror=" in html
+    cat = client.get("/kategorie/sluchatka").text
+    assert ALLEGRO_S256 in cat
+    assert "/original/" not in cat
+    assert "wsrv.nl" not in cat
+    assert '"/img/' not in cat
+
+
+def test_apply_feed_stores_allegro_s512_not_original(client_db):
+    from lovceny.service import apply_feed
+    from lovceny.shops.feed import FeedItem, parse_tradedoubler
+    client, db, make = client_db
+    url = "https://allegro.cz/nabidka/sony-wh-1000xm5-cerna"
+    p = make([6990], name="Sluchátka Sony WH-1000XM5 černá", shop="allegro", category="sluchatka")
+    p.image_url = ALLEGRO_ORIG
+    p.offers[0].url = url
+    p.offers[0].shop = "allegro"
+    db.commit()
+    apply_feed(db, "allegro", [FeedItem(
+        item_id="1", name=p.name, url=url, price=6990, image=ALLEGRO_ORIG,
+        category="Elektronika > Audio, video a domácí spotřebiče > Sluchátka > Bezdrátová",
+        in_stock=True,
+    )])
+    db.refresh(p)
+    assert p.image_url == ALLEGRO_S512
+
+    raw = """<?xml version="1.0"?>
+<products><product>
+  <name>Sluchátka JBL Tune 770NC</name>
+  <productImage>https://a.allegroimg.com/s1024/11aa22/abcd/jbl.jpg</productImage>
+  <categories><category name="Elektronika &gt; Audio, video a domácí spotřebiče &gt; Sluchátka &gt; Bezdrátová"/></categories>
+  <productUrl>https://allegro.cz/nabidka/jbl-tune-770nc</productUrl>
+  <price>2490</price>
+</product></products>""".encode()
+    items, _total = parse_tradedoubler(raw)
+    assert items[0].image == "https://a.allegroimg.com/s512/11aa22/abcd/jbl.jpg"
+    apply_feed(db, "allegro", items, create_missing=True, max_create=5)
+    from lovceny.models import Product
+    from sqlalchemy import select
+    created = db.scalar(select(Product).where(Product.name == "Sluchátka JBL Tune 770NC"))
+    assert created is not None
+    assert created.image_url == "https://a.allegroimg.com/s512/11aa22/abcd/jbl.jpg"
+
+
 def test_resize_to_webp_keeps_ratio_and_no_upscale():
     out = Image.open(io.BytesIO(images.resize_webp(_jpeg(1200, 800), 320)))
     assert out.format == "WEBP" and out.size == (320, 213)
