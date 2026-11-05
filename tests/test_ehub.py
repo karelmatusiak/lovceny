@@ -1,4 +1,4 @@
-"""eHUB affiliate wrapping + Heureka feed matching for iStyle/Sencor/XM.cz."""
+"""eHUB affiliate wrapping + Heureka feed matching for iStyle/Sencor/XM.cz/EVOLVEO."""
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
 
@@ -40,6 +40,7 @@ def test_shop_affiliate_link_ehub(monkeypatch):
     sencor = get_shop("sencor")
     smarty = get_shop("smarty")
     xm = get_shop("xm")
+    evolveo = get_shop("evolveo")
     url = "https://istyle.cz/products/iphone-15"
     wrapped = istyle.affiliate_link(url)
     assert "ehub.cz" in wrapped and "a_bid=92ecd9a4" in wrapped and "desturl=" in wrapped
@@ -48,9 +49,13 @@ def test_shop_affiliate_link_ehub(monkeypatch):
     xm_u = "https://xm.cz/apple-iphone-15_z53756/?id_variation=49121"
     assert "a_bid=0ff74973" in xm.affiliate_link(xm_u)
     assert "desturl=" in xm.affiliate_link(xm_u)
+    evo_u = "https://eshop.evolveo.cz/evolveo-bonepro--bezdratova-sluchatka/"
+    assert "a_bid=f89ce7c7" in evolveo.affiliate_link(evo_u)
+    assert "desturl=" in evolveo.affiliate_link(evo_u)
     monkeypatch.setenv("EHUB_AID", "")
     assert istyle.affiliate_link(url) == url
     assert xm.affiliate_link(xm_u) == xm_u
+    assert evolveo.affiliate_link(evo_u) == evo_u
     assert not istyle.affiliate_active
 
 
@@ -58,11 +63,14 @@ def test_status_labels_ehub_shops(monkeypatch):
     monkeypatch.delenv("ISTYLE_FEED_URL", raising=False)
     monkeypatch.delenv("SENCOR_FEED_URL", raising=False)
     monkeypatch.delenv("XM_FEED_URL", raising=False)
+    monkeypatch.delenv("EVOLVEO_FEED_URL", raising=False)
     st, label = get_shop("istyle").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("sencor").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("xm").status_label()
+    assert st == "ok" and "feed" in label
+    st, label = get_shop("evolveo").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("smarty").status_label()
     assert st == "ok" and "affiliate" in label.lower()
@@ -73,13 +81,17 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("ISTYLE_FEED_URL", "")
     monkeypatch.setenv("SENCOR_FEED_URL", "")
     monkeypatch.setenv("XM_FEED_URL", "")
+    monkeypatch.setenv("EVOLVEO_FEED_URL", "")
     assert get_shop("istyle").feed_url.startswith("https://")
     assert get_shop("sencor").feed_url.startswith("https://")
     assert get_shop("xm").feed_url.startswith("https://xm.cz/")
+    assert get_shop("evolveo").feed_url.startswith("https://feeds.mergado.com/evolveo-cz-heureka")
     monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
     assert get_shop("istyle").feed_url == "https://example.test/istyle.xml"
     monkeypatch.setenv("XM_FEED_URL", "https://example.test/xm.xml")
     assert get_shop("xm").feed_url == "https://example.test/xm.xml"
+    monkeypatch.setenv("EVOLVEO_FEED_URL", "https://example.test/evolveo.xml")
+    assert get_shop("evolveo").feed_url == "https://example.test/evolveo.xml"
 
 
 def test_parse_stream_and_strip_tracking():
@@ -129,7 +141,7 @@ def test_apply_feed_attach_by_ean_and_create():
 def test_obchody_shows_ehub_partners(client_db):
     c, db, make = client_db
     html = c.get("/obchody").text
-    assert "iStyle" in html and "Sencor" in html and "Smarty" in html and "XM.cz" in html
+    assert "iStyle" in html and "Sencor" in html and "Smarty" in html and "XM.cz" in html and "EVOLVEO" in html
     assert "oficiální feed" in html
     assert "affiliate odkazy" in html  # Smarty zdroj
 
@@ -476,3 +488,70 @@ def test_apply_feed_skips_ean_mismatch_tv_monitor(client_db):
     assert not urls, (urls, st)
     assert st.get("detached", 0) >= 1
     assert tv.ean is None  # otrávené EAN pryč
+
+
+def test_evolveo_shop_registry_and_click_wrapper(monkeypatch):
+    from lovceny.shops import shop_for_url
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    monkeypatch.delenv("EVOLVEO_FEED_URL", raising=False)
+    shop = get_shop("evolveo")
+    assert shop is not None and shop.name == "EVOLVEO" and shop.ehub_bid == "f89ce7c7"
+    assert shop.source == "feed" and shop.status == "ok"
+    assert "eshop.evolveo.cz" in shop.domains and "evolveo.cz" in shop.domains
+    assert shop.feed_url == (
+        "https://feeds.mergado.com/evolveo-cz-heureka-cz-cz-ehub-affiliate-31bf20ac5bdad01b32f5bc782bcfb82e.xml"
+    )
+    assert shop_for_url("https://eshop.evolveo.cz/evolveo-bonepro/") is shop
+    assert shop_for_url("https://www.evolveo.cz/produkt") is shop
+    dest = "https://eshop.evolveo.cz/evolveo-bonepro--bezdratova-sluchatka-na-licni-kosti--mp3-32gb--ip68--cerna/"
+    wrapped = shop.affiliate_link(dest)
+    assert wrapped.startswith("https://ehub.cz/system/scripts/click.php?")
+    q = parse_qs(urlparse(wrapped).query)
+    assert q["a_aid"] == ["667205fc"]
+    assert q["a_bid"] == ["f89ce7c7"]
+    assert unquote(q["desturl"][0]) == dest
+
+
+def test_evolveo_feed_categories_skip_accessories_and_notebooks():
+    """Podložky pod notebook a kabely nejsou notebooky; sluchátka ano. Levný telefon pod min. cenou ne."""
+    from lovceny.categories import accept_feed_item
+    pad = "E-shop | Produkty | PC komponenty a herní příslušenství | Chladící podložky pod notebooky"
+    cable = "E-shop | Produkty | Mobilní telefony | Nabíjení a příslušenství pro telefony"
+    phones = "E-shop | Produkty | Mobilní telefony"
+    headphones = "E-shop | Produkty | Audio, foto, TV | Sluchátka | Bezdrátová sluchátka"
+    antenna = "E-shop | Produkty | Audio, foto, TV | Multimédia a TV příslušenství | TV antény | Venkovní antény"
+    assert accept_feed_item(
+        "EVOLVEO Ania 5, chladicí podložka pro notebook", pad, 699,
+        url="https://eshop.evolveo.cz/ania-5/",
+    ) is None
+    assert accept_feed_item(
+        "EVOLVEO microUSB kabel StrongPhone", cable, 81,
+        url="https://eshop.evolveo.cz/kabel/",
+    ) is None
+    assert accept_feed_item(
+        "EVOLVEO Shark, aktivní venkovní anténa DVB-T2", antenna, 649,
+        url="https://eshop.evolveo.cz/shark/",
+    ) is None
+    assert accept_feed_item(
+        "EVOLVEO StrongPhone W4, vodotěsný odolný Dual SIM telefon", phones, 1390,
+        url="https://eshop.evolveo.cz/strongphone-w4/",
+    ) is None
+    assert accept_feed_item(
+        "EVOLVEO BonePro, bezdrátová sluchátka na lícní kosti", headphones, 1990,
+        url="https://eshop.evolveo.cz/bonepro/",
+    ) == "sluchatka"
+
+
+def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    c, db, make = client_db
+    p = make([1990], name="EVOLVEO BonePro sluchátka", shop="evolveo", category="sluchatka")
+    o = p.offers[0]
+    o.url = "https://eshop.evolveo.cz/evolveo-bonepro-page-test/"
+    o.in_stock = True
+    db.commit()
+    html = c.get(f"/produkt/{p.id}").text
+    assert "EVOLVEO" in html
+    assert "ehub.cz/system/scripts/click.php" in html
+    assert "a_bid=f89ce7c7" in html
+    assert "nofollow sponsored noopener" in html
