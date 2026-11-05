@@ -98,7 +98,7 @@ tpl.env.globals["dname"] = dname
 
 def affiliate_on() -> bool:
     """Affiliate upozornění se ukáže, až když jsou odkazy opravdu provizní:
-    LOVCENY_AFFILIATE=1, affiliate ID Alza/Datart, nebo eHUB a_bid + a_aid (výchozí AID)."""
+    LOVCENY_AFFILIATE=1, affiliate ID Alza/Datart, eHUB a_bid + a_aid, nebo Dognet chid."""
     import os
     if os.environ.get("LOVCENY_AFFILIATE", "0") == "1":
         return True

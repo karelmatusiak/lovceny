@@ -3,6 +3,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db")
 # eHUB default AID by zapnul AFFILIATE_ON ve všech testech – vypneme, dokud test výslovně nepovolí
 os.environ["EHUB_AID"] = ""
+# Dognet chid by stejně zapnul AFFILIATE_ON – výchozí kód v dognet.py, prázdné = vypnuto.
+os.environ["DOGNET_CHID"] = ""
 
 import pytest
 

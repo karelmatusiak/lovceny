@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<result xmlns="urn:com:tradedoubler:pf:model:xml:output" xmlns:ns2="urn:com:tradedoubler:pf:model:xml:common" version="3.0">
+  <productHeader><totalHits>1</totalHits></productHeader>
+  <products>
+    <product>
+      <ns2:name>Akumulátorový vysavač Dyson V15 Detect Absolute</ns2:name>
+      <ns2:productImage>https://www.dyson.cz/media/v15.png</ns2:productImage>
+      <ns2:categories><ns2:category name="Bezkabelové vysavače"/></ns2:categories>
+      <ns2:fields>
+        <ns2:field name="gtin">5025155000001</ns2:field>
+      </ns2:fields>
+      <ns2:ean>5025155000001</ns2:ean>
+      <offers>
+        <offer sourceProductId="494719-01">
+          <ns2:productUrl>https://pdt.tradedoubler.com/click?a(1)p(2)product(50990-494719-01)url(https%3A%2F%2Fwww.dyson.cz%2Fv15-detect-absolute)</ns2:productUrl>
+          <priceHistory><ns2:price currency="CZK">19090.0</ns2:price></priceHistory>
+        </offer>
+      </offers>
+    </product>
+  </products>
+</result>

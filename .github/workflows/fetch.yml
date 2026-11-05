@@ -27,7 +27,12 @@ jobs:
           SENCOR_FEED_URL: ${{ secrets.SENCOR_FEED_URL }}
           XM_FEED_URL: ${{ secrets.XM_FEED_URL }}
           EVOLVEO_FEED_URL: ${{ secrets.EVOLVEO_FEED_URL }}
+          ELECTRONICSTAR_FEED_URL: ${{ secrets.ELECTRONICSTAR_FEED_URL }}
+          FOURHOME_FEED_URL: ${{ secrets.FOURHOME_FEED_URL }}
+          ELECTROLUX_FEED_URL: ${{ secrets.ELECTROLUX_FEED_URL }}
+          DYSON_FEED_URL: ${{ secrets.DYSON_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
+          DOGNET_CHID: ${{ secrets.DOGNET_CHID }}
           # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.
           EMAIL_BACKEND: ${{ secrets.EMAIL_BACKEND || 'log' }}
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}

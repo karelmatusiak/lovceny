@@ -26,6 +26,8 @@ class Shop:
     affiliate_env: str | None = None
     # eHUB campaign link ID (a_bid); when set, affiliate_link wraps via eHUB click.php
     ehub_bid: str | None = None
+    # Dognet channel code (chid). DOGNET_CHID v env přepíše; prázdné vypne obalení.
+    dognet_chid: str | None = None
     color: str = "#0B6E4F"
     extra: dict = field(default_factory=dict)
     # živé vyhledávání: funkce(query) -> list[SearchHit]; None = obchod živě nehledáme
@@ -57,35 +59,55 @@ class Shop:
             return env.strip()
         return (self.extra.get("feed_url_default") or "").strip()
 
+    def feed_sources(self) -> list[str]:
+        """Primární URL a případná veřejná záloha. Env override zálohu nepoužije."""
+        primary = self.feed_url
+        if not primary:
+            return []
+        explicit = False
+        if self.feed_url_env:
+            env = os.environ.get(self.feed_url_env)
+            explicit = bool(env and env.strip())
+        out = [primary]
+        if not explicit:
+            fb = (self.extra.get("feed_url_fallback") or "").strip()
+            if fb and fb not in out:
+                out.append(fb)
+        return out
+
     @property
     def can_scrape(self) -> bool:
         return (not self.retired) and self.source == "scrape" and self.status == "ok"
 
     @property
     def affiliate_active(self) -> bool:
-        """True, když affiliate_link opravdu obalí URL (param ID nebo eHUB a_bid + a_aid)."""
+        """True, když affiliate_link opravdu obalí URL (param ID, eHUB nebo Dognet)."""
         if self.affiliate_param and self.affiliate_env and os.environ.get(self.affiliate_env):
             return True
         if self.ehub_bid:
             from .ehub import ehub_aid
             return bool(ehub_aid())
+        if self.dognet_chid:
+            from .dognet import dognet_chid
+            return bool(dognet_chid(self.dognet_chid))
         return False
 
     def status_label(self) -> tuple[str, str]:
         """(css_mod, lidský stav) pro /obchody a /jak-radime. css_mod: ok | wait."""
+        networked = bool(self.ehub_bid or self.dognet_chid)
         if self.source == "feed" and self.feed_url:
             return "ok", "oficiální feed"
-        if self.ehub_bid and self.source == "feed":
+        if networked and self.source == "feed":
             return "wait", "affiliate napojeno, feed URL chybí"
-        if self.ehub_bid and self.status == "blocked":
+        if networked and self.status == "blocked":
             return "ok", "affiliate odkazy (feed připravujeme)"
         if self.status == "blocked" or (self.source == "feed" and not self.feed_url):
             return "wait", "připravujeme oficiální feed"
         return "ok", "funguje"
 
     def affiliate_link(self, url: str) -> str:
-        """Affiliate obalení: Alza/Datart parametr, nebo eHUB click.php (a_bid na Shop).
-        Bez nastaveného ID / a_aid vrací URL beze změny. Na pořadí ani verdikt nemá vliv."""
+        """Affiliate obalení: Alza/Datart parametr, eHUB click.php, nebo Dognet go.dognet.com.
+        Bez nastaveného ID / a_aid / chid vrací URL beze změny. Na pořadí ani verdikt nemá vliv."""
         aff_id = os.environ.get(self.affiliate_env, "") if self.affiliate_env else ""
         if self.affiliate_param and aff_id:
             p = urlparse(url)
@@ -97,6 +119,10 @@ class Shop:
             aid = ehub_aid()
             if aid:
                 return ehub_click_url(self.ehub_bid, url, aid)
+        if self.dognet_chid:
+            from .dognet import dognet_chid, dognet_click_url
+            if dognet_chid(self.dognet_chid):
+                return dognet_click_url(url, self.dognet_chid)
         return url
 
 
@@ -126,10 +152,12 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="Cena z meta tagů produktu, robots.txt povoluje.",
          searcher=lambda q: _search.search_abcom(q), trailing_slash=True,
          search_note="Živé vyhledávání /hledani?q= povoleno robots.txt."),
-    Shop("4home", "4Home", ["4home.cz"], source="scrape", status="ok", color="#E4007C",
-         note="JSON-LD schema.org Product na stránce, robots.txt povoluje.",
-         searcher=lambda q: _search.search_4home(q), trailing_slash=True,
-         search_note="Živé vyhledávání /hledat/?q= povoleno robots.txt (domácí spotřebiče, kuchyň)."),
+    Shop("4home", "4Home", ["4home.cz"], source="feed", status="ok", color="#E4007C",
+         note="Ceny z XML feedu 4Home (Dognet); odkazy přes Dognet. Katalog srovnávače, ne reklama.",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="FOURHOME_FEED_URL", dognet_chid="9CFqgvpQ", trailing_slash=True,
+         extra={"feed_url_default": "https://www.4home.cz/export/google-products.xml",
+                "dognet_campaign": "4857"}),
     Shop("vestavne", "Vestavné spotřebiče", ["vestavne-spotrebice.cz"], source="scrape", status="ok", color="#8A5A00",
          note="Vyřazeno: GitHub Actions runnerům ConnectTimeout – katalog držíme na jiných obchodech.",
          searcher=lambda q: _search.search_vestavne(q), trailing_slash=True, retired=True, extra={"match_slug": True},
@@ -174,6 +202,8 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          search_note="Vyhledávání (/search.php) zakazuje robots.txt – živě nehledáme, jen sledování podle URL produktu."),
     Shop("czc", "CZC", ["czc.cz"], source="scrape", status="blocked", color="#7A4BD1",
          note="Přímé stahování nejde (Allegro/DataDome). Připravujeme oficiální / affiliate feed."),
+    # Allegro (Dognet kampaň 493, allegro.cz): TradeDoubler má ~385 tis. položek a JSONL
+    # elektroniky ~4 GB. Celý katalog nestahujeme; mall.cz / czc.cz necháme jako blocked scrape.
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",
          note="Přesměrováno na Allegro (DataDome). Připravujeme oficiální / affiliate feed."),
     Shop("smarty", "Smarty", ["smarty.cz"], source="scrape", status="blocked", color="#169B5B",
@@ -199,6 +229,26 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="EVOLVEO_FEED_URL", ehub_bid="f89ce7c7",
          extra={"feed_url_default": "https://feeds.mergado.com/evolveo-cz-heureka-cz-cz-ehub-affiliate-31bf20ac5bdad01b32f5bc782bcfb82e.xml"}),
+    Shop("electronicstar", "Electronic-star", ["electronic-star.cz", "elestar.eu"], source="feed", status="ok",
+         color="#E4572E",
+         note="Ceny z Heureka XML feedu (Dognet); odkazy přes Dognet.",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="ELECTRONICSTAR_FEED_URL", dognet_chid="9CFqgvpQ",
+         extra={"feed_url_default": "http://feedy.elestar.eu/data/dognet_elstar_cz.xml",
+                "feed_url_fallback": "https://feeds.mergado.com/electronic-star-cz-cz-e-star-dognet-f9f155c8cf2c386daff9ae418093234c.xml",
+                "dognet_campaign": "3995"}),
+    Shop("electrolux", "Electrolux", ["electrolux.cz"], source="feed", status="ok", color="#011E41",
+         note="Ceny z XML feedu Electrolux (Dognet); odkazy přes Dognet.",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="ELECTROLUX_FEED_URL", dognet_chid="9CFqgvpQ",
+         extra={"feed_url_default": "https://www.feedoptimise.com/sy/feed/5125eac3547689c19286364534d04224.xml?campaign=CZ-Shopping-Channel&channel=Tradedoubler.com",
+                "dognet_campaign": "529"}),
+    Shop("dyson", "Dyson", ["dyson.cz"], source="feed", status="ok", color="#6E2C91",
+         note="Ceny z XML feedu Dyson (Dognet); odkazy přes Dognet.",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="DYSON_FEED_URL", dognet_chid="9CFqgvpQ",
+         extra={"feed_url_default": "https://api.tradedoubler.com/1.0/products.xml;page=1;pageSize=100;fid=50990?token=0BF566CB031EDE04D2B0CE7B72A50F5B081B0944",
+                "dognet_campaign": "429"}),
     Shop("electroworld", "Electroworld", ["electroworld.cz"], source="scrape", status="blocked", color="#E2001A",
          note="F5 ochrana jako Datart. Připravujeme oficiální / affiliate feed."),
     Shop("kasa", "Kasa", ["kasa.cz"], source="scrape", status="blocked", color="#C45C00",

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>4HOME</title>
+    <item>
+      <title>Sencor SVC 7814VT tyčový vysavač 2v1</title>
+      <link>https://www.4home.cz/sencor-svc-7814vt-tycovy-vysavac-2v1/?utm_source=google</link>
+      <g:id>123</g:id>
+      <g:price>2049 CZK</g:price>
+      <g:availability>in_stock</g:availability>
+      <g:image_link>https://cdn.4home.cz/a.jpg</g:image_link>
+      <g:brand>Sencor</g:brand>
+      <g:gtin>8590669000001</g:gtin>
+      <g:mpn>SVC7814VT</g:mpn>
+      <g:product_type>Úklid &gt; Vysavače &gt; Akumulátorové vysavače</g:product_type>
+    </item>
+    <item>
+      <title>Concept HEPA filtr stanice pro VP6300</title>
+      <link>https://www.4home.cz/concept-hepa-filtr-stanice/</link>
+      <g:id>124</g:id>
+      <g:price>135 CZK</g:price>
+      <g:availability>out_of_stock</g:availability>
+      <g:product_type>Úklid &gt; Vysavače &gt; Příslušenství k vysavačům</g:product_type>
+    </item>
+  </channel>
+</rss>
