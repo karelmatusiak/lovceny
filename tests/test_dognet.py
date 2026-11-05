@@ -558,9 +558,14 @@ def test_allegro_product_page_dognet_and_oos(client_db, monkeypatch):
 
 
 def test_allegro_seed_spreads_categories_and_prefers_ean():
-    from seed import _feed_brand, allegro_seed_limit, pick_feed_create_items
-    assert allegro_seed_limit(25) == 60
+    from seed import ALLEGRO_BRAND_CAP, ALLEGRO_SEED_LIMIT, _feed_brand, allegro_seed_limit, brand_cap_for_shops, pick_feed_create_items
+    assert allegro_seed_limit(25) == ALLEGRO_SEED_LIMIT == 500
     assert allegro_seed_limit(10) == 10
+    assert brand_cap_for_shops({"allegro"}) == ALLEGRO_BRAND_CAP == 20
+    assert brand_cap_for_shops({"sencor"}) == 6
+    assert brand_cap_for_shops({"allegro", "sencor"}) == 6
+    assert _feed_brand("Bluetooth sluchátka Sony WH-1000") == "sony"
+    assert _feed_brand("Pánské chytré hodinky Garmin Venu") == "garmin"
     assert _feed_brand("Notebook Hp 14-ep") == "hp"
     assert _feed_brand("Notebook Lenovo IdeaPad") == "lenovo"
     assert _feed_brand("MacBook Air 13") == "apple"
