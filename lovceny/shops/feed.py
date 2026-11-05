@@ -15,10 +15,11 @@ import html
 import io
 import logging
 import re
+import time
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -34,8 +35,36 @@ _TRACKING_KEYS = frozenset({
     "fo_c", "fo_k", "fo_s", "fo_m", "fo_v",
 })
 
-# TradeDoubler products.xml je stránkovaný. Strop, ať omylem neseženeme celý Allegro katalog.
+# TradeDoubler products.xml je stránkovaný. Strop jednoho výpisu (Dyson a podobné malé feedy).
 TD_MAX_PAGES = 25
+# Allegro má ~385 tis. položek. load_shop proto bere jen krátké dotazy a součet stránek
+# nesmí přerůst tenhle strop (ani kdyby registry omylem nastavilo víc).
+TD_MULTI_TOTAL_CAP = 40
+# Allegro fid 257027: krátké dotazy s minPrice. q je jen nápověda — po stažení
+# se stejně nechá jen allowlist kategorií (q=notebook umí vrátit myš).
+ALLEGRO_TD_PAGE_CAP = 3
+ALLEGRO_TD_TOTAL_CAP = 30
+# TradeDoubler vrací 429, když dotazy jdou hned za sebou. Mezera drží Allegro v limitu.
+_TD_MIN_GAP_S = 1.2
+_td_last_http = 0.0
+ALLEGRO_TD_QUERIES = (
+    "minPrice=2500;q=smartphone",
+    "minPrice=4000;q=iphone",
+    "minPrice=5000;q=notebook",
+    "minPrice=8000;q=macbook",
+    "minPrice=4000;q=televizor",
+    "minPrice=3000;q=pračka",
+    "minPrice=3000;q=chladnička",
+    "minPrice=3000;q=lednička",
+    "minPrice=3000;q=mraznička",
+    "minPrice=1500;q=vysavač",
+    "minPrice=2000;q=kávovar",
+    "minPrice=8000;q=stolní počítač",
+    "minPrice=700;q=sluchátka",
+    "minPrice=800;q=chytré hodinky",
+    "minPrice=4000;q=nintendo",
+    "minPrice=5000;q=playstation",
+)
 _TD_PAGED = re.compile(r"api\.tradedoubler\.com/.+;page=\d+", re.I)
 _TD_INNER_URL = re.compile(r"url\(([^)]+)\)", re.I)
 _MONEY_RE = re.compile(r"[-+]?\d[\d\s\u00a0]*(?:[.,]\d+)?")
@@ -59,7 +88,7 @@ def strip_tracking(url: str) -> str:
     u = normalize_url(url)
     p = urlparse(u)
     q = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
-         if k.lower() not in _TRACKING_KEYS]
+         if k.lower() not in _TRACKING_KEYS and not k.lower().startswith("utm_")]
     return urlunparse(p._replace(query=urlencode(q)))
 
 
@@ -465,8 +494,35 @@ def unwrap_tradedoubler_url(url: str) -> str:
     return unquote(m.group(1))
 
 
+def unwrap_allegro_affiliate_url(url: str) -> str:
+    """allegro.cz/affiliate?redirect_url=<nabídka> → čistá URL nabídky.
+
+    TradeDoubler u Allegra balí klik nejdřív do affiliate přesměrování. Dognet pak
+    obaluje až tuhle nabídku, ne affiliate ani pdt.tradedoubler.com.
+    """
+    current = url or ""
+    for _ in range(3):
+        p = urlparse(current)
+        host = (p.hostname or "").lower()
+        if host != "allegro.cz" and not host.endswith(".allegro.cz"):
+            return current
+        if p.path.rstrip("/") != "/affiliate":
+            return current
+        q = dict(parse_qsl(p.query, keep_blank_values=True))
+        nxt = (q.get("redirect_url") or q.get("redirectUrl") or "").strip()
+        if not nxt:
+            return current
+        current = unquote(nxt)
+    return current
+
+
+def clean_product_url(url: str) -> str:
+    """TD click → Allegro affiliate → nabidka, bez utm a dalšího trackingu."""
+    return normalize_url(strip_tracking(unwrap_allegro_affiliate_url(unwrap_tradedoubler_url(url))))
+
+
 def _clean_product_url(url: str) -> str:
-    return normalize_url(strip_tracking(unwrap_tradedoubler_url(url)))
+    return clean_product_url(url)
 
 
 def _detect_format(head: bytes) -> str:
@@ -634,7 +690,7 @@ def _td_product(el) -> FeedItem | None:
         name=name or clean,
         url=clean,
         price=price,
-        ean=ean or None,
+        ean=_clean_ean(ean),
         image=image or None,
         category=normalize_category(cat),
         in_stock=stock,
@@ -691,14 +747,74 @@ def _is_td_paged(source: str) -> bool:
     return source.startswith(("http://", "https://")) and bool(_TD_PAGED.search(source))
 
 
-def _load_tradedoubler_paged(url: str) -> list[FeedItem]:
+def _encode_td_matrix(query: str) -> str:
+    """`minPrice=5000;q=pračka` → matrix parametry s kódovanou hodnotou."""
+    parts = []
+    for part in (query or "").split(";"):
+        if not part:
+            continue
+        if "=" not in part:
+            parts.append(part)
+            continue
+        key, value = part.split("=", 1)
+        parts.append(f"{key}={quote(value, safe='')}")
+    return ";".join(parts)
+
+
+def _td_with_query(url: str, query: str) -> str:
+    extra = _encode_td_matrix(query)
+    if not extra:
+        return url
+    if "?" in url:
+        path, qs = url.split("?", 1)
+        return f"{path};{extra}?{qs}"
+    return url + ";" + extra
+
+
+def _td_get(url: str, *, gap: float) -> bytes:
+    """GET s mezerou mezi požadavky a opakováním při 429."""
+    global _td_last_http
+    delay = 1.5
+    last: Exception | None = None
+    for attempt in range(4):
+        wait = gap - (time.monotonic() - _td_last_http)
+        if gap and _td_last_http and wait > 0:
+            time.sleep(wait)
+        try:
+            data = _http_get(url)
+            _td_last_http = time.monotonic()
+            return data
+        except RuntimeError as e:
+            _td_last_http = time.monotonic()
+            last = e
+            if "429" not in str(e) or attempt == 3:
+                raise
+            time.sleep(delay)
+            delay *= 2
+    raise last or RuntimeError("stažení feedu selhalo")
+
+
+def _fetch_td_pages(url: str, max_pages: int | None = None, *, gap: float = 0.0) -> tuple[list[FeedItem], int]:
+    """Stáhne stránky jednoho TradeDoubler výpisu. Vrací (položky, počet HTTP požadavků).
+
+    Když spadne až další stránka, vrátí se to, co už došlo — první stránka se nezahodí.
+    """
+    limit = TD_MAX_PAGES if max_pages is None else max(1, min(int(max_pages), TD_MAX_PAGES))
     m_size = re.search(r";pageSize=(\d+)", url, re.I)
     page_size = int(m_size.group(1)) if m_size else 100
     items: list[FeedItem] = []
     total: int | None = None
-    for page in range(1, TD_MAX_PAGES + 1):
+    pages = 0
+    for page in range(1, limit + 1):
         page_url = re.sub(r";page=\d+", f";page={page}", url, count=1, flags=re.I)
-        batch, hits = parse_tradedoubler(_http_get(page_url))
+        pages += 1
+        try:
+            batch, hits = parse_tradedoubler(_td_get(page_url, gap=gap))
+        except RuntimeError as e:
+            if items:
+                log.warning("TradeDoubler stránka %s selhala (%s), beru %d položek", page, e, len(items))
+                break
+            raise
         if total is None:
             total = hits
         if not batch:
@@ -708,7 +824,49 @@ def _load_tradedoubler_paged(url: str) -> list[FeedItem]:
             break
         if len(batch) < page_size:
             break
+    return items, pages
+
+
+def _load_tradedoubler_paged(url: str, max_pages: int | None = None, *, gap: float = 0.0) -> list[FeedItem]:
+    items, _pages = _fetch_td_pages(url, max_pages=max_pages, gap=gap)
     return items
+
+
+def _load_tradedoubler_multi(url: str, queries: list[str], *, per_query: int, total_cap: int) -> list[FeedItem]:
+    """Několik krátkých TradeDoubler dotazů místo celého katalogu.
+
+    Každý dotaz má vlastní strop stránek a součet požadavků nepřesáhne total_cap
+    (a ani TD_MULTI_TOTAL_CAP). Stejná nabídka z víc dotazů se bere jen jednou.
+    Selhání jednoho dotazu ostatní nezahodí; když nesedne nic, vyhodí poslední chybu.
+    """
+    per_query = max(1, min(int(per_query), TD_MAX_PAGES))
+    total_cap = max(1, min(int(total_cap), TD_MULTI_TOTAL_CAP))
+    seen: set[str] = set()
+    out: list[FeedItem] = []
+    used = 0
+    errors: list[str] = []
+    for query in queries:
+        if used >= total_cap:
+            break
+        cap = min(per_query, total_cap - used)
+        page_url = _td_with_query(url, query)
+        try:
+            batch, pages = _fetch_td_pages(page_url, max_pages=cap, gap=_TD_MIN_GAP_S)
+        except Exception as e:  # noqa: BLE001 – další dotaz může projít
+            errors.append(f"{query}: {e}")
+            log.warning("TradeDoubler dotaz %s selhal (%s)", query, e)
+            used += 1
+            continue
+        used += max(pages, 1)
+        for it in batch:
+            if it.url in seen:
+                continue
+            seen.add(it.url)
+            out.append(it)
+    if not out and errors:
+        raise RuntimeError(errors[-1])
+    log.info("TradeDoubler dotazy: %d URL, %d stránek, %d položek", len(queries), used, len(out))
+    return out
 
 
 def parse_bytes(raw: bytes) -> list[FeedItem]:
@@ -739,6 +897,25 @@ def load(source: str) -> list[FeedItem]:
     return parse_bytes(_read_source(source))
 
 
+def _td_queries(shop) -> list[str]:
+    raw = (getattr(shop, "extra", None) or {}).get("td_queries") or []
+    return [str(q).strip() for q in raw if str(q).strip()]
+
+
+def _load_shop_source(shop, src: str) -> list[FeedItem]:
+    """Jedna URL feedu. Allegro (td_queries) neprochází celý katalog, jen krátké dotazy."""
+    queries = _td_queries(shop)
+    if queries and _is_td_paged(src):
+        extra = getattr(shop, "extra", None) or {}
+        per = int(extra.get("td_page_cap") or 1)
+        total = int(extra.get("td_total_cap") or per)
+        # Vlastní URL s ;q= je jeden výpis (env override), ne násobek výchozích dotazů.
+        if re.search(r";q=", src, re.I):
+            return _load_tradedoubler_paged(src, max_pages=min(per, TD_MAX_PAGES), gap=_TD_MIN_GAP_S)
+        return _load_tradedoubler_multi(src, queries, per_query=per, total_cap=total)
+    return load(src)
+
+
 def load_shop(shop) -> list[FeedItem]:
     """Načte feed obchodu. Veřejná záloha (feed_url_fallback) jen když není env override."""
     sources = shop.feed_sources()
@@ -747,7 +924,7 @@ def load_shop(shop) -> list[FeedItem]:
     errors: list[str] = []
     for i, src in enumerate(sources):
         try:
-            return load(src)
+            return _load_shop_source(shop, src)
         except Exception as e:  # noqa: BLE001 – další URL je záloha
             errors.append(str(e))
             if i + 1 < len(sources):

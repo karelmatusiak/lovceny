@@ -52,6 +52,7 @@ def serve(routes):
 @pytest.mark.parametrize("url,ok", [
     (OK_URL, True),
     ("https://cdn.4home.cz/a.jpg", True),             # poddoména obchodu
+    ("https://a.allegroimg.com/original/abc", True),  # CDN Allegra
     ("https://mc-static.fast.eu/pics/1/2", True),      # CDN Planeo/4Home
     ("http://www.softcom.cz/x.png", True),
     ("https://evil.example.com/a.jpg", False),

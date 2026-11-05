@@ -16,6 +16,8 @@ from pathlib import Path
 import argparse
 import math
 import random
+import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
@@ -146,8 +148,32 @@ def retire_vestavne(db, dry_run=False) -> dict:
 FEED_MAX_PER_BRAND_CAT = 6
 
 
+# Obecná slova na začátku názvu („Notebook Hp…“) nejsou značka.
+_GENERIC_PRODUCT_WORDS = frozenset({
+    "notebook", "smartphone", "telefon", "mobil", "mobilni", "televizor", "televize",
+    "pracka", "lednice", "lednicka", "chladnicka", "mraznicka", "mrazak", "vysavac",
+    "tycovy", "roboticky", "kavovar", "automaticky", "pakovy", "sluchatka", "tablet",
+    "pocitac", "stolni", "chytry", "chytre", "hodinky", "akumulatorovy", "bezdratovy",
+    "bezdratova", "bezdratove", "dratova", "dratove", "novy", "nova", "nove", "herni",
+    "prenosna", "prenosny", "mala", "male", "maly",
+})
+_KNOWN_BRANDS = (
+    "samsung", "xiaomi", "redmi", "lenovo", "asus", "acer", "dell", "huawei", "motorola",
+    "nokia", "sony", "philips", "bosch", "siemens", "whirlpool", "beko", "aeg", "gorenje",
+    "candy", "hisense", "tcl", "roborock", "rowenta", "delonghi", "krups", "nivona",
+    "jbl", "bose", "garmin", "amazfit", "nintendo", "logitech", "honor", "realme", "poco",
+    "oneplus", "nothing", "microsoft", "sharp", "panasonic", "miele", "haier", "indesit",
+    "amica", "concept", "eta", "kruger", "hp", "lg",
+)
+
+
+def _ascii_name(name: str) -> str:
+    s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
 def _feed_brand(name: str) -> str:
-    n = (name or "").lower()
+    n = _ascii_name(name)
     for brand in ("sencor", "dyson", "electrolux", "klarstein"):
         if brand in n:
             return brand
@@ -156,13 +182,22 @@ def _feed_brand(name: str) -> str:
         "macbook", "apple ",
     )):
         return "apple"
-    tok = n.replace("-", " ").split()
-    return tok[0] if tok else "other"
+    padded = f" {n} "
+    for brand in _KNOWN_BRANDS:
+        if f" {brand} " in padded:
+            return brand
+    toks = [t for t in n.split() if t not in _GENERIC_PRODUCT_WORDS and len(t) > 2]
+    return toks[0] if toks else "other"
 
 
 def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter=None,
-                           max_per_brand_cat: int = FEED_MAX_PER_BRAND_CAT):
-    """1 produkt na barevnou rodinu (nejlevnější skladem) + max N na značku/kategorii (vyšší cena)."""
+                           max_per_brand_cat: int = FEED_MAX_PER_BRAND_CAT,
+                           prefer_ean: bool = False, spread_categories: bool = False):
+    """1 produkt na barevnou rodinu (nejlevnější skladem) + max N na značku/kategorii (vyšší cena).
+
+    prefer_ean: při shodě rodiny nechá položku s GTIN/EAN (párování nabídek).
+    spread_categories: střídá kategorie, ať max_create nesežere jen nejdražší značku.
+    """
     from lovceny.categories import accept_feed_item
     from lovceny.shops.feed import variant_family_key
 
@@ -186,6 +221,8 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
             b_ok = b.in_stock is not False
             if a_ok != b_ok:
                 return a if a_ok else b
+            if prefer_ean and bool(a.ean) != bool(b.ean):
+                return a if a.ean else b
             return a if float(a.price or 0) <= float(b.price or 0) else b
 
         families[key] = better(prev, it)
@@ -197,20 +234,46 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
     for group in by_cb.values():
         group.sort(key=lambda x: float(x.price or 0), reverse=True)
         picked.extend(group[:max_per_brand_cat])
-    picked.sort(key=lambda x: float(x.price or 0), reverse=True)
-    return picked
+    if not spread_categories:
+        picked.sort(key=lambda x: float(x.price or 0), reverse=True)
+        return picked
+    buckets: dict[str, list] = {c: [] for c in allowed_cats}
+    rest = []
+    for it in picked:
+        cat = accept_feed_item(it.name, it.category, it.price, url=it.url)
+        if cat in buckets:
+            buckets[cat].append(it)
+        else:
+            rest.append(it)
+    for group in buckets.values():
+        group.sort(key=lambda x: (0 if x.ean else 1, -float(x.price or 0)))
+    out = []
+    while any(buckets.values()):
+        for cat in allowed_cats:
+            if buckets[cat]:
+                out.append(buckets[cat].pop(0))
+    out.extend(rest)
+    return out
 
 
 # Obchody, jejichž katalog držíme z feedu (retire špatných nabídek i seed).
 FEED_CATALOG_SHOPS = (
     "istyle", "sencor", "xm", "evolveo", "pocitace24",
-    "electronicstar", "4home", "electrolux", "dyson",
+    "electronicstar", "4home", "electrolux", "dyson", "allegro",
 )
+
+
+def allegro_seed_limit(feed_limit: int) -> int:
+    """Výchozí --feed-limit 25 nechá Allegro na 60 (víc kategorií). Jiné číslo platí i pro něj."""
+    if feed_limit == 25:
+        return 60
+    return feed_limit
 
 
 def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolveo_limit=25,
                     pocitace24_limit=25,
                     electronicstar_limit=25, fourhome_limit=25, electrolux_limit=25, dyson_limit=25,
+                    allegro_limit=60,
                     dry_run=False) -> dict:
     """Konzervativně přidá produkty z Heureka, eHUB a Dognet feedů.
 
@@ -234,6 +297,11 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
         ("4home", fourhome_limit, ("vysavace", "kavovary", "pracky", "lednice")),
         ("electrolux", electrolux_limit, ("pracky", "lednice", "kavovary", "vysavace")),
         ("dyson", dyson_limit, ("vysavace",)),
+        # Allegro: krátké TD dotazy, po filtru kategorií desítky přístrojů napříč katalogem.
+        ("allegro", allegro_limit, (
+            "telefony", "notebooky", "pocitace", "televize", "pracky", "lednice",
+            "kavovary", "vysavace", "sluchatka", "chytre-hodinky", "konzole",
+        )),
     ]
 
     def _apple_only(name: str) -> bool:
@@ -260,7 +328,12 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             continue
         st_attach = apply_feed(db, slug, items, create_missing=False)
         bf = _apple_only if slug == "istyle" else None
-        picked = pick_feed_create_items(items, cats, brand_filter=bf)
+        picked = pick_feed_create_items(
+            items, cats, brand_filter=bf,
+            max_per_brand_cat=4 if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,
+            prefer_ean=slug == "allegro",
+            spread_categories=slug == "allegro",
+        )
         st_create = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
         st = {
             "loaded": len(items),
@@ -481,7 +554,7 @@ def main(argv=None):
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--from-feeds", action="store_true",
-                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, Electronic-star, 4Home, Electrolux, Dyson)")
+                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, Electronic-star, 4Home, Electrolux, Dyson, Allegro)")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
@@ -504,7 +577,8 @@ def main(argv=None):
                 db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
                 evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
                 electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
-                electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit, dry_run=a.dry_run)
+                electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
+                allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
             print(f"Feed seed: {fs}")
         return
     items = [i for i in load_catalog() if not a.category or i["cat"] == a.category][:a.limit]
@@ -518,7 +592,8 @@ def main(argv=None):
             db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
             evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
             electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
-            electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit, dry_run=a.dry_run)
+            electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
+            allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
         print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:
         return

@@ -47,7 +47,7 @@ services:
         sync: false
       - key: EVOLVEO_FEED_URL
         sync: false
-      # Dognet (Electronic-star, 4Home, Electrolux, Dyson). Prázdné DOGNET_CHID = vypnuto; jinak výchozí chid v kódu.
+      # Dognet (Electronic-star, 4Home, Electrolux, Dyson, Allegro). Prázdné DOGNET_CHID = vypnuto; jinak výchozí chid v kódu.
       - key: DOGNET_CHID
         sync: false
       - key: ELECTRONICSTAR_FEED_URL
@@ -57,6 +57,8 @@ services:
       - key: ELECTROLUX_FEED_URL
         sync: false
       - key: DYSON_FEED_URL
+        sync: false
+      - key: ALLEGRO_FEED_URL
         sync: false
       - key: POCITACE24_FEED_URL
         sync: false

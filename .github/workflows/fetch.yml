@@ -31,6 +31,7 @@ jobs:
           FOURHOME_FEED_URL: ${{ secrets.FOURHOME_FEED_URL }}
           ELECTROLUX_FEED_URL: ${{ secrets.ELECTROLUX_FEED_URL }}
           DYSON_FEED_URL: ${{ secrets.DYSON_FEED_URL }}
+          ALLEGRO_FEED_URL: ${{ secrets.ALLEGRO_FEED_URL }}
           POCITACE24_FEED_URL: ${{ secrets.POCITACE24_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
           DOGNET_CHID: ${{ secrets.DOGNET_CHID }}

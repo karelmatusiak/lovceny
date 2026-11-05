@@ -46,8 +46,8 @@ Alza a Datart jsou nastavené jako `source="feed"`. Vložený odkaz z Alzy/Datar
 - **Affiliate odkazy**: `ALZA_AFFILIATE_ID` přidá k odkazům `?idp=<ID>`; `DATART_AFFILIATE_ID` analogicky (název parametru upravte v registry podle podmínek programu). Na pořadí ani verdikt to nemá vliv.
 - Test: `tests/test_feed.py`.
 
-### Dognet (Electronic-star, 4Home, Electrolux, Dyson)
-Odkazy jdou přes `https://go.dognet.com/?chid=…&url=`. Výchozí kanál Lovceny.cz je v kódu (`9CFqgvpQ`); `DOGNET_CHID` ho přepíše a prázdná hodnota obalení vypne. Feed URL mají veřejný default (`ELECTRONICSTAR_FEED_URL`, `FOURHOME_FEED_URL`, `ELECTROLUX_FEED_URL`, `DYSON_FEED_URL`). 4Home je Google Shopping XML použitý jen jako katalog srovnávače – ne jako zdroj pro Google Shopping / CSS. Dyson stahuje stránky TradeDoubler feedu, dokud nejsou prázdné. Seed (`--from-feeds`) bere jen pračky, lednice, kávovary a vysavače a vynechává filtry, sáčky, kabely a kryty. Allegro (kampaň 493) v tomhle kroku není: feed má stovky tisíc položek. Mall a CZC zůstávají blokované. Test: `tests/test_dognet.py`.
+### Dognet (Electronic-star, 4Home, Electrolux, Dyson, Allegro)
+Odkazy jdou přes `https://go.dognet.com/?chid=…&url=`. Výchozí kanál Lovceny.cz je v kódu (`9CFqgvpQ`); `DOGNET_CHID` ho přepíše a prázdná hodnota obalení vypne. Feed URL mají veřejný default (`ELECTRONICSTAR_FEED_URL`, `FOURHOME_FEED_URL`, `ELECTROLUX_FEED_URL`, `DYSON_FEED_URL`, `ALLEGRO_FEED_URL`). 4Home je Google Shopping XML použitý jen jako katalog srovnávače – ne jako zdroj pro Google Shopping / CSS. Dyson stahuje stránky TradeDoubler feedu, dokud nejsou prázdné. Allegro (kampaň 493, TradeDoubler fid 257027, ~385 tis. položek) nestahuje celý katalog: jen krátké dotazy s `minPrice` (nejvýš 3 stránky na dotaz a 30 stránek celkem, s mezerou mezi požadavky kvůli limitu TradeDoubleru) a po stažení nechá telefony, notebooky, stolní počítače, televize, pračky, lednice, kávovary, vysavače, sluchátka, hodinky a konzole. Affiliate URL `allegro.cz/affiliate?redirect_url=` se před Dognet obalem srovná na `/nabidka/`. Kryty, kabely, filtry, sáčky, nabíječky, stylus a samostatný ovladač do katalogu nepatří. Seed (`--from-feeds`) u menších Dognet obchodů bere pračky, lednice, kávovary a vysavače; Allegro má širší výběr a při výchozím limitu 25 přidá až 60 kusů. Mall a CZC zůstávají blokované (scrape). Test: `tests/test_dognet.py`.
 
 ### Živé hledání v obchodech (`lovceny/shops/search.py`)
 Když text v DB najde méně než 4 produkty, stránka `/hledat` hned zobrazí načítání a přes `/hledat/zive?q=` (bez JS `?zive=1`)
@@ -73,7 +73,7 @@ robots.txt čteme s podporou `*`/`$` (`shops/robots.py`; stdlib parser wildcardy
 | Mobilfone | ⚠️ `/search.php` zakázáno – jen sledování podle URL, cena z HTML (v4) |
 | Sencor, Whirlpool, Rowenta, Samsung.cz, LG, Siemens/BSH, Philips, Emos, Expert, iStyle, Mobil Pohotovost, CZC (rozcestník na Allegro), h-shop | ❌ vyhledávání zakazuje robots.txt |
 | Penta | ❌ `Disallow: /` pro ostatní roboty |
-| Conrad, TS Bohemia, Smarty, eBerry, BScom, Euroking, Mader, Lenovo, Xiaomi (mi.com), Tefal, Allegro/Mall, Megapixel (Anubis) | ❌ ochrana proti botům (403 / Cloudflare) |
+| Conrad, TS Bohemia, Smarty, eBerry, BScom, Euroking, Mader, Lenovo, Xiaomi (mi.com), Tefal, Mall (scrape Allegra), Megapixel (Anubis) | ❌ ochrana proti botům (403 / Cloudflare) |
 | SlevyElektro, Sporilek, Tipa, K24, Comfor, Garmin, Huawei, Apple | ❌ výsledky hledání jen přes JS / interní API – neobcházíme |
 | Dyson.cz | feed přes Dognet (TradeDoubler); živé `/catalogsearch/` robots zakazuje |
 | ProMobily, FotoŠkoda, iSpace, Elektrospot, Počítárna, GigaComputer, LevnaPC | ❌ vyhledávání zakazuje robots.txt |
