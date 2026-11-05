@@ -162,7 +162,10 @@ _ACCESSORY_NAME = (
 _ACCESSORY_NAME_RX = re.compile(
     r"(^|\s)(pouzdro|kryt|obal|sklo|folie|case)\s+(na|pro)\b"
     r"|(^|\s)(ochranny\s+kryt|ochranne\s+sklo|textilni\s+sacek)\b"
-    r"|\b(pouzdro|kryt|obal)\s+pro\s+(iphone|ipad|macbook|airpods)\b",
+    r"|\b(pouzdro|kryt|obal)\s+pro\s+(iphone|ipad|macbook|airpods)\b"
+    # stylus / dotykové pero jako výrobek (ne „se stylusem“ v názvu telefonu)
+    r"|(^| )stylus( |$)"
+    r"|(^| )dotykove pero( |$)",
     re.I,
 )
 
@@ -213,6 +216,135 @@ def _stem_at_word(text: str, stem: str) -> bool:
     return re.search(r"(^| )"+re.escape(stem), text) is not None
 
 
+def _path_segments(shop_category: str | None) -> list[str]:
+    """Cesta kategorie bez diakritiky, segmenty oddělené „>“ / „|“."""
+    raw = unicodedata.normalize("NFKD", shop_category or "").encode("ascii", "ignore").decode().lower()
+    raw = raw.replace(">", "|")
+    parts = []
+    for seg in raw.split("|"):
+        seg = re.sub(r"[^a-z0-9]+", " ", seg).strip()
+        if seg:
+            parts.append(seg)
+    return parts
+
+
+# Allegro (TradeDoubler) má v rodiči „Telefony a příslušenství“, ale list je telefon.
+# Poznáme cestu podle těchto úseků a příslušenství soudíme jen z listu.
+_ALLEGRO_MARKERS = (
+    "telefony a prislusenstvi",
+    "prislusenstvi gsm",
+    "audio video a domaci spotrebice",
+    "volne stojici domaci spotrebice",
+    "male domaci spotrebice",
+    "konzole a herni automaty",
+    "chytre hodinky a prislusenstvi",
+    "pocitace > notebooky",
+    "pocitace > stolni pocitace",
+    "pocitace > tablety",
+    "pocitace > mikrofony a sluchatka",
+    "pocitace > prislusenstvi",
+)
+# Konec cesty → slug Lovceny. Delší sufixy dřív (pračka se sušičkou před pračkou).
+# Tablety (Počítače > Tablety > Zařízení) nemají vlastní kategorii, proto tu nejsou.
+_ALLEGRO_SUFFIXES: tuple[tuple[str, str], ...] = (
+    ("volne stojici domaci spotrebice > pracky se susickou", "pracky"),
+    ("volne stojici domaci spotrebice > pracky", "pracky"),
+    ("volne stojici domaci spotrebice > lednicky", "lednice"),
+    ("volne stojici domaci spotrebice > lednice", "lednice"),
+    ("volne stojici domaci spotrebice > chladnicky", "lednice"),
+    ("volne stojici domaci spotrebice > mraznicky", "lednice"),
+    ("volne stojici domaci spotrebice > mrazaky", "lednice"),
+    ("kavovary > kavovary na espresso", "kavovary"),
+    ("kavovary > kapslove kavovary", "kavovary"),
+    ("kavovary > automaticke kavovary", "kavovary"),
+    ("vestavne spotrebice > kavovary", "kavovary"),
+    ("vysavace > tycove vysavace", "vysavace"),
+    ("vysavace > roboticke vysavace", "vysavace"),
+    ("vysavace > podlahove vysavace", "vysavace"),
+    ("vysavace > rucni vysavace", "vysavace"),
+    ("vysavace > vysavace na mok", "vysavace"),
+    ("sluchatka > bezdratova sluchatka", "sluchatka"),
+    ("sluchatka > dratova sluchatka", "sluchatka"),
+    ("sluchatka > bezdratova", "sluchatka"),
+    ("sluchatka > bezdratove", "sluchatka"),
+    ("sluchatka > dratova", "sluchatka"),
+    ("sluchatka > dratove", "sluchatka"),
+    ("mikrofony a sluchatka > bezdratova sluchatka", "sluchatka"),
+    ("mikrofony a sluchatka > dratova sluchatka", "sluchatka"),
+    ("chytre hodinky a prislusenstvi > chytre hodinky", "chytre-hodinky"),
+    ("smartphony a mobilni telefony", "telefony"),
+    ("pocitace > notebooky", "notebooky"),
+    ("pocitace > stolni pocitace", "pocitace"),
+    ("televize a video > televizory", "televize"),
+    ("konzole a herni automaty > prenosne herni konzole", "konzole"),
+    ("konzole a herni automaty > stacionarni herni konzole", "konzole"),
+    ("nintendo switch 2 > konzole", "konzole"),
+    ("nintendo switch > konzole", "konzole"),
+    ("playstation 5 > konzole", "konzole"),
+    ("playstation 4 > konzole", "konzole"),
+    ("xbox series > konzole", "konzole"),
+    ("xbox > konzole", "konzole"),
+)
+# Listy, které nejsou hlavní výrobek (držák, hadice, řemínek, displej, dálkový ovladač…).
+_ALLEGRO_LEAF_ACCESSORY = _ACCESSORY_CATEGORY + (
+    "drzak", "hadic", "trubk", "pasek", "remin", "displej", "dalkov", "ovladan",
+    "servisn", "matric", "grafick", "obal", "kryt", "pouzdr", "folie", "kabel",
+    "brasn", "sack", "nahradn", "prislusen", "filtry", "baterie", "nabijec",
+)
+
+
+def _allegro_path(shop_category: str | None) -> str:
+    return " > ".join(_path_segments(shop_category))
+
+
+def _is_allegro_path(shop_category: str | None) -> bool:
+    path = _allegro_path(shop_category)
+    if not path:
+        return False
+    return any(m in path for m in _ALLEGRO_MARKERS)
+
+
+def _suffix_match(path: str, suffix: str) -> bool:
+    if path == suffix or path.endswith(" > " + suffix):
+        return True
+    if " > " not in suffix:
+        return False
+    parent, leaf = suffix.rsplit(" > ", 1)
+    marker = parent + " > "
+    idx = path.rfind(marker)
+    if idx == -1:
+        return False
+    rest = path[idx + len(marker):]
+    if " > " in rest:
+        return False
+    return rest == leaf or rest.startswith(leaf + " ")
+
+
+def _allegro_allowed_slug(shop_category: str | None) -> str | None:
+    path = _allegro_path(shop_category)
+    for suffix, slug in sorted(_ALLEGRO_SUFFIXES, key=lambda x: len(x[0]), reverse=True):
+        if _suffix_match(path, suffix):
+            return slug
+    return None
+
+
+def _allegro_leaf_accessory(shop_category: str | None) -> bool:
+    segs = _path_segments(shop_category)
+    if not segs:
+        return False
+    leaf = " " + segs[-1] + " "
+    return any(_stem_at_word(leaf, a) for a in _ALLEGRO_LEAF_ACCESSORY)
+
+
+def _standalone_remote(name_folded: str) -> bool:
+    """Ovladač jako samostatný výrobek. Herní ovladač (DualSense, Xbox, Switch) ne."""
+    if not re.search(r"(^| )ovladac( |$)", name_folded):
+        return False
+    if re.search(r"dualsense|playstation|xbox|nintendo|joy-?con|gamepad", name_folded):
+        return False
+    return True
+
+
 def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     """True = příslušenství / náhradní díl / služba – ne hlavní produkt."""
     n = _fold(name)
@@ -220,6 +352,11 @@ def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
         return True
     if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
         return True
+    if _standalone_remote(n):
+        return True
+    if _is_allegro_path(shop_category):
+        # Rodič „Telefony a příslušenství“ nesmí shodit samotný telefon.
+        return _allegro_leaf_accessory(shop_category)
     c = _fold(shop_category or "")
     if c.strip() and any(_stem_at_word(c, a) for a in _ACCESSORY_CATEGORY):
         return True
@@ -231,7 +368,12 @@ def feed_category_slug(shop_category: str | None) -> str | None:
 
     Hint musí sedět na segment cesty (za `|`), ne jen jako podřetězec rodiče.
     Jinak „Počítače a notebooky | Monitory/GPU“ spadne pod notebooky.
+    Allegro cesty jdou přes vlastní sufixy (rodič „… a příslušenství“ není list).
     """
+    if _is_allegro_path(shop_category):
+        if _allegro_leaf_accessory(shop_category):
+            return None
+        return _allegro_allowed_slug(shop_category)
     c = _fold(shop_category or "")
     if not c.strip():
         return None
@@ -313,7 +455,7 @@ def accept_feed_item(
         return None
     blob = _fold(name) + " " + _fold(shop_category or "")
     # Nápojové / zrací skříně nejsou domácí lednice; průmyslový vysavač není tyčový/robot.
-    if feed_slug == "lednice" and re.search(r"vinotek|zrani|napoj|minibar|autochlad", blob):
+    if feed_slug == "lednice" and re.search(r"vinotek|zrani|napoj|minibar|autochlad|obytn", blob):
         return None
     if feed_slug == "vysavace" and re.search(r"prumysl", blob):
         return None

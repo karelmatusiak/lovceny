@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
+from .feed import ALLEGRO_TD_PAGE_CAP, ALLEGRO_TD_QUERIES, ALLEGRO_TD_TOTAL_CAP
+
 
 @dataclass
 class Shop:
@@ -41,7 +43,11 @@ class Shop:
 
     def canonical_url(self, url: str) -> str:
         from ..util import normalize_url
-        u = normalize_url(url)
+        if self.slug == "allegro":
+            from .feed import clean_product_url
+            u = clean_product_url(url)
+        else:
+            u = normalize_url(url)
         p = urlparse(u)
         if self.trailing_slash and p.path not in ("", "/") and not p.query and "." not in p.path.rsplit("/", 1)[-1]:
             u += "/"
@@ -202,8 +208,7 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          search_note="Vyhledávání (/search.php) zakazuje robots.txt – živě nehledáme, jen sledování podle URL produktu."),
     Shop("czc", "CZC", ["czc.cz"], source="scrape", status="blocked", color="#7A4BD1",
          note="Přímé stahování nejde (Allegro/DataDome). Připravujeme oficiální / affiliate feed."),
-    # Allegro (Dognet kampaň 493, allegro.cz): TradeDoubler má ~385 tis. položek a JSONL
-    # elektroniky ~4 GB. Celý katalog nestahujeme; mall.cz / czc.cz necháme jako blocked scrape.
+    # mall.cz / czc.cz zůstávají blocked scrape (DataDome). Marketplace feed je obchod allegro.
     Shop("mall", "Mall", ["mall.cz"], source="scrape", status="blocked", color="#D93A3A",
          note="Přesměrováno na Allegro (DataDome). Připravujeme oficiální / affiliate feed."),
     Shop("smarty", "Smarty", ["smarty.cz"], source="scrape", status="blocked", color="#169B5B",
@@ -249,6 +254,15 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          feed_url_env="DYSON_FEED_URL", dognet_chid="9CFqgvpQ",
          extra={"feed_url_default": "https://api.tradedoubler.com/1.0/products.xml;page=1;pageSize=100;fid=50990?token=0BF566CB031EDE04D2B0CE7B72A50F5B081B0944",
                 "dognet_campaign": "429"}),
+    Shop("allegro", "Allegro", ["allegro.cz"], source="feed", status="ok", color="#FF5A00",
+         note="Ceny z feedu Dognet/TradeDoubler; odkazy jdou přes Dognet. Katalog srovnávače, ne reklama.",
+         search_note="Hledáme v importovaném feedu (DB).",
+         feed_url_env="ALLEGRO_FEED_URL", dognet_chid="9CFqgvpQ",
+         extra={"feed_url_default": "https://api.tradedoubler.com/1.0/products.xml;page=1;pageSize=100;fid=257027?token=0BF566CB031EDE04D2B0CE7B72A50F5B081B0944",
+                "dognet_campaign": "493",
+                "td_queries": ALLEGRO_TD_QUERIES,
+                "td_page_cap": ALLEGRO_TD_PAGE_CAP,
+                "td_total_cap": ALLEGRO_TD_TOTAL_CAP}),
     Shop("pocitace24", "Počítače24", ["pocitace24.cz"], source="feed", status="ok", color="#D1214C",
          note="Ceny z XML feedu obchodu; odkazy jdou přes eHUB (affiliate).",
          search_note="Hledáme v importovaném feedu (DB).",
