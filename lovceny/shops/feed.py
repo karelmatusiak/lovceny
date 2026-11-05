@@ -4,7 +4,7 @@ Heureka XML:
 <SHOP><SHOPITEM><ITEM_ID/><PRODUCTNAME/><URL/><PRICE_VAT/><EAN/>…</SHOPITEM></SHOP>
 CSV: hlavička se stejnými názvy sloupců (ITEM_ID,PRODUCTNAME,URL,PRICE_VAT,EAN).
 
-XML se parsuje streamovaně (iterparse) – feedy iStyle/Sencor/XM.cz mají i desítky MB.
+XML se parsuje streamovaně (iterparse) – feedy iStyle/Sencor/XM.cz/EVOLVEO mají i desítky MB.
 """
 from __future__ import annotations
 

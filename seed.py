@@ -200,8 +200,8 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
     return picked
 
 
-def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, dry_run=False) -> dict:
-    """Konzervativně přidá produkty z iStyle/Sencor/XM.cz Heureka feedů.
+def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolveo_limit=25, dry_run=False) -> dict:
+    """Konzervativně přidá produkty z iStyle/Sencor/XM.cz/EVOLVEO Heureka feedů.
 
     accept_feed_item + sloučení barev + FEED_MAX_PER_BRAND_CAT na značku/kategorii.
     """
@@ -213,6 +213,8 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, dry_ru
         ("istyle", istyle_limit, ("telefony", "notebooky", "sluchatka", "chytre-hodinky", "fotoaparaty", "chytra-domacnost")),
         ("sencor", sencor_limit, ("vysavace", "kavovary", "televize", "chytra-domacnost")),
         ("xm", xm_limit, ("telefony", "sluchatka", "chytre-hodinky", "vysavace", "kavovary")),  # bez notebooky: Heureka „Počítače a notebooky|*“ je plná monitorů/GPU
+        # bez notebooky/televize: ve feedu nejsou (podložky, zdroje, antény, TV příslušenství). Telefony jen nad min. cenou.
+        ("evolveo", evolveo_limit, ("sluchatka", "chytra-domacnost", "telefony")),
     ]
 
     def _apple_only(name: str) -> bool:
@@ -270,7 +272,7 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     bad_urls: set[str] = set()
     url_meta: dict[str, str] = {}
     ean_to_reject_names: dict[str, list[str]] = {}
-    for slug in ("istyle", "sencor", "xm"):
+    for slug in ("istyle", "sencor", "xm", "evolveo"):
         shop = SHOPS.get(slug)
         if not shop or not shop.feed_url:
             continue
@@ -295,7 +297,7 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
         "cover", "nahradni", "prislusenstvi", "comfort", "powerbank", "kabel", "adapter",
         "cistic-oken", "cistici-oken", "window-clean", "roboticky-cistic-oken",
     )
-    offers = db.scalars(select(Offer).where(Offer.shop.in_(("istyle", "sencor", "xm")))).all()
+    offers = db.scalars(select(Offer).where(Offer.shop.in_(("istyle", "sencor", "xm", "evolveo")))).all()
     to_delete = []
     for o in offers:
         clean = strip_tracking(o.url)
@@ -318,7 +320,7 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
         if reason:
             to_delete.append((o, reason))
 
-    feed_shops = ("istyle", "sencor", "xm")
+    feed_shops = ("istyle", "sencor", "xm", "evolveo")
 
     def _is_feed_only(p) -> bool:
         shops = {x.shop for x in p.offers}
@@ -460,11 +462,11 @@ def main(argv=None):
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--from-feeds", action="store_true",
-                    help="doplnit katalog z iStyle/Sencor/XM.cz Heureka feedů (konzervativně)")
+                    help="doplnit katalog z iStyle/Sencor/XM.cz/EVOLVEO Heureka feedů (konzervativně)")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
-                    help="smazat příslušenství/špatné nabídky z iStyle/Sencor/XM.cz feed seedu")
+                    help="smazat příslušenství/špatné nabídky z iStyle/Sencor/XM.cz/EVOLVEO feed seedu")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -479,7 +481,7 @@ def main(argv=None):
         for line in st.get("reasons", [])[:100]:
             print(" ", line)
         if a.from_feeds:
-            fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit, dry_run=a.dry_run)
+            fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit, evolveo_limit=a.feed_limit, dry_run=a.dry_run)
             print(f"Feed seed: {fs}")
         return
     items = [i for i in load_catalog() if not a.category or i["cat"] == a.category][:a.limit]
@@ -489,7 +491,7 @@ def main(argv=None):
     retired = retire_vestavne(db, dry_run=a.dry_run)
     print(f"Vestavné nabídky pryč: {retired}")
     if a.from_feeds:
-        fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit, dry_run=a.dry_run)
+        fs = seed_from_feeds(db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit, evolveo_limit=a.feed_limit, dry_run=a.dry_run)
         print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:
         return

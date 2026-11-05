@@ -26,6 +26,7 @@ jobs:
           ISTYLE_FEED_URL: ${{ secrets.ISTYLE_FEED_URL }}
           SENCOR_FEED_URL: ${{ secrets.SENCOR_FEED_URL }}
           XM_FEED_URL: ${{ secrets.XM_FEED_URL }}
+          EVOLVEO_FEED_URL: ${{ secrets.EVOLVEO_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
           # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.
           EMAIL_BACKEND: ${{ secrets.EMAIL_BACKEND || 'log' }}
