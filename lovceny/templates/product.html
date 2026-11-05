@@ -2,7 +2,7 @@
 {% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
-{% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ p.image_url }}">{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ img_canon(p.image_url) }}">{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block body %}
 <section style="padding-top:12px"><div class="wrap">
   {% if msg %}<div class="notice warn">{{ msg }}</div>{% endif %}

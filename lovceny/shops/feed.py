@@ -368,6 +368,14 @@ def _clean_ean(raw: str | None) -> str | None:
     return s
 
 
+def _feed_image(url: str | None) -> str | None:
+    """Allegro /original/ a /s1024+/ uložíme jako /s512/. Ostatní URL beze změny."""
+    if not url:
+        return None
+    from ..images import normalize_allegro_image
+    return normalize_allegro_image(url)
+
+
 def _item_id(r: dict) -> str | None:
     """ITEM_ID (Heureka). Shoptet „Ostatní“ ho nemá – když je vyplněné, použije se PRODUCTNO."""
     return (r.get("ITEM_ID") or r.get("PRODUCTNO") or "").strip() or None
@@ -397,7 +405,7 @@ def _from_row(r: dict) -> FeedItem | None:
         url=strip_tracking(url),
         price=price,
         ean=_clean_ean(r.get("EAN")),
-        image=r.get("IMGURL") or None,
+        image=_feed_image(r.get("IMGURL")),
         category=r.get("CATEGORYTEXT") or None,
         original_price=_f(r.get("PRICE_VAT_ORIGINAL")),
         in_stock=in_stock,
@@ -588,7 +596,7 @@ def parse_google_xml(source) -> list[FeedItem]:
             url=clean,
             price=price,
             ean=gtin or None,
-            image=image or None,
+            image=_feed_image(image),
             category=normalize_category(cat),
             original_price=original,
             in_stock=_in_stock_from_text(avail, missing=None),
@@ -640,7 +648,7 @@ def parse_feedoptimise_xml(source) -> list[FeedItem]:
             url=clean,
             price=price,
             ean=ean or None,
-            image=image or None,
+            image=_feed_image(image),
             category=normalize_category(cat),
             original_price=original,
             in_stock=_in_stock_from_text(avail, missing=None),
@@ -691,7 +699,7 @@ def _td_product(el) -> FeedItem | None:
         url=clean,
         price=price,
         ean=_clean_ean(ean),
-        image=image or None,
+        image=_feed_image(image),
         category=normalize_category(cat),
         in_stock=stock,
     )

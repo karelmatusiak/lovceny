@@ -67,12 +67,11 @@ def load_catalog() -> list[dict]:
 
 def _apply_meta(prod, it):
     """Název z katalogu, když obchod žádný nedal (název je jen odvozený z URL), a obrázek z výpisu obchodu."""
-    from lovceny.service import _name_from_url
+    from lovceny.service import _assign_image, _name_from_url
     from lovceny.util import slugify
     if any(prod.name == _name_from_url(o.url) for o in prod.offers):
         prod.name, prod.slug = it["name"], slugify(it["name"])
-    if not prod.image_url and it.get("image"):
-        prod.image_url = it["image"]
+    _assign_image(prod, it.get("image"))
     if not prod.category_slug:
         prod.category_slug = it["cat"]
 

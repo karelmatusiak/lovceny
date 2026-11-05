@@ -11,10 +11,11 @@ import hashlib
 import io
 import logging
 import os
+import re
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlparse, urljoin, quote
+from urllib.parse import urlparse, urljoin, urlunparse, quote
 
 import httpx
 
@@ -106,14 +107,73 @@ def _key(url: str, w: int) -> str:
 
 
 # Hostitelé, od kterých free resizer wsrv.nl/images.weserv.nl nedostane obrázek (404/blokace).
-# Pro ty necháme náš /img proxy (po zapnutí Cloudflare orange-cloud se cacheuje na edge).
-WSRV_BLOCKED_HOSTS = ("data.planeo.cz", "planeo.cz", "fast.eu", "mc-static.fast.eu")
+# Planeo/Fast: lokální /img (po zapnutí Cloudflare orange-cloud se cacheuje na edge).
+# allegroimg.com: wsrv vrací 404 i timeout; velikost už má jejich CDN (/s256, /s512),
+# takže je neposíláme ani na wsrv, ani na /img (ten by stáhl /original/ ~230 KB).
+WSRV_BLOCKED_HOSTS = ("data.planeo.cz", "planeo.cz", "fast.eu", "mc-static.fast.eu", "allegroimg.com")
 WSRV_BASE = "https://wsrv.nl/"
+# Allegro CDN: /original/ ~230 KB, /s512/ ~47 KB, /s256/ ~29 KB, /s128/ ~7 KB.
+_ALLEGRO_SIZE = re.compile(r"s(\d+)", re.I)
 
 
 def wsrv_blocked(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower()
     return any(host == h or host.endswith("." + h) for h in WSRV_BLOCKED_HOSTS)
+
+
+def _allegro_parsed(url: str):
+    try:
+        p = urlparse(url)
+    except ValueError:
+        return None
+    host = (p.hostname or "").lower()
+    if host != "allegroimg.com" and not host.endswith(".allegroimg.com"):
+        return None
+    return p
+
+
+def is_allegro_cdn(url: str | None) -> bool:
+    return bool(url) and _allegro_parsed(url) is not None
+
+
+def allegro_size_for_width(w: int) -> str:
+    """Náhled karty (slot ≤320 px, tj. CSS ~120 px @2×) → s256. Širší slot → s512. Nikdy /original/."""
+    return "s256" if w <= 320 else "s512"
+
+
+def allegro_sized_url(url: str | None, size: str) -> str | None:
+    """Přepíše první segment cesty (/original/ nebo /sNNN/) na `size`. Jinak None."""
+    if not url:
+        return None
+    p = _allegro_parsed(url)
+    if p is None:
+        return None
+    parts = p.path.split("/")
+    # path začíná „/“, size je parts[1]
+    if len(parts) < 3 or not parts[1]:
+        return None
+    token = parts[1]
+    low = token.lower()
+    if low != "original" and not _ALLEGRO_SIZE.fullmatch(token):
+        return None
+    if low == size.lower():
+        return url
+    parts[1] = size
+    return urlunparse(p._replace(path="/".join(parts)))
+
+
+def normalize_allegro_image(url: str | None) -> str | None:
+    """URL k uložení: /original/ a /s1024+/ → /s512/. Menší rendice (s128–s512) necháme."""
+    if not url or not is_allegro_cdn(url):
+        return url
+    p = _allegro_parsed(url)
+    token = (p.path.split("/")[1:] or [""])[0].lower() if p is not None else ""
+    if token == "original":
+        return allegro_sized_url(url, "s512") or url
+    m = _ALLEGRO_SIZE.fullmatch(token)
+    if m and int(m.group(1)) > 512:
+        return allegro_sized_url(url, "s512") or url
+    return url
 
 
 def local_proxy_url(url: str | None, w: int) -> str:
@@ -127,19 +187,42 @@ def wsrv_url(url: str, w: int) -> str:
 
 
 def proxy_url(url: str | None, w: int) -> str:
-    """Primární URL náhledu: wsrv.nl, u blokovaných obchodů lokální /img/*.webp."""
+    """Primární URL náhledu.
+
+    Allegro: přímá CDN rendice (s256/s512). wsrv na allegroimg 404uje a /img by
+    na free tieru stahoval /original/. Planeo/Fast a další blokované hosty: /img.
+    Ostatní povolené hosty: wsrv.nl.
+    """
     if not url:
         return local_proxy_url(url, w)
+    if is_allegro_cdn(url):
+        return allegro_sized_url(url, allegro_size_for_width(w)) or url
     if wsrv_blocked(url):
         return local_proxy_url(url, w)
     return wsrv_url(url, w)
+
+
+def _srcset_value(url: str, ws: list[int]) -> str:
+    """srcset. Stejná URL (Allegro s256 pro víc slotů) se zapíše jednou, s nejširším deskriptorem."""
+    parts: list[tuple[str, int]] = []
+    index: dict[str, int] = {}
+    for w in ws:
+        u = proxy_url(url, w)
+        i = index.get(u)
+        if i is None:
+            index[u] = len(parts)
+            parts.append((u, w))
+        else:
+            parts[i] = (u, w)
+    return ", ".join(f"{u} {w}w" for u, w in parts)
 
 
 def srcset(url: str | None, px: int) -> dict | None:
     """Atributy <img> pro zobrazenou velikost px (CSS px): src (≈2×) + srcset šířek do ≥ 3× px.
     Nepovolený host → None (šablona použije originál).
     fallback = lokální /img když selže wsrv; prázdné když už je primární /img
-    (nikdy originál – multi‑MB JPEG z Planeo/Fast)."""
+    nebo jde o Allegro CDN (onerror nesmí stáhnout /original/ přes /img).
+    Nikdy originál Planeo/Fast – multi‑MB JPEG."""
     if not url or not is_allowed(url):
         return None
     big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
@@ -147,12 +230,18 @@ def srcset(url: str | None, px: int) -> dict | None:
     base = next((w for w in WIDTHS if w >= px * 2), WIDTHS[-1])
     src = proxy_url(url, base)
     local = local_proxy_url(url, base)
+    if is_allegro_cdn(url):
+        fallback = ""
+        orig = normalize_allegro_image(url) or url
+    else:
+        fallback = local if src != local else ""
+        orig = url
     return {
         "src": src,
-        "srcset": ", ".join(f"{proxy_url(url, w)} {w}w" for w in ws),
+        "srcset": _srcset_value(url, ws),
         "sizes": f"{px}px",
-        "fallback": local if src != local else "",
-        "orig": url,
+        "fallback": fallback,
+        "orig": orig,
     }
 
 
@@ -320,7 +409,11 @@ def get(url: str, w: int, client: httpx.Client | None = None) -> bytes:
         except OSError:
             pass
         try:
-            data = resize_webp(_download(url, client), w)
+            # Allegro /original/ nenecháme stáhnout ani když někdo trefí /img přímo.
+            fetch = url
+            if is_allegro_cdn(url):
+                fetch = allegro_sized_url(url, allegro_size_for_width(w)) or url
+            data = resize_webp(_download(fetch, client), w)
         except ImageError:
             with _lock:
                 _fail[url] = time.monotonic()
