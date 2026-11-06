@@ -485,3 +485,280 @@ def uniquify_short_names(full_names: list[str], *, max_len: int = 78) -> list[st
 
 def display_name(name: str) -> str:
     return short_name(name)
+
+
+# Slova, která sama o sobě nejsou značka ani model. Neodstraňují se, jen se
+# přes ně přeskakuje, když se hledá, čím název začít.
+_CARD_STOP = frozenset({
+    "a", "i", "k", "s", "u", "v", "ve", "na", "do", "od", "po", "pri", "za", "ze", "se", "si",
+    "pres", "pri", "the", "and", "with", "for",
+    "sluchatka", "sluchatko", "headphone", "headphones", "earbud", "earbuds", "headset",
+    "televize", "televizor", "television", "notebook", "notebooky", "laptop",
+    "pracka", "kavovar", "vysavac", "smartphone", "telefon", "mobil",
+    "bezdratova", "bezdratove", "bezdratovy", "bezdratovych", "dratova", "dratove", "dratovy",
+    "bluetooth", "bt", "anc", "enc", "tws", "ows", "usb", "usb-c", "usbc", "wifi", "wi-fi", "nfc", "gps", "hifi", "hi-fi",
+    "stereo", "mikrofon", "mikrofonem", "dokanalova", "dokanalovy", "dokanalove", "dokanalovych",
+    "otevrena", "otevrene", "otevrenym", "sportovni", "herni", "profesionalni", "studiova", "studiove",
+    "nahlavni", "panske", "damske", "chytre", "hodinky", "naramek", "bezdratovym",
+    "usi", "ousko", "ouskem", "hlavovy", "most", "nastavitelnym", "kostni", "vedeni",
+    "behani", "beh", "hovory", "volanim", "volani", "prekladac", "preklad", "jazykovy",
+    "novy", "nova", "nove", "model", "novinka", "akce", "sleva", "hit", "top", "bestseller",
+    "skladem", "darek", "zdarma", "super",     "ultra", "plus",
+    "printed", "logo", "logos", "metal", "barva", "smart", "new", "lehka", "lehke",
+    "vlajkova", "lod", "kvalitni", "vynikajici", "orig", "org",
+    "pancerovy", "pancerove", "vojensky", "maly", "sikove", "pomucky", "tajna",
+    "dokovaci", "stanice", "pouzdro", "pouzdrem", "aktivnim", "potlacenim", "hluku",
+    "bezdratovych",
+})
+
+# Značky, které se jen poznají ve zdrojovém textu. Do názvu se nikdy nedoplňují.
+_CARD_BRAND_FOLDS = frozenset(_fold(b) for b in _KNOWN_BRANDS) | frozenset(_fold(b) for b in (
+    "Baseus", "Guess", "Savio", "JLab", "Belkin", "Blitzwolf", "Awei", "Mcdodo", "Modecom",
+    "Cubot", "QCY", "Sencor", "Klarstein", "Kärcher", "Dunu", "Sivga", "Maono", "Feegar",
+    "WiWU", "DKNY", "BMW", "Poly", "Creative", "Poco", "Lelit", "Pykson", "Rampage",
+    "Occamo", "Haylou", "TechniSat", "Marshall", "Elonix", "Edifier", "Plantronics", "Fifine",
+))
+
+
+_CARD_CATEGORY = frozenset({
+    "sluchatka", "sluchatko", "headphone", "headphones", "earbud", "earbuds", "headset",
+    "televize", "televizor", "television", "notebook", "notebooky", "laptop",
+    "pracka", "kavovar", "vysavac", "smartphone", "telefon", "mobil",
+})
+
+_YEAR_RE = re.compile(r"^(19|20)\d{2}$")
+_CAPACITY_RE = re.compile(r"(?i)^\d+([.,]\d+)?\s*(gb|tb|mm|cm|mah|hz|w)$")
+_VERSION_RE = re.compile(r"(?i)^\d+[.,]\d+$")
+_MODEL_CODE_RE = re.compile(
+    r"(?i)^(?!\d+(gb|tb|mm|cm|mah|hz|w)$)(?!\d+[.,]\d+$)(?!ipx?\d+$)"
+    r"(?=[a-z0-9-]*\d)(?=[a-z0-9-]*[a-z])[a-z0-9][a-z0-9-]{1,}$"
+)
+
+
+def _token_fold(token: str) -> str:
+    return _fold(token).strip(".,;:()[]{}+\"'`")
+
+
+def _is_card_stop(token: str) -> bool:
+    return _token_fold(token) in _CARD_STOP
+
+
+def _is_card_brand(token: str) -> bool:
+    return _token_fold(token) in _CARD_BRAND_FOLDS
+
+
+def _is_model_code(token: str) -> bool:
+    raw = token.strip(".,;:()[]").replace(" ", "")
+    if not raw or "/" in raw or _YEAR_RE.match(raw) or _CAPACITY_RE.match(raw) or _VERSION_RE.match(raw):
+        return False
+    if re.fullmatch(r"(?i)ipx?\d+[a-z]?", raw) or re.fullmatch(r"(?i)\d+[hv]", raw) or re.fullmatch(r"(?i)\d+g", raw):
+        return False
+    return _MODEL_CODE_RE.match(raw) is not None
+
+
+def _buried_sku(token: str) -> bool:
+    """Kód, který smí předběhnout výplň, jen když v názvu není značka."""
+    raw = token.strip(".,;:()[]")
+    if not _is_model_code(raw):
+        return False
+    if "-" in raw:
+        return True
+    return re.fullmatch(r"(?i)[a-z]{1,4}\d{2,}[a-z]{0,3}", raw) is not None
+
+
+def _is_color_token(token: str) -> bool:
+    raw = token.strip(".,;:()[]")
+    if not raw:
+        return False
+    match = _COLOR_RE.search(raw)
+    return match is not None and match.group(0) == raw
+
+
+def _is_hour_or_spec(token: str) -> bool:
+    raw = token.strip(".,;:()[]").replace(" ", "")
+    if not raw:
+        return False
+    return bool(
+        _YEAR_RE.match(raw)
+        or _VERSION_RE.match(raw)
+        or _CAPACITY_RE.match(raw)
+        or re.fullmatch(r"(?i)\d+h", raw)
+        or re.fullmatch(r"(?i)\d+g", raw)
+        or re.fullmatch(r"(?i)ipx?\d+", raw)
+    )
+
+
+_COMPAT_PREV = frozenset({"pro", "k", "ke", "for", "compatible", "kompatibilni"})
+_CARD_CONDITION = frozenset({
+    "originalni", "original", "kompatibilni", "kompatibilne", "kompatibilita",
+    "repasovany", "repasovane", "repasovana", "bazar", "bazarovy", "bazarova",
+    "pouzity", "pouzita", "pouzite", "zanovni", "rozbaleny", "rozbalene", "rozbalena",
+    "refurbished", "used",
+})
+
+
+def _split_card_tokens(text: str) -> list[str]:
+    out = []
+    for part in text.split():
+        tok = part.strip()
+        if not tok or tok.strip(".,;:–-—/|()[]") == "":
+            continue
+        out.append(tok.strip(",;"))
+    return out
+
+
+def _slash_dup(token: str) -> str:
+    """„černá/černá“ je totéž slovo dvakrát, ne dvě varianty."""
+    if "/" not in token:
+        return token
+    bits = [b for b in token.split("/") if b]
+    if len(bits) >= 2 and all(_token_fold(b) == _token_fold(bits[0]) for b in bits):
+        return bits[0]
+    return token
+
+
+def _blocks_brand(token: str) -> bool:
+    """Delší slovo před značkou obvykle znamená, že značka v názvu není výrobce."""
+    fold = _token_fold(token)
+    if not fold or _is_card_stop(token) or _is_color_token(token) or _is_hour_or_spec(token):
+        return False
+    if fold in _CARD_CONDITION or fold in _CARD_CATEGORY:
+        return False
+    return len(fold) >= 4
+
+
+def _brand_index(tokens: list[str]) -> int | None:
+    """První značka výrobce. „pro/k iPhone“ ani značka až za jiným názvem se nebere."""
+    for i, tok in enumerate(tokens):
+        if not _is_card_brand(tok):
+            continue
+        prev = _token_fold(tokens[i - 1]) if i else ""
+        if prev in _COMPAT_PREV:
+            continue
+        if any(_blocks_brand(p) for p in tokens[:i]):
+            continue
+        return i
+    return None
+
+
+def _buried_model_index(tokens: list[str]) -> int | None:
+    """Kód modelu schovaný za obecnými slovy, jen když v názvu není značka."""
+    if _brand_index(tokens) is not None:
+        return None
+    for i, tok in enumerate(tokens):
+        if i == 0 or not _buried_sku(tok):
+            continue
+        prev = tokens[i - 1]
+        if not _is_card_stop(prev) and not _is_color_token(prev):
+            continue
+        return i
+    return None
+
+
+def _take_run(tokens: list[str], start: int) -> list[int]:
+    """Značka a hned následující slova modelu, bez barvy, verze a výplně."""
+    idxs = [start]
+    k = start + 1
+    while k < len(tokens) and len(idxs) < 4:
+        tok = tokens[k]
+        if _is_card_stop(tok) or _is_color_token(tok) or _is_hour_or_spec(tok):
+            break
+        idxs.append(k)
+        k += 1
+    return idxs
+
+
+def _drop_category(tokens: list[str]) -> list[str]:
+    out = []
+    i = 0
+    while i < len(tokens):
+        fold = _token_fold(tokens[i])
+        nxt = _token_fold(tokens[i + 1]) if i + 1 < len(tokens) else ""
+        if fold == "novy" and nxt == "model":
+            i += 2
+            continue
+        if fold == "chytre" and nxt == "hodinky":
+            i += 2
+            continue
+        if fold in _CARD_CATEGORY:
+            i += 1
+            continue
+        out.append(_slash_dup(tokens[i]))
+        i += 1
+    return out
+
+
+def _join_card(tokens: list[str]) -> str:
+    text = " ".join(t for t in tokens if t)
+    text = re.sub(r"\s+([,.;:])", r"\1", text)
+    return _clean_ws(text)
+
+
+def card_label(name: str) -> str:
+    """Viditelný název na kartě. Původní `name` se nemění.
+
+    Značka a model, pokud ve zdroji opravdu jsou, jdou na začátek. Pryč jdou jen
+    samostatná kategorie („sluchátka“) a opakovaný stejný token („černá/černá“)
+    a spojení „nový model“. Originální/kompatibilní, barva, kapacita, generace
+    a zkratky (ANC, USB-C) zůstávají v původním znění. Bez spolehlivé identity
+    se vrátí dosavadní zkrácení, nic se nedomýšlí.
+    """
+    raw = _clean_ws(name)
+    if not raw:
+        return ""
+    # Nejdřív existující zkrácení specifikací (lomítka, televize, MacBook).
+    # Přeuspořádání nesmí vrátit výčet, který short_name už sundal.
+    prose = short_name(raw)
+    tokens = [_slash_dup(t) for t in _split_card_tokens(prose)]
+    if not tokens:
+        return prose
+    brand_at = _brand_index(tokens)
+    if brand_at is None:
+        buried = _buried_model_index(tokens)
+        if buried is None:
+            return _join_card(tokens) or prose
+        used = {buried}
+        head = [tokens[buried]]
+    else:
+        used_list = _take_run(tokens, brand_at)
+        # Značka už je na začátku: nesahej na pozdější kód, ať se neroztrhne řada.
+        if brand_at > 0 and not any(_is_model_code(tokens[i]) for i in used_list):
+            for j in range(brand_at + 1, min(len(tokens), brand_at + 8)):
+                tok = tokens[j]
+                if not _is_model_code(tok) or _is_hour_or_spec(tok):
+                    continue
+                prev = j - 1
+                if prev not in used_list and prev != brand_at:
+                    prev_tok = tokens[prev]
+                    if not _is_card_stop(prev_tok) and not _is_color_token(prev_tok) and not _is_hour_or_spec(prev_tok):
+                        used_list.append(prev)
+                used_list.append(j)
+                break
+        used = set(used_list)
+        head = [tokens[i] for i in used_list]
+    if not used or used == set(range(len(head))) and tokens[: len(head)] == head:
+        return _join_card(_drop_category(tokens) if brand_at not in (None, 0) else tokens) or prose
+    tail = []
+    head_folds = {_token_fold(t) for t in head}
+    skip_next_model = False
+    for i, tok in enumerate(tokens):
+        if i in used:
+            continue
+        fold = _token_fold(tok)
+        if skip_next_model:
+            skip_next_model = False
+            if fold == "model":
+                continue
+        if fold == "novy" and i + 1 < len(tokens) and _token_fold(tokens[i + 1]) == "model":
+            skip_next_model = True
+            continue
+        if fold == "chytre" and i + 1 < len(tokens) and _token_fold(tokens[i + 1]) == "hodinky":
+            continue
+        if fold == "hodinky" and i > 0 and _token_fold(tokens[i - 1]) == "chytre":
+            continue
+        if fold in _CARD_CATEGORY:
+            continue
+        if fold in head_folds and (_is_card_brand(tok) or _is_model_code(tok)):
+            continue
+        tail.append(tok)
+    return _join_card(head + tail) or prose
