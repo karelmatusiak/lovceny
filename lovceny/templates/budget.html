@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link %}
 {% block title %}Hlídání podle rozpočtu – dáme vědět, až bude produkt pod tvou cenou | Lovceny{% endblock %}
 {% block description %}Nastav kategorii, značku a maximální cenu. Jakmile se v českých e-shopech objeví produkt v tvém rozpočtu, pošleme upozornění. Bez registrace a bez cookies.{% endblock %}
 {% block body %}
@@ -27,7 +27,7 @@
   {% if preview %}
   <p class="sub">{{ preview|length }} {% if preview|length == 1 %}produkt{% elif preview|length < 5 %}produkty{% else %}produktů{% endif %} už teď vychází. Když si hlídání nastavíš, tyhle ti hlásit nebudeme (leda by ještě zlevnily) – upozorníme na nové. {{ rank_link() }}</p>
   <ul class="bw-list">{% for p, o in preview[:12] %}{% set s = SHOPS.get(o.shop) %}
-    <li class="card bw-item"><a href="/produkt/{{ p.id }}-{{ p.slug }}"><span class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span><span class="bw-name"><span class="bw-n" title="{{ p.name }}">{{ dname(p) }}</span><small>{{ s.name if s else o.shop }}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</small></span><b>{{ o.price|czk }}</b></a></li>{% endfor %}
+    <li class="card bw-item"><a href="/produkt/{{ p.id }}-{{ p.slug }}"><span class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span><span class="bw-name"><span class="bw-n" title="{{ p.name }}">{{ dname(p) }}</span><small>{{ s.name if s else o.shop }}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</small></span><b>{{ o.price|czk }}</b></a></li>{% endfor %}
   </ul>
   {% else %}<p class="sub">Teď nic takového nevidíme. Nastav hlídání a dáme vědět, jakmile se to změní.</p>{% endif %}
 </div></section>

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, cmp_button, rank_link %}
 {% block title %}Black Friday {{ s.year }}: které slevy jsou opravdu nejnižší | Lovceny{% endblock %}
 {% block description %}Black Friday {{ s.year }} ({{ cz_date(s.bf) }}): přehled aktuálních slev elektroniky a spotřebičů s historií cen. Ukážeme, co je na nejnižší naměřené ceně a kde bylo za 30 dní levněji (§ 12a).{% endblock %}
 {% block body %}
@@ -37,7 +37,7 @@
   {% if lowest %}
   <div class="bf-low">{% for r in lowest %}
     <a class="card bf-low-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-      <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span>
+      <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span>
       <span class="p-name sm">{{ dname(r.product) }}</span>
       <span class="bf-low-price"><b>{{ r.best.price|czk }}</b>{% if r.real_pct >= 1 %}<span class="save-pct">−{{ '%.0f'|format(r.real_pct) }}&nbsp;%</span>{% endif %}</span>
       <small>{{ get_shop(r.best.shop).name if get_shop(r.best.shop) else r.best.shop }} · sledujeme {{ r.days }} dní{% if r.verdict.median90 %} · obvykle {{ r.verdict.median90|czk }}{% endif %}</small>
@@ -61,7 +61,7 @@
   <ul class="bf-list">{% for r in rows %}{% set sh = get_shop(r.best.shop) %}
     <li class="card bf-row bf-{{ r.kind }}">
       <a class="bf-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-        <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</span>
+        <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span>
         <span class="bf-info"><span class="p-name sm">{{ dname(r.product) }}</span>
           <span class="bf-meta">{{ sh.name if sh else r.best.shop }}{% if r.best.last_checked %} · ověřeno {{ r.best.last_checked|prague }}{% endif %}{% if r.has_demo %} · <span class="demo-tag">DEMO</span>{% endif %}</span></span>
         <span class="bf-price"><b>{{ r.best.price|czk }}</b>{% if r.claimed_pct %}<small>obchod uvádí −{{ '%.0f'|format(r.claimed_pct) }}&nbsp;% z {{ r.best.original_price|czk }}</small>{% endif %}</span>

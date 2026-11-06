@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, badge, cmp_button, rank_link, pcard %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, cmp_button, rank_link, pcard %}
 {% block title %}Skutečné slevy – Lovceny{% endblock %}
 {% block description %}Žebříček produktů u 90denního minima a přehled slev, u kterých jsme za 30 dní naměřili nižší cenu. Bez placených pozic.{% endblock %}
 {% block og_title %}Skutečné slevy – Lovceny{% endblock %}
@@ -22,7 +22,7 @@
   {% for r in buys %}
     <article class="card deal-row">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div class="deal-info">
           <div class="p-name sm">{{ dname(r.product) }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
@@ -69,7 +69,7 @@
     {% for r in near %}
       <article class="card deal-row">
         <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-          <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
+          <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
           <div class="deal-info">
             <div class="p-name sm">{{ dname(r.product) }}</div>
             <div class="deal-meta">{{ badge(r.verdict) }}</div>
@@ -115,7 +115,7 @@
   {% for r in fakes %}
     <article class="card deal-row deal-fake">
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div class="deal-info">
           <div class="p-name sm">{{ dname(r.product) }}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>

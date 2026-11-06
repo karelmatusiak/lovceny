@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img %}
+{% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img, img_missing %}
 {% block title %}{% if r %}Ověření slevy: {{ (r.name or (r.query|pretty_name) or 'produkt')[:70] }}{% else %}Ověř slevu z jakéhokoli e-shopu{% endif %} | Lovceny{% endblock %}
 {% block description %}Vlož odkaz na produkt z e-shopu: ukážeme aktuální cenu, historii, nejnižší cenu za posledních 30 dní (§ 12a zákona o ochraně spotřebitele) a nabídky v dalších obchodech.{% endblock %}
 {% block body %}
@@ -20,7 +20,7 @@
   <div class="ov-grid">
     <article class="card ov-card" aria-labelledby="ov-name">
       <div class="p-head">
-        <div class="p-img">{% if r.image %}{{ shop_img(r.image, 60, priority=true) }}{% elif r.product and r.product.image_url %}{{ shop_img(r.product.image_url, 60, priority=true) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+        <div class="p-img">{% if r.image %}{{ shop_img(r.image, 60, priority=true) }}{% elif r.product and r.product.image_url %}{{ shop_img(r.product.image_url, 60, priority=true) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div><h2 class="p-name" id="ov-name">{{ r.name or (r.query|pretty_name) or 'Produkt' }}</h2>
           <div class="p-cat">{% if r.shop %}<span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}{% else %}{{ host }}{% endif %} · <a href="{{ r.url }}" target="_blank" rel="noopener nofollow">otevřít v obchodě ↗</a></div></div>
       </div>
