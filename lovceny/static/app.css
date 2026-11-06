@@ -261,14 +261,22 @@ main:focus{outline:none}
 .si-wa{background:#167A45}.si-ms{background:#0866D6}.si-x{background:#14171A}.si-em{background:var(--accent);color:#3A1606}
 @media (max-width:560px){.share-pop{position:fixed;left:10px;right:10px;bottom:10px;top:auto;width:auto;padding:16px;border-radius:22px;box-shadow:0 -10px 50px -10px rgba(20,33,27,.4)}}
 /* ---------- v3: PWA výzva ---------- */
-.pwa-install{position:fixed;z-index:40;left:50%;transform:translateX(-50%);bottom:16px;width:min(560px,calc(100% - 24px));display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--brand-100);border-radius:20px;box-shadow:0 18px 50px -12px rgba(20,33,27,.35);padding:16px 18px}
+.pwa-install{position:static;z-index:auto;left:auto;bottom:auto;transform:none;width:auto;max-width:none;display:block;margin:0;background:var(--brand-50);border:0;border-bottom:1px solid var(--brand-100);border-radius:0;box-shadow:none;padding:0}
+.pwa-inner{display:flex;gap:14px;align-items:flex-start;padding:14px 0}
 .pwa-install img{border-radius:12px;flex:none}
-.pwa-body{flex:1;min-width:0}.pwa-title{margin:0;font-size:16px}.pwa-title:focus{outline:none}
+.pwa-body{flex:1;min-width:0}
+.pwa-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pwa-title{margin:0;font-size:16px}
+.pwa-close{flex:none;width:44px;height:44px;margin:-8px -8px 0 0;border:0;background:transparent;color:var(--ink);font-size:28px;line-height:1;cursor:pointer;border-radius:12px}
+.pwa-close:hover{background:#fff}
 .pwa-text{margin:4px 0 10px;font-size:14px;color:var(--muted)}
 .pwa-ios{margin:0 0 12px;padding-left:20px;font-size:14.5px;display:grid;gap:6px}.ios-share{vertical-align:-3px;color:#0A64D6}
 .pwa-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn-link{background:none;border:0;font:inherit;color:var(--muted);text-decoration:underline;cursor:pointer;min-height:44px;padding:0 10px}
-.cmp-bar:not([hidden])~.pwa-install{display:none}
+@media (max-width:390px){
+  .pwa-inner{gap:10px}
+  .pwa-install img{width:40px;height:40px}
+}
 .foot-btn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;min-height:22px}
 .offline img{border-radius:22px;margin:24px auto 0}
 .push-ios{display:grid;gap:8px;text-align:left;background:var(--brand-50);border-radius:16px;padding:14px 16px}.push-ios p{margin:0}.push-ios .btn{background:#fff;justify-self:start}
