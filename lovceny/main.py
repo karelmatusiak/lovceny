@@ -23,7 +23,7 @@ from .verdict import compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk, cz_count, cz_plural
-from .names import short_name, uniquify_short_names
+from .names import card_label, short_name, uniquify_short_names
 from .availability import (
     offer_is_buyable, best_buyable_offer, last_known_offer,
     sort_offers_for_display,
@@ -53,6 +53,7 @@ from . import seasons  # noqa: E402
 tpl.env.globals["season_tip"] = seasons.category_tip
 tpl.env.filters["pretty_name"] = lambda q: __import__("lovceny.verify", fromlist=["x"]).pretty_name(q)
 tpl.env.filters["short_name"] = short_name
+tpl.env.globals["card_label"] = card_label
 
 
 def assign_display_names(products):

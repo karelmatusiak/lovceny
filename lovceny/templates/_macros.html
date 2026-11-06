@@ -25,8 +25,8 @@
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ p.slug }}">
   <div class="p-head">
-    <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt=dname(p)) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
-    <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{{ dname(p) }}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
+    <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt="") }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+    <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{% set label = card_label(p.name) %}{{ label }}{% if label != p.name %}<span class="sr-only">. Celý název: {{ p.name }}</span>{% endif %}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
   </div>
   <div class="pc-row">{{ badge(v) }}
     <div class="pc-prices">
