@@ -16,10 +16,20 @@
   function remember(id, slug) { if (!slug) return; try { var s = slugs(); s[id] = slug; localStorage.setItem(KS, JSON.stringify(s)); } catch (e) {} }
   function url(l) { var s = slugs(); return '/porovnat' + (l.length ? '?p=' + l.map(function (id) { return id + (s[id] ? '-' + s[id] : ''); }).join(',') : ''); }
   function say(t) { var h = document.getElementById('cmp-hint'); if (h) h.textContent = t; }
+  function reserve(bar) {
+    var pad = 0;
+    if (bar && !bar.hidden) pad = Math.ceil(bar.getBoundingClientRect().height) + 28;
+    document.documentElement.style.setProperty('--cmp-pad', pad + 'px');
+  }
   function toggle(b) {
     var id = +b.dataset.cmpId, l = get(), i = l.indexOf(id);
     if (i >= 0) l.splice(i, 1);
-    else if (l.length >= MAX) { set(l); say('Srovnat jde nejvýš ' + MAX + ' produkty – nejdřív nějaký odeber.'); return; }
+    else if (l.length >= MAX) {
+      set(l);
+      say('Srovnat jde nejvýš ' + MAX + ' produkty – nejdřív nějaký odeber.');
+      reserve(document.getElementById('cmp-bar'));
+      return;
+    }
     else { remember(id, b.dataset.cmpSlug); l.push(id); }
     set(l);
   }
@@ -30,14 +40,16 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.classList.toggle('on', on);
       var t = b.querySelector('.cmp-txt'); if (t) t.textContent = on ? 'Ve srovnání ✓' : 'Přidat do srovnání';
     });
-    var bar = document.getElementById('cmp-bar'); if (!bar) return;
+    var bar = document.getElementById('cmp-bar'); if (!bar) { reserve(null); return; }
     var onPage = !!document.getElementById('cmp-page');
     bar.hidden = l.length === 0 || onPage;
     document.getElementById('cmp-n').textContent = l.length;
     var go = document.getElementById('cmp-go'); go.href = url(l);
     go.classList.toggle('disabled', l.length < 2); go.setAttribute('aria-disabled', l.length < 2 ? 'true' : 'false');
     say(l.length < 2 ? 'Přidej ještě aspoň 1 produkt' : (l.length >= MAX ? 'Maximum ' + MAX + ' produkty' : ''));
+    reserve(bar);
   }
+  window.addEventListener('resize', function () { reserve(document.getElementById('cmp-bar')); });
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-cmp-id]');
     if (b) { e.preventDefault(); toggle(b); return; }

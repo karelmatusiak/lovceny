@@ -29,7 +29,7 @@
         {% if h.badge %}<span class="hero-pick-badge">{{ h.badge }}</span>{% endif %}
         <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
           <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 96, priority=(loop.first), alt=dname(h.product)) }}{% else %}{{ img_missing() }}{% endif %}</div>
-          <div class="hero-pick-name" title="{{ h.product.name }}">{{ dname(h.product) }}</div>
+          <div class="hero-pick-name" title="{{ h.product.name }}">{{ dname(h.product) }}{% if dname(h.product) != h.product.name %}<span class="sr-only">. Celý název: {{ h.product.name }}</span>{% endif %}</div>
         </a>
         <div class="hero-pick-meta"><b>{{ h.best.price|czk }}</b>
           {% if hs %}<a class="btn btn-shop-sm hero-pick-buy" href="{{ hs.affiliate_link(h.best.url) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
@@ -60,7 +60,7 @@
   <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
   <div class="teaser-grid">{% for r in deals %}
     <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
-      <div class="p-name sm">{{ dname(r.product) }}</div>
+      <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
       {{ badge(r.verdict) }}
       <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>
       {% if r.savings_czk > 0 %}<small>ušetříš {{ r.savings_czk|czk }} oproti obvyklé ceně</small>{% endif %}

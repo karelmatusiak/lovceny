@@ -57,6 +57,33 @@ def test_compare_empty_and_single():
     db.close()
 
 
+def test_compare_tray_reserves_room_above_the_bar():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    css = (root / "lovceny/static/app.css").read_text()
+    js = (root / "lovceny/static/compare.js").read_text()
+    compact = css.replace(" ", "").replace("\n", "")
+    assert "body{padding-bottom:var(--cmp-pad)}" in compact
+    assert "html{scroll-padding-bottom:var(--cmp-pad)}" in compact
+    assert "function reserve" in js and "--cmp-pad" in js
+    flat = css.replace("\n", "")
+    assert ".crumbs li{display:flex;align-items:center;max-width:100%;min-width:0}" in flat
+    assert "max-width:min(60ch,100%)" in flat
+    assert "addEventListener('resize'" in js
+    init_db()
+    db = SessionLocal()
+    p = _product(db, "Sony MDR-ZX310APR Sluchátka, červená", 528)
+    p.category_slug = "sluchatka"
+    db.commit()
+    c = TestClient(app)
+    page = c.get("/kategorie/sluchatka?znacka=Sony&od=1&do=1&skladem=1").text
+    assert "Žádný produkt neodpovídá filtrům" in page
+    assert 'id="hlidat-rozpocet"' in page and 'id="bw-max"' in page
+    assert 'id="cmp-bar" class="cmp-bar" hidden' in page
+    assert 'id="pwa-install"' in page and 'id="cmp-go"' in page
+    db.close()
+
+
 def test_cards_and_detail_have_compare_button():
     init_db()
     db = SessionLocal()

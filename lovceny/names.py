@@ -103,8 +103,12 @@ def _fold(s: str) -> str:
 def _clean_ws(s: str) -> str:
     s = htmlmod.unescape(s or "")
     s = s.replace("\xa0", " ").replace("／", "/")
-    s = re.sub(r"\s+", " ", s).strip(" \t,;/-")
-    return s
+    s = re.sub(r"\s+", " ", s).strip()
+    # „model , barva“ vznikne, když se mezi slovem a čárkou smaže kategorie.
+    # Čárka před číslem („26,5“) se neroztrhne.
+    s = re.sub(r"\s+([,;])", r"\1", s)
+    s = re.sub(r"([,;])(?=[^\s\d])", r"\1 ", s)
+    return s.strip(" \t,;/-")
 
 
 def _is_category_part(part: str) -> bool:
@@ -601,10 +605,40 @@ def _split_card_tokens(text: str) -> list[str]:
     out = []
     for part in text.split():
         tok = part.strip()
-        if not tok or tok.strip(".,;:–-—/|()[]") == "":
+        if not tok:
             continue
-        out.append(tok.strip(",;"))
+        if tok in {",", ";", ".", ":"}:
+            if out and not out[-1].endswith(tok):
+                out[-1] += tok
+            continue
+        if tok.strip(".,;:–-—/|()[]") == "":
+            continue
+        out.append(tok)
     return out
+
+
+# Jen celý token, který opravdu je tahle zkratka nebo značka. Ne „Ancillary“, ne „JblTune“.
+_POLISH_TOKEN = {
+    "anc": "ANC",
+    "enc": "ENC",
+    "jbl": "JBL",
+    "bluetooth": "Bluetooth",
+    "usb-c": "USB-C",
+    "usbc": "USB-C",
+}
+
+
+def _polish_token(token: str) -> str:
+    """Sjednotí zápis známé zkratky. Ostatní slova, včetně češtiny, nechá jak přišla."""
+    match = re.match(r"^([(\[\"']*)(.*?)([)\]\"',.;:]*)$", token)
+    if not match or not match.group(2):
+        return token
+    pre, core, post = match.groups()
+    key = _fold(core).replace("–", "-").replace("—", "-").replace(" ", "")
+    shown = _POLISH_TOKEN.get(key)
+    if shown is None:
+        return token
+    return pre + shown + post
 
 
 def _slash_dup(token: str) -> str:
@@ -689,7 +723,7 @@ def _drop_category(tokens: list[str]) -> list[str]:
 
 
 def _join_card(tokens: list[str]) -> str:
-    text = " ".join(t for t in tokens if t)
+    text = " ".join(_polish_token(t) for t in tokens if t)
     text = re.sub(r"\s+([,.;:])", r"\1", text)
     return _clean_ws(text)
 
@@ -699,9 +733,10 @@ def card_label(name: str) -> str:
 
     Značka a model, pokud ve zdroji opravdu jsou, jdou na začátek. Pryč jdou jen
     samostatná kategorie („sluchátka“) a opakovaný stejný token („černá/černá“)
-    a spojení „nový model“. Originální/kompatibilní, barva, kapacita, generace
-    a zkratky (ANC, USB-C) zůstávají v původním znění. Bez spolehlivé identity
-    se vrátí dosavadní zkrácení, nic se nedomýšlí.
+    a spojení „nový model“. Originální/kompatibilní, barva, kapacita a generace
+    zůstávají. Celé tokeny ANC, ENC, USB-C, Bluetooth a JBL se sjednotí, ostatní
+    slova se nepřepisují a značka se nedomýšlí. Bez spolehlivé identity se vrátí
+    dosavadní zkrácení.
     """
     raw = _clean_ws(name)
     if not raw:

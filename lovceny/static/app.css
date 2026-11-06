@@ -68,6 +68,9 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}.p-full-name{margin:4px 
   border:1.5px solid var(--line,#DDE3DF);background:#fff;color:#22302A;border-radius:10px;padding:7px 12px;min-height:40px}
 .btn-cmp:hover{border-color:#0B6E4F}.btn-cmp.on{background:#E8F3EE;border-color:#0B6E4F;color:#0B6E4F}
 .p-verdict-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between}
+:root{--cmp-pad:0px}
+body{padding-bottom:var(--cmp-pad)}
+html{scroll-padding-bottom:var(--cmp-pad)}
 .cmp-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:12px;
   background:#fff;border:1px solid var(--line,#DDE3DF);border-radius:16px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.15);max-width:calc(100% - 24px)}
 .cmp-bar .btn.disabled{opacity:.55;cursor:not-allowed}.cmp-hint{font-size:13px;color:#5B6B63}
@@ -190,11 +193,11 @@ main:focus{outline:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 /* ---- drobečková navigace ---- */
 .crumbs{font-size:14px;color:var(--muted);margin:4px 0 0}
-.crumbs ol{list-style:none;display:flex;flex-wrap:wrap;gap:2px 0}
-.crumbs li{display:flex;align-items:center;max-width:100%}
-.crumbs li+li::before{content:"›";margin:0 8px;color:#93A29A}
+.crumbs ol{list-style:none;display:flex;flex-wrap:wrap;gap:2px 0;min-width:0;max-width:100%}
+.crumbs li{display:flex;align-items:center;max-width:100%;min-width:0}
+.crumbs li+li::before{content:"›";margin:0 8px;color:#93A29A;flex:none}
 .crumbs a{text-decoration:none;color:var(--brand-600);padding:6px 0}.crumbs a:hover{text-decoration:underline}
-.crumbs [aria-current]{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch}
+.crumbs [aria-current]{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;max-width:min(60ch,100%)}
 /* ---- kategorie ---- */
 .cat-hero{padding:28px 0 12px}
 .page-h1{font-size:clamp(30px,4.4vw,46px);line-height:1.1;letter-spacing:-.03em;margin:10px 0 12px;max-width:none;font-weight:850}
