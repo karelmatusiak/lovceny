@@ -90,6 +90,8 @@ def _run(db, shop, ok, blocked=0, captcha=0, errors=0, robots=0, when=None):
 def test_evaluate_failing_stale_and_ok(client_db):
     _, db, make = client_db
     now = datetime.now(timezone.utc)
+    # Mironet musí mít vlastní čerstvou nabídku, jinak ho vyhodnocení přeskočí.
+    make([1000], shop="mironet")
     for o in db.query(Offer).all():  # čistý stav: všechny nabídky čerstvé
         o.status, o.last_checked = "ok", now
     db.commit()

@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, Body
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response, FileResponse
@@ -794,6 +794,7 @@ def _cat_rows(db, c):
     rows = sorted(rows, key=lambda r: (
         r[1].in_stock is False,  # OOS dolů
         float(r[1].price) if r[1] else 0,
+        r[0].id,  # stejná cena nesmí mezi stránkami přeskočit ani se opakovat
     ))
     # payload order follows rows after sort
     by_pid = {pid: (pid, bid, v) for pid, bid, v in payload}
@@ -817,8 +818,58 @@ def _ve_sleve_rows(rows):
         if pct < 1:
             continue
         scored.append(((p, best, v), pct))
-    scored.sort(key=lambda x: -x[1])
+    scored.sort(key=lambda x: (-x[1], x[0][0].id))
     return [r for r, _ in scored]
+
+
+# Výpis kategorie. 24 karet je jedna obrazovka na desktopu a pořád srozumitelný seznam na mobilu.
+CATEGORY_PAGE_SIZE = 24
+
+
+def _category_pages(n: int) -> int:
+    if n <= 0:
+        return 0
+    return (n + CATEGORY_PAGE_SIZE - 1) // CATEGORY_PAGE_SIZE
+
+
+def _parse_strana(raw: str | None) -> tuple[int, bool]:
+    """Číslo stránky a příznak, že `strana=1` má zmizet z URL (kanonická první stránka)."""
+    if raw is None or str(raw).strip() == "":
+        return 1, False
+    text = str(raw).strip()
+    if not text.isdigit():
+        raise HTTPException(404)
+    n = int(text)
+    if n < 1:
+        raise HTTPException(404)
+    return n, n == 1
+
+
+def _cat_url(path: str, params: list[tuple[str, str]], page: int) -> str:
+    q = list(params)
+    if page > 1:
+        q.append(("strana", str(page)))
+    return path + (("?" + urlencode(q)) if q else "")
+
+
+def _pager_numbers(page: int, pages: int) -> list[int | None]:
+    """Čísla stránek; None je mezera. Do devíti stránek (sluchátka) ukážeme všechny."""
+    if pages <= 9:
+        return list(range(1, pages + 1))
+    wanted = {1, pages, page - 1, page, page + 1}
+    if page <= 3:
+        wanted.update({2, 3, 4})
+    if page >= pages - 2:
+        wanted.update({pages - 1, pages - 2, pages - 3})
+    nums = sorted(n for n in wanted if 1 <= n <= pages)
+    out: list[int | None] = []
+    prev = 0
+    for n in nums:
+        if prev and n > prev + 1:
+            out.append(None)
+        out.append(n)
+        prev = n
+    return out
 
 
 CAT_VIEWS = {
@@ -842,7 +893,7 @@ def categories_index(request: Request, db=Depends(get_db)):
 @app.get("/kategorie/{slug}", response_class=HTMLResponse)
 @app.get("/kategorie/{slug}/{view}", response_class=HTMLResponse)
 def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
-             znacka: str = "", od: str = "", do: str = "", skladem: str = ""):
+             znacka: str = "", od: str = "", do: str = "", skladem: str = "", strana: str = ""):
     c = _cat_or_404(slug)
     if view not in CAT_VIEWS:
         raise HTTPException(404)
@@ -871,32 +922,48 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
         rows = [(p, o, v) for p, o, v in rows if o and o.in_stock is not False]
     if view == "nejlevnejsi":
         rows = rows[:20]
+    total = len(rows)
+    pages = _category_pages(total)
+    page, strip_strana = _parse_strana(strana)
     title_t, desc_t = CAT_VIEWS[view]
     fmt = {"name": c.name, "name_l": c.name[:1].lower() + c.name[1:], "gen": c.gen}
     path = f"/kategorie/{slug}" + (f"/{view}" if view else "")
     crumbs = [("Lovceny", "/"), (c.name, f"/kategorie/{slug}")] + ([({"nejlevnejsi": "Nejlevnější", "ve-sleve": "Ve slevě"}[view], path)] if view else [])
     priced = [float(b.price) for _, b, _ in rows if b]
     from .categories import CATEGORY_INTROS
-    from urllib.parse import urlencode
-    fq = {}
+    fq: list[tuple[str, str]] = []
     if brand:
-        fq["znacka"] = brand
+        fq.append(("znacka", brand))
     if od.strip():
-        fq["od"] = od.strip()
+        fq.append(("od", od.strip()))
     if do.strip():
-        fq["do"] = do.strip()
+        fq.append(("do", do.strip()))
     if only_stock:
-        fq["skladem"] = "1"
+        fq.append(("skladem", "1"))
+    if strip_strana:
+        return RedirectResponse(_cat_url(path, fq, 1), status_code=301)
+    if page > 1 and page > pages:
+        raise HTTPException(404)
+    start = (page - 1) * CATEGORY_PAGE_SIZE
+    page_rows = rows[start:start + CATEGORY_PAGE_SIZE]
     filter_qs = ("?" + urlencode(fq)) if fq else ""
+    canon_path = _cat_url(path, fq, page)
+    range_from = start + 1 if total else 0
+    range_to = start + len(page_rows)
     return tpl.TemplateResponse(request, "category.html", {
-        "c": c, "view": view, "rows": rows, "crumbs": crumbs, "canonical_path": path,
+        "c": c, "view": view, "rows": page_rows, "crumbs": crumbs, "canonical_path": canon_path,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
         "page_title": title_t.format(**fmt), "page_desc": desc_t.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
         "thin_history": price_history_thin(db),
         "cat_intro": CATEGORY_INTROS.get(slug) if not view else None,
         "brands": brands, "filter_brand": brand, "filter_od": od.strip(), "filter_do": do.strip(),
         "filter_skladem": only_stock, "filter_qs": filter_qs, "filters_active": bool(fq),
-        "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(rows, path)]})
+        "page": page, "pages": pages, "total": total,
+        "range_from": range_from, "range_to": range_to,
+        "page_prev": _cat_url(path, fq, page - 1) if page > 1 else "",
+        "page_next": _cat_url(path, fq, page + 1) if page < pages else "",
+        "page_links": [(n, _cat_url(path, fq, n) if n else "") for n in _pager_numbers(page, pages)],
+        "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(page_rows, canon_path, start=start)]})
 
 
 @app.get("/sitemap.xml")

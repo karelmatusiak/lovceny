@@ -742,6 +742,14 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 .about-how-steps{margin:16px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.5}
 .about-how .section-art{margin:12px 0;max-width:420px}
 .nav-cta-btn{white-space:nowrap}
+.pager{margin:12px 0 4px}
+.pager-list{display:flex;flex-wrap:wrap;gap:8px;align-items:center;list-style:none;margin:0;padding:0}
+.pager-link{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--line,#DDE3DF);border-radius:12px;background:#fff;color:var(--ink,#122018);font-weight:700;text-decoration:none}
+.pager-link:hover{border-color:var(--brand,#0B6E4F);color:var(--brand,#0B6E4F)}
+.pager-link:focus-visible{outline:3px solid var(--accent,#FF7A45);outline-offset:3px}
+.pager-link[aria-current="page"]{background:var(--brand,#0B6E4F);border-color:transparent;color:#fff}
+.pager-link.is-disabled{opacity:.4}
+.pager-gap{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;color:var(--muted,#5B6B63)}
 
 
 /* --- Shop buy CTAs: prominent, consistent, tasteful --- */

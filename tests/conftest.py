@@ -1,6 +1,9 @@
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db")
+# Jedna lokální SQLite na běh pytestu. Nastaví se dřív, než se naimportuje lovceny.db,
+# takže engine nemůže mířit na Neon ani na ./lovceny.db.
+_TEST_DB_PATH = os.path.join(tempfile.mkdtemp(prefix="lovceny-pytest-"), "test.db")
+os.environ["DATABASE_URL"] = "sqlite:///" + _TEST_DB_PATH
 # eHUB default AID by zapnul AFFILIATE_ON ve všech testech – vypneme, dokud test výslovně nepovolí
 os.environ["EHUB_AID"] = ""
 # Dognet chid by stejně zapnul AFFILIATE_ON – výchozí kód v dognet.py, prázdné = vypnuto.
@@ -8,8 +11,34 @@ os.environ["DOGNET_CHID"] = ""
 
 import pytest
 
+from lovceny.db import DATABASE_URL, Base, engine
+
+if engine.dialect.name != "sqlite" or engine.url.database != _TEST_DB_PATH:
+    raise RuntimeError("pytest refused to start: tests may only use the temporary sqlite file")
+if "neon.tech" in DATABASE_URL or DATABASE_URL.startswith("postgres"):
+    raise RuntimeError("pytest refused to start against a hosted database")
+
 from lovceny.shops import SHOPS as _SHOPS
 ORIGINAL_SEARCHERS = {k: s.searcher for k, s in _SHOPS.items()}
+
+
+def _empty_test_tables() -> None:
+    """Každý test začíná s prázdnými tabulkami. Smazání jde jen do sqlite enginu z tohoto souboru."""
+    if engine.dialect.name != "sqlite" or engine.url.database != _TEST_DB_PATH:
+        raise RuntimeError("refusing to delete rows from a database that is not the pytest sqlite file")
+    from lovceny.db import init_db
+    init_db()
+    with engine.begin() as conn:
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_test_db():
+    _empty_test_tables()
+    yield
 
 
 @pytest.fixture(autouse=True)

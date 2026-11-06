@@ -59,9 +59,9 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
     return d
 
 
-def itemlist_ld(rows, path: str) -> dict:
+def itemlist_ld(rows, path: str, start: int = 0) -> dict:
     return {"@context": "https://schema.org", "@type": "ItemList", "url": _abs(path),
-            "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": _abs(f"/produkt/{p.id}-{p.slug}"), "name": getattr(p, "display_name", None) or p.name}
+            "itemListElement": [{"@type": "ListItem", "position": start + i + 1, "url": _abs(f"/produkt/{p.id}-{p.slug}"), "name": getattr(p, "display_name", None) or p.name}
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 

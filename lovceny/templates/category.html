@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, pcard, rank_link %}
 {% block title %}{{ page_title }} | Lovceny{% endblock %}
 {% block description %}{{ page_desc }}{% endblock %}
+{% block head %}{% if page_prev %}<link rel="prev" href="{{ canonical(page_prev) }}">{% endif %}{% if page_next %}<link rel="next" href="{{ canonical(page_next) }}">{% endif %}{% endblock %}
 {% block body %}
 <section class="cat-hero"><div class="wrap">
   <div class="eyebrow"><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }}</div>
@@ -43,8 +44,10 @@
 {% endif %}
 <section style="padding-top:8px"><div class="wrap">
   {% if rows %}
-  <p class="cat-count">{{ cz_count(rows|length, 'produkt', 'produkty', 'produktů') }} · řazeno {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
+  <p class="cat-count">Zobrazeno {{ range_from }}–{{ range_to }} z {{ cz_count(total, 'produkt', 'produkty', 'produktů') }} · řazeno {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
+  {% include "_pager.html" %}
   <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v) }}{% endfor %}</div>
+  {% include "_pager.html" %}
   {% else %}
   <div class="card chart-empty cat-empty">
     {% if filters_active %}<p><b>Žádný produkt neodpovídá filtrům.</b> Uprav značku nebo cenu, nebo <a href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">zruš filtry</a>.</p>
