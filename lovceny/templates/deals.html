@@ -24,7 +24,7 @@
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div class="deal-info">
-          <div class="p-name sm">{{ dname(r.product) }}</div>
+          <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
         </div>
         <div class="deal-prices">
@@ -71,7 +71,7 @@
         <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
           <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
           <div class="deal-info">
-            <div class="p-name sm">{{ dname(r.product) }}</div>
+            <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
             <div class="deal-meta">{{ badge(r.verdict) }}</div>
           </div>
           <div class="deal-prices">
@@ -117,7 +117,7 @@
       <a class="deal-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <div class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div class="deal-info">
-          <div class="p-name sm">{{ dname(r.product) }}</div>
+          <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
           <div class="deal-meta">{{ badge(r.verdict) }}{% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}</div>
           {% if r.verdict.tooltip %}<p class="deal-why">{{ r.verdict.tooltip }}</p>{% endif %}
         </div>

@@ -27,7 +27,7 @@
       <article class="card cmp-col{% if cheapest == p.id %} is-cheapest{% endif %}" style="border-top:5px solid {{ it.color }}" aria-labelledby="cmp-n-{{ p.id }}">
         <button type="button" class="cmp-remove" data-cmp-remove="{{ p.id }}" aria-label="Odebrat {{ dname(p) }} ze srovnání">✕ Odebrat</button>
         <div class="cmp-img">{% if p.image_url %}{{ shop_img(p.image_url, 140) }}{% else %}{{ img_missing() }}{% endif %}</div>
-        <h2 class="cmp-name" id="cmp-n-{{ p.id }}" title="{{ p.name }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ dname(p) }}</h2>
+        <h2 class="cmp-name" id="cmp-n-{{ p.id }}" title="{{ p.name }}"><span class="cmp-swatch" style="background:{{ it.color }}" aria-hidden="true"></span>{{ dname(p) }}{% if dname(p) != p.name %}<span class="sr-only">. Celý název: {{ p.name }}</span>{% endif %}</h2>
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>

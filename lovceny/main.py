@@ -92,7 +92,8 @@ def assign_all_display_names(db):
 
 
 def dname(p):
-    return getattr(p, "display_name", None) or short_name(getattr(p, "name", "") or "")
+    """Viditelný název mimo uloženou identitu. Schema dál používá short display_name."""
+    return card_label(getattr(p, "name", "") or "")
 
 
 tpl.env.globals["dname"] = dname
