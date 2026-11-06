@@ -1,7 +1,6 @@
 name: Oprava kategorií displejů
-# Jednorázový zápis po suchém běhu 42206117197. Push tohoto souboru ho spustí.
-# Maže jen category_slug a popisek kategorie u 37 ověřených displejů.
-# Nenastavuje retired_at a nevolá --retire-bad-feeds.
+# Oprava už proběhla 2026-11-06 (apply run 42206366490).
+# Soubor zůstává, aby další push omylem nezapsal do databáze.
 on:
   push:
     branches: [main]
@@ -13,93 +12,9 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  apply:
+  done:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - name: Ověř kandidáty a oprav kategorii
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          python - << 'PY'
-          from sqlalchemy import func, select
-          from lovceny.categories import is_computer_display
-          from lovceny.db import SessionLocal
-          from lovceny.models import Offer, PricePoint, Product
-
-          # Přesná množina ze suchého běhu 2026-11-06 (run 42206117197).
-          EXPECTED = {
-              323,331,332,337,354,355,359,360,363,322,371,372,374,376,433,437,443,444,
-              446,447,451,483,484,485,486,488,497,499,501,504,578,579,582,585,586,589,599,
-          }
-
-          def totals(db):
-              return (
-                  db.scalar(select(func.count()).select_from(Product)),
-                  db.scalar(select(func.count()).select_from(Offer)),
-                  db.scalar(select(func.count()).select_from(PricePoint)),
-              )
-
-          db = SessionLocal()
-          try:
-              before = totals(db)
-              print(f"BEFORE products={before[0]} offers={before[1]} price_points={before[2]}")
-              rows = db.scalars(select(Product).where(Product.category_slug == "sluchatka")).all()
-              active = [p for p in rows if p.retired_at is None]
-              displays = [p for p in active if is_computer_display(p.name or "")]
-              found = {p.id for p in displays}
-              print(f"BEFORE sluchatka_active={len(active)} displays={len(displays)} headphones={len(active)-len(displays)}")
-              if found != EXPECTED:
-                  extra = sorted(found - EXPECTED)
-                  missing = sorted(EXPECTED - found)
-                  raise SystemExit(f"abort: candidate set drifted extra={extra} missing={missing}")
-              snap = {}
-              for p in displays:
-                  if p.retired_at is not None:
-                      raise SystemExit(f"abort: retired id={p.id}")
-                  if (p.category or "") != "Sluchátka":
-                      raise SystemExit(f"abort: unexpected label id={p.id}")
-                  oc = len(p.offers)
-                  pc = sum(len(o.points) for o in p.offers)
-                  snap[p.id] = (oc, pc, p.ean, p.image_url, p.retired_at)
-                  print(f"ROLLBACK id={p.id} offers={oc} points={pc} category={p.category!r} name={p.name}")
-              print(f"ROLLBACK_ROWS {len(snap)}")
-          finally:
-              db.close()
-
-          import seed
-          db = SessionLocal()
-          try:
-              st = seed.repair_display_headphones(db, dry_run=False)
-              print(
-                  f"APPLIED updated={st['updated']} headphones_kept={st['headphones_kept']} "
-                  f"offers_kept={st['offers_kept']} price_points_kept={st['price_points_kept']}"
-              )
-              if st["updated"] != 37 or st["offers_kept"] != 37 or st["price_points_kept"] != 338:
-                  raise SystemExit(f"abort: unexpected apply stats {st}")
-              after = totals(db)
-              print(f"AFTER products={after[0]} offers={after[1]} price_points={after[2]}")
-              if after != before:
-                  raise SystemExit(f"abort: table counts changed {before} -> {after}")
-              for pid, (oc, pc, ean, image, retired) in snap.items():
-                  p = db.get(Product, pid)
-                  if p is None or p.retired_at is not None or p.category_slug is not None or p.category is not None:
-                      raise SystemExit(f"abort: row not cleared cleanly id={pid}")
-                  if p.ean != ean or p.image_url != image:
-                      raise SystemExit(f"abort: identity fields changed id={pid}")
-                  if len(p.offers) != oc or sum(len(o.points) for o in p.offers) != pc:
-                      raise SystemExit(f"abort: history changed id={pid}")
-              left = db.scalars(select(Product).where(Product.category_slug == "sluchatka", Product.retired_at.is_(None))).all()
-              bad = [p.id for p in left if is_computer_display(p.name or "")]
-              print(f"AFTER sluchatka_active={len(left)} displays_left={len(bad)}")
-              if bad or len(left) != 209:
-                  raise SystemExit(f"abort: headphones left {len(left)} displays {bad}")
-              print("APPLY_OK")
-          finally:
-              db.close()
-          PY
+      - name: Oprava je hotová
+        run: echo "Category repair already applied on 2026-11-06. This job does not write."
