@@ -30,7 +30,12 @@ def test_head_links(client_db):
     assert '<link rel="manifest" href="/manifest.webmanifest">' in html
     assert 'name="apple-mobile-web-app-capable" content="yes"' in html and "apple-touch-icon" in html
     assert "pwa.js" in html and 'id="pwa-install"' in html and "Přidat na plochu" in html
-    assert "Sdílet" in html and "Přidat na plochu" in html
+    assert "Sdílet" in html and "Teď ne" in html
+    assert 'aria-label="Zavřít nabídku přidání na plochu"' in html
+    assert 'data-pwa-open' in html
+    css = (STATIC / "app.css").read_text()
+    rule = css.split(".pwa-install{", 1)[1].split("}", 1)[0]
+    assert "position:static" in rule and "position:fixed" not in rule
 
 
 def test_service_worker(client_db):
@@ -66,5 +71,6 @@ def test_push_ios_hint_and_pwa_js(client_db, monkeypatch):
     js = (STATIC / "pwa.js").read_text()
     assert "beforeinstallprompt" in js and "navigator.serviceWorker.register('/sw.js'" in js
     assert "Přidat na plochu" in js and "standalone" in js
+    assert "appinstalled" in js and "COOLDOWN_MS" in js and "ENGAGE_MS" in js
     push = (STATIC / "push.js").read_text()
     assert ".push-ios" in push
