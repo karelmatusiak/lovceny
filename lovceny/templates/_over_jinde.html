@@ -1,11 +1,11 @@
-{%- from "_macros.html" import shop_img, rank_link, affiliate_note -%}
+{%- from "_macros.html" import shop_img, img_missing, rank_link, affiliate_note -%}
 {%- if r.elsewhere -%}
 <h2 class="ov-h2">Nabídky v dalších obchodech</h2>
 <p class="ov-muted">Podle názvu „{{ r.query }}“. Řazeno jen podle ceny (bez dopravy); zkontroluj, že jde o stejný model a variantu. {{ rank_link() }}</p>
 <ul class="ov-list">
 {%- for h in r.elsewhere %}{% set s = SHOPS[h.shop] %}
   <li class="ov-row{% if loop.first %} ov-best{% endif %}">
-    <div class="p-img">{% if h.image %}{{ shop_img(h.image, 48) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+    <div class="p-img">{% if h.image %}{{ shop_img(h.image, 48) }}{% else %}{{ img_missing() }}{% endif %}</div>
     <div class="ov-row-main"><a href="{{ s.affiliate_link(h.url) }}" target="_blank" rel="{{ shop_rel(s) }}">{{ h.name }}</a>
       <span class="p-cat"><span class="shop-dot" style="background:{{ s.color }}"></span>{{ s.name }}{% if loop.first %} · <b class="ov-lowest">nejnižší cena</b>{% endif %}</span></div>
     <b class="ov-row-price">{{ h.price|czk }}</b>

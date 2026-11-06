@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link %}
 {% block title %}Týdenní přehled slev – {{ d.week }}. týden {{ d.year }} | Lovceny{% endblock %}
 {% block description %}Skutečné slevy {{ d.week }}. týdne {{ d.year }} ({{ range[0].day }}. {{ range[0].month }}. – {{ range[1].day }}. {{ range[1].month }}.): {{ items|length }} produktů u 90denního minima, seřazeno podle úspory oproti obvyklé ceně.{% endblock %}
 {% block body %}
@@ -13,7 +13,7 @@
   <ol class="dg-list">{% for it in items %}
     <li class="card dg-item">
       <span class="dg-rank" aria-hidden="true">{{ loop.index }}</span>
-      <div class="p-img">{% if it.image %}{{ shop_img(it.image, 56) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+      <div class="p-img">{% if it.image %}{{ shop_img(it.image, 56) }}{% else %}{{ img_missing() }}{% endif %}</div>
       <div class="dg-main"><a class="p-name sm" href="/produkt/{{ it.product_id }}-{{ it.slug }}">{{ it.name }}</a>
         <span class="p-cat">{{ it.shop_name }} · obvykle {{ it.median90|czk }} · minimum 90 dní {{ it.min90|czk }}{% if it.demo %} · <span class="demo-tag">DEMO</span>{% endif %}</span></div>
       <div class="dg-price"><b>{{ it.price|czk }}</b><span class="save-pct">−{{ '%.0f'|format(it.savings_pct) }}&nbsp;%</span><small>ušetříš {{ it.savings_czk|czk }}</small></div>

@@ -1,10 +1,10 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing %}
 {% block title %}{{ hit.name if hit else 'Produkt z obchodu ' ~ shop.name }} – náhled | Lovceny{% endblock %}
 {% block body %}
 <section style="padding-top:24px"><div class="wrap narrow">
   <div class="card preview">
     <div class="p-head">
-      <div class="p-img">{% if hit and hit.image %}{{ shop_img(hit.image, 64, priority=true) }}{% else %}<span aria-hidden="true">📦</span>{% endif %}</div>
+      <div class="p-img">{% if hit and hit.image %}{{ shop_img(hit.image, 64, priority=true) }}{% else %}{{ img_missing() }}{% endif %}</div>
       <div><h1 class="p-name">{{ hit.name if hit else 'Produkt z obchodu ' ~ shop.name }}</h1>
         <div class="p-cat"><span class="shop-dot" style="background:{{ shop.color }}"></span>{{ shop.name }}</div></div>
     </div>

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, badge, cmp_button, share, rank_link, affiliate_note %}
+{% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, img_missing, badge, cmp_button, share, rank_link, affiliate_note %}
 {% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
@@ -10,7 +10,7 @@
   <div class="card product" style="margin-top:12px">
     <div class="p-info">
       <div class="p-head">
-        <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, priority=true) }}{% else %}📦{% endif %}</div>
+        <div class="p-img">{% if p.image_url %}{{ shop_img(p.image_url, 60, priority=true) }}{% else %}{{ img_missing() }}{% endif %}</div>
         <div><h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>{% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}<div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
       </div>
       <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, dname(p)) }}</div></div>
