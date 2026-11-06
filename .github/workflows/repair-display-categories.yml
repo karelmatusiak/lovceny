@@ -1,0 +1,70 @@
+name: Oprava kategorií displejů
+# Jednorázový suchý běh opravy z PR 16. Push tohoto souboru ho spustí.
+# Nic nezapisuje. Stejná skupina jako stahování cen, ať se s fetchem nepotkají.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/repair-display-categories.yml
+concurrency:
+  group: fetch-prices
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Počty a kandidáti (bez zápisu)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - << 'PY'
+          from sqlalchemy import func, select
+          from lovceny.categories import is_computer_display
+          from lovceny.db import SessionLocal
+          from lovceny.models import Offer, PricePoint, Product
+
+          db = SessionLocal()
+          try:
+              products = db.scalar(select(func.count()).select_from(Product))
+              offers = db.scalar(select(func.count()).select_from(Offer))
+              points = db.scalar(select(func.count()).select_from(PricePoint))
+              print(f"TOTAL products={products} offers={offers} price_points={points}")
+              rows = db.scalars(select(Product).where(Product.category_slug == "sluchatka")).all()
+              active = [p for p in rows if p.retired_at is None]
+              retired = [p for p in rows if p.retired_at is not None]
+              displays = [p for p in active if is_computer_display(p.name or "")]
+              headphones = [p for p in active if p not in displays]
+              retired_displays = [p for p in retired if is_computer_display(p.name or "")]
+              print(
+                  f"SLUCHATKA active={len(active)} headphones={len(headphones)} "
+                  f"displays={len(displays)} retired={len(retired)} retired_displays={len(retired_displays)}"
+              )
+              offer_n = point_n = 0
+              for p in displays:
+                  oc = len(p.offers)
+                  pc = sum(len(o.points) for o in p.offers)
+                  offer_n += oc
+                  point_n += pc
+                  label = (p.category or "").replace("\n", " ")
+                  print(f"CANDIDATE id={p.id} offers={oc} points={pc} category={label!r} name={p.name}")
+              print(f"CANDIDATE_TOTAL displays={len(displays)} offers={offer_n} price_points={point_n}")
+              if len(displays) > 80:
+                  raise SystemExit("abort: more display candidates than the XM feed leaf")
+              for p in displays:
+                  if not is_computer_display(p.name or ""):
+                      raise SystemExit(f"abort: not a display id={p.id}")
+          finally:
+              db.close()
+          PY
+      - name: seed.py suchý běh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python seed.py --repair-categories --dry-run
