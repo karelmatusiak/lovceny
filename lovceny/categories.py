@@ -416,11 +416,93 @@ _WINDOW_CLEANER_RX = re.compile(
 )
 _SCW_RX = re.compile(r"(^|[^a-z])scw(\s|-|_|\d)", re.I)
 
+# Identita sluchátek v NÁZVU. Přebije zmínku monitoru (Marshall Monitor, „k monitoru“,
+# in-ear monitor). Kategorie obchodu se sem nepočítá – ta u XM umí lhát.
+_HEADPHONE_IDENTITY_RX = re.compile(
+    r"\bsluchat"
+    r"|\b(airpods|earpods)\b"
+    r"|\b(headphones?|headsets?|earbuds?|earphones?)\b"
+    r"|\bbuds\b"
+    r"|\b(wh|wf)-?\d"
+    r"|\bquietcomfort\b"
+    r"|\bnahlavni souprava\b"
+    r"|\bin[- ]ear monitors?\b"
+    r"|\bmarshall monitor\b"
+)
+# Řady, které jsou počítačové displeje (ne televize, ne sluchátka).
+_DISPLAY_LINE_RX = re.compile(r"\b(thinkvision|ultragear|viewfinity|zenscreen)\b")
+_DISPLAY_WORD_RX = re.compile(
+    r"\bmonitors?\b|\bmonitore\b|\bmonitory\b|\bmonitoru\b|\bmonitorem\b|\bmonitorech\b"
+)
+_DISPLAY_LCD_RX = re.compile(r"\blcd\b")
+_DISPLAY_PANEL_RX = re.compile(
+    r"\b(ips|va|qhd|fhd|wqhd|uwqhd|oled|uhd)\b|\d{3,4}\s*x\s*\d{3,4}|\d+\s*hz\b"
+)
+_DISPLAY_MT_RX = re.compile(r"\bmt\b")
+_ODYSSEY_RX = re.compile(r"\bodyssey\b")
+_ODYSSEY_MONITOR_RX = re.compile(
+    r"\b(g[5789]\d|oled|qhd|uhd|ips|va)\b|\d+\s*hz\b|\d{2}(?:[.,]\d+)?\s*\""
+)
+# Modelový kód televize (OLED55, QE55…). Holé „oled“ / „qled“ je i u monitoru.
+_TV_IDENTITY_RX = re.compile(r"\bteleviz|\b(qe|ue|kd-?|xr-?|oled|tq|tu)\d{2}\b")
+_MONITOR_SPEC_RX = re.compile(r"\b(qhd|fhd|wqhd|uwqhd|qd-oled)\b")
+
+
+def _display_name(name: str) -> str:
+    """Název bez diakritiky; palce zapsané jako '' sjednotí na uvozovku."""
+    return _fold(name).replace("''", "\"")
+
+
+def _inch_size(folded: str) -> float | None:
+    m = re.search(r"(\d{2}(?:[.,]\d+)?)\s*\"", folded)
+    if not m:
+        return None
+    try:
+        return float(m.group(1).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def is_computer_display(name: str) -> bool:
+    """True = název je počítačový displej.
+
+    Rozhoduje jen název výrobku, ne CATEGORYTEXT a ne popis. Sluchátka, která se
+    jmenují Monitor (Marshall) nebo v názvu mají „k monitoru“, displej nejsou.
+    Televizní model (OLED55, „televizor“) taky ne.
+    """
+    n = _display_name(name)
+    if not n.strip():
+        return False
+    if _HEADPHONE_IDENTITY_RX.search(n):
+        return False
+    if _TV_IDENTITY_RX.search(n):
+        return False
+    if _DISPLAY_LINE_RX.search(n) or _DISPLAY_WORD_RX.search(n):
+        return True
+    if _ODYSSEY_RX.search(n) and _ODYSSEY_MONITOR_RX.search(n):
+        return True
+    inch = _inch_size(n)
+    if _DISPLAY_LCD_RX.search(n) and (_DISPLAY_PANEL_RX.search(n) or inch is not None):
+        return True
+    # XM ve feedu zkracuje monitor na „MT“ (AOC MT 27", SAMSUNG MT LED LCD).
+    if _DISPLAY_MT_RX.search(n) and (
+        _DISPLAY_LCD_RX.search(n) or inch is not None or _DISPLAY_PANEL_RX.search(n)
+    ):
+        return True
+    # 26,5'' + QHD / QD-OLED (ASUS XG27…) – pod 50", ať se do toho nevejde 55" televize.
+    if inch is not None and inch < 50 and _MONITOR_SPEC_RX.search(n):
+        return True
+    return False
+
 
 def category_url_conflict(slug: str | None, name: str, url: str | None = None) -> bool:
     """True = název/URL nesedí na cílovou kategorii (např. čistič oken ≠ vysavač)."""
     if not slug:
         return False
+    # Displej nesmí spadnout do sluchátek jen proto, že list Heureky je „Sluchátka“,
+    # ani do televizí kvůli holému „OLED“ v názvu monitoru.
+    if slug in ("sluchatka", "televize") and is_computer_display(name):
+        return True
     hay = _fold(name) + " " + _fold(url or "")
     path = _fold((url or "").replace("https://", "").replace("http://", ""))
     if slug == "vysavace":
@@ -444,7 +526,8 @@ def accept_feed_item(
     """Vrátí category_slug pokud feed položka smí vytvořit/připojit nabídku, jinak None.
 
     Pravidla: ne příslušenství, CATEGORYTEXT whitelist → slug, cena ≥ MIN_PRICE,
-    classify souhlasí, URL/název neodporuje kategorii (čistič oken ≠ vysavač).
+    classify souhlasí, URL/název neodporuje kategorii (čistič oken ≠ vysavač,
+    počítačový displej ≠ sluchátka ani když list feedu říká „Sluchátka“).
     """
     if is_accessory_text(name, shop_category):
         return None

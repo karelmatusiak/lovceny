@@ -10,6 +10,8 @@ nestahuje a demo historie se nepřidá podruhé. Ceny se stahují živě (robots
   python seed.py --category pracky --limit 5
   python seed.py --dry-run        # jen vypíše, co by přidal (nic nestahuje, nic nezapisuje)
   python seed.py --purge-demo     # smaže všechna demo data
+  python seed.py --repair-categories --dry-run   # monitory ve Sluchátkách: jen počty
+  python seed.py --repair-categories             # sundá je z kategorie, historie zůstane
 """
 import json
 from pathlib import Path
@@ -367,6 +369,7 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     """
     from lovceny.categories import (
         MIN_PRICE_CZK, accept_feed_item, category_url_conflict, is_accessory_text,
+        is_computer_display,
     )
     from lovceny.models import Product
     from lovceny.shops import SHOPS, feed as feedmod
@@ -387,6 +390,10 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             continue
         for it in items:
             clean = strip_tracking(it.url)
+            # Monitor v listu „Sluchátka“ není příslušenství. Nabídku nemažeme –
+            # kategorii srovná repair_display_headphones, historie ceny zůstane.
+            if is_computer_display(it.name) and not is_accessory_text(it.name, it.category):
+                continue
             if is_accessory_text(it.name, it.category) or accept_feed_item(
                 it.name, it.category, it.price, url=it.url
             ) is None:
@@ -414,7 +421,10 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             reason = "url-keyword"
         elif is_accessory_text(prod.name if prod else "", None):
             reason = "product-name-accessory"
-        elif prod and category_url_conflict(prod.category_slug, prod.name or "", o.url):
+        elif (
+            prod and category_url_conflict(prod.category_slug, prod.name or "", o.url)
+            and not is_computer_display(prod.name or "")
+        ):
             reason = "url-category-conflict"
         else:
             slug = prod.category_slug if prod else None
@@ -561,6 +571,44 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     return stats
 
 
+def repair_display_headphones(db, dry_run=True) -> dict:
+    """Sundá počítačové displeje z kategorie Sluchátka.
+
+    Nemazá produkty, nabídky ani price_points a nenastavuje retired_at
+    (301 /produkt → kategorie se tím nemění). Výchozí je suchý běh.
+    Aktivní řádky jen: category_slug sluchatka + název je displej.
+    """
+    from lovceny.categories import is_computer_display
+    from lovceny.models import Product
+
+    rows = db.scalars(select(Product).where(Product.category_slug == "sluchatka")).all()
+    displays = [p for p in rows if p.retired_at is None and is_computer_display(p.name or "")]
+    headphones = [p for p in rows if p.retired_at is None and p not in displays]
+    offer_n = 0
+    point_n = 0
+    for p in displays:
+        offer_n += len(p.offers)
+        for o in p.offers:
+            point_n += len(o.points)
+    samples = [p.name for p in displays[:40]]
+    stats = {
+        "dry_run": bool(dry_run),
+        "sluchatka_active": len(headphones) + len(displays),
+        "headphones_kept": len(headphones),
+        "candidates": len(displays),
+        "updated": 0 if dry_run else len(displays),
+        "offers_kept": offer_n,
+        "price_points_kept": point_n,
+        "samples": samples,
+    }
+    if dry_run:
+        return stats
+    for p in displays:
+        p.category_slug = None
+        p.category = None
+    db.commit()
+    return stats
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
@@ -575,6 +623,8 @@ def main(argv=None):
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
                     help="smazat příslušenství/špatné nabídky z feed seedu (eHUB + Dognet obchody)")
+    ap.add_argument("--repair-categories", action="store_true",
+                    help="sundat monitory z kategorie Sluchátka (bez mazání nabídek a historie cen)")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -582,6 +632,20 @@ def main(argv=None):
         n = db.execute(delete(PricePoint).where(PricePoint.is_demo.is_(True))).rowcount
         db.commit()
         print(f"Smazáno {n} demo bodů.")
+        return
+    if a.repair_categories:
+        st = repair_display_headphones(db, dry_run=a.dry_run)
+        mode = "DRY-RUN" if a.dry_run else "APPLY"
+        print(
+            f"Oprava kategorií ({mode}): sluchatka={st['sluchatka_active']} "
+            f"sluchatka_nechat={st['headphones_kept']} monitory={st['candidates']} "
+            f"upraveno={st['updated']} nabidky={st['offers_kept']} "
+            f"historie={st['price_points_kept']}"
+        )
+        for name in st["samples"]:
+            print(f"  monitor: {name[:120]}")
+        if st["candidates"] > len(st["samples"]):
+            print(f"  … a dalších {st['candidates'] - len(st['samples'])}")
         return
     if a.retire_bad_feeds:
         st = retire_bad_feed_items(db, dry_run=a.dry_run)
