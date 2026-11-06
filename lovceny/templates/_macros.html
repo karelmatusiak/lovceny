@@ -39,12 +39,14 @@
     </div>
   </div>
 </a>
-{% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
 <div class="pcard-act">
+{% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
+<div class="pcard-buttons">
 {{ cmp_button(p) }}
 {% if best and best.in_stock is not false %}{% set s = get_shop(best.shop) %}
 <a class="btn btn-shop-sm" href="{{ s.affiliate_link(best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
 {% endif %}
+</div>
 </div>
 </div>
 {%- endmacro %}
