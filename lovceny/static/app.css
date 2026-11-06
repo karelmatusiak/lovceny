@@ -778,3 +778,68 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 .oos-label{display:inline-block;margin-left:10px;padding:4px 10px;border-radius:999px;background:#FFF4E5;color:#8A5200;font-size:13px;font-weight:700;vertical-align:middle}
 .oos-banner{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:#FFF4E5;color:#5C3B00;font-size:14px}
 .pc-oos{display:block;margin-top:2px;font-size:12px;font-weight:700;color:#8A5200}
+
+/* Karty ve stejném řádku: název, cena a tlačítka sdílejí základnu.
+   Delší český název nebo verdikt s druhým řádkem zvedne jen ten řádek mřížky,
+   cenu ani „Do obchodu“ neposune vůči sousedům. Text se nezkracuje. */
+@supports (grid-template-rows: subgrid) {
+  .grid > .pcard{
+    display:grid;
+    grid-template-rows:subgrid;
+    grid-row:span 3;
+    row-gap:12px;
+    height:auto;
+  }
+  .grid > .pcard > .pcard-link{
+    display:contents;
+    overflow:visible;
+  }
+  .grid > .pcard .p-head{align-items:flex-start}
+  .grid > .pcard .pc-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:start;
+    justify-content:stretch;
+    column-gap:12px;
+    row-gap:4px;
+    margin-top:0;
+  }
+  .grid > .pcard .pc-prices{align-self:start;justify-self:end;max-width:100%}
+  .grid > .pcard .p-name{
+    display:block;
+    -webkit-line-clamp:unset;
+    -webkit-box-orient:unset;
+    overflow:visible;
+  }
+  .grid > .pcard .pcard-act{
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    align-items:stretch;
+    align-self:stretch;
+    gap:6px;
+    margin-top:0;
+  }
+  .grid > .pcard .pcard-buttons{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px 14px;
+    min-height:44px;
+  }
+  .grid > .pcard .pc-how{margin:0}
+  @media (max-width:640px){
+    .grid > .pcard .pc-row{grid-template-columns:minmax(0,1fr)}
+    .grid > .pcard .pc-prices{justify-self:start;align-items:flex-start}
+  }
+  .pcard-link:focus-visible > .p-head,
+  .pcard-link:focus-visible > .pc-row{
+    outline:3px solid var(--accent,#FF7A45);
+    outline-offset:3px;
+    border-radius:12px;
+  }
+}
+@supports not (grid-template-rows: subgrid) {
+  .grid > .pcard{height:100%}
+  .grid > .pcard > .pcard-act{margin-top:auto}
+}
