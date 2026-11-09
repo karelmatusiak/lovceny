@@ -2,10 +2,12 @@
 
 Bezpečnost: stahujeme jen z hostitelů našich obchodů (domény z registry + jejich CDN), jen http(s),
 max. MAX_BYTES, timeout, redirect jen opět na povolený host, jen obrázky (Pillow ověří formát),
-ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě endpoint vrátí malý placeholder
-(Cache-Control: private, no-store) – nikdy 302 na originál (Planeo/Fast JPEG bývá i >3 MB).
+ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě endpoint nevrátí 200 s obrázkem
+(karta by ho brala jako úspěch a onerror by nespustil) a nikdy 302 na originál
+(Planeo/Fast JPEG bývá i >3 MB).
 Paměť (Render free 512 MiB): najednou jen IMG_CONCURRENCY resize (výchozí 1), download max 8 MB
-(JPEG dekód přes Image.draft), close(), semafor kolem miss cesty. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
+(JPEG dekód přes Image.draft v měřítku cílové šířky), close(), semafor kolem miss cesty.
+Souběžné šířky stejné URL sdílejí jedno stažení. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
 """
 import hashlib
 import io
@@ -22,13 +24,18 @@ import httpx
 log = logging.getLogger("lovceny.images")
 
 WIDTHS = (80, 160, 320, 640)
+# Strop src i srcset u lokálního /img (Planeo/Fast). Prohlížeč s width deskriptory
+# vybere nejmenší kandidát ≥ sizes×DPR a src ignoruje — 180px na 2×/3× by jinak
+# stáhl /img/640.webp. 640 zůstává ve WIDTHS pro wsrv, Allegro a slot širší než strop.
+LOCAL_PROXY_SRC_MAX = 320
 # Těsné limity: 1 velký Shopify JPEG (~1 MB) se v Pillow snadno nafoukne na desítky MB;
 # 4 souběžné PNG 6k×4k lokálně = ~760 MB RSS → OOM na free 512 MiB.
 # Download cap: shop CDN JPEGs (Planeo/Fast) often 2–4 MB. Decode stays small via Image.draft.
 # Peak RSS stays low with IMG_CONCURRENCY=1; do not raise concurrency with this limit.
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 8_000_000  # ~8 MP (např. 3500×2300)
-# 1×1 transparent WebP – error response that cards can show or hide; never cache at CF.
+# 1×1 průhledný WebP. Dřív se vracel jako HTTP 200 a karta ho brala jako načtenou fotku
+# (onerror se nespustí). Už ho jako úspěch neposíláme; konstanta zůstává pro regresní test.
 PLACEHOLDER_WEBP = bytes.fromhex(
     "524946464000000057454250565038580a00000010000000000000000000"
     "414c504802000000000056503820180000003001009d012a010001000cc0ce25a400037000feec670000"
@@ -218,6 +225,41 @@ def _srcset_value(url: str, ws: list[int]) -> str:
     return ", ".join(f"{u} {w}w" for u, w in parts)
 
 
+def _display_width(px: int) -> int:
+    """Šířka ve srcsetu odpovídající asi 2× CSS px (Retina)."""
+    return next((w for w in WIDTHS if w >= px * 2), WIDTHS[-1])
+
+
+def _local_proxy_card(url: str) -> bool:
+    """Planeo/Fast a další wsrv-blokované hosty, které jdou přes /img. Ne Allegro."""
+    return wsrv_blocked(url) and not is_allegro_cdn(url)
+
+
+def _src_width(url: str, px: int) -> int:
+    """Šířka atributu src.
+
+    U wsrv je v pořádku skočit na 2× (CDN to udělá samo). U lokálního /img
+    strop 320, dokud CSS slot sám není širší: 180px karta by jinak dostala 640.
+    """
+    base = _display_width(px)
+    if not _local_proxy_card(url) or base <= LOCAL_PROXY_SRC_MAX or px > LOCAL_PROXY_SRC_MAX:
+        return base
+    return max(w for w in WIDTHS if w <= LOCAL_PROXY_SRC_MAX)
+
+
+def _srcset_widths(url: str, px: int) -> list[int]:
+    """Kandidáti srcsetu do DPR 3.
+
+    U lokálního /img je strop 320. Jinak 2×/3× displej vybere 640 a src nepoužije.
+    Slot širší než ten strop (žádná současná karta) smí 640, protože 320 by bylo
+    malé i na 1×.
+    """
+    big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
+    if _local_proxy_card(url) and px <= LOCAL_PROXY_SRC_MAX:
+        big = min(big, LOCAL_PROXY_SRC_MAX)
+    return [w for w in WIDTHS if w <= big]
+
+
 def srcset(url: str | None, px: int) -> dict | None:
     """Atributy <img> pro zobrazenou velikost px (CSS px): src (≈2×) + srcset šířek do ≥ 3× px.
     Nepovolený host → None (šablona použije originál).
@@ -226,11 +268,10 @@ def srcset(url: str | None, px: int) -> dict | None:
     Nikdy originál Planeo/Fast – multi‑MB JPEG."""
     if not url or not is_allowed(url):
         return None
-    big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
-    ws = [w for w in WIDTHS if w <= big]
-    base = next((w for w in WIDTHS if w >= px * 2), WIDTHS[-1])
-    src = proxy_url(url, base)
-    local = local_proxy_url(url, base)
+    ws = _srcset_widths(url, px)
+    src_w = _src_width(url, px)
+    src = proxy_url(url, src_w)
+    local = local_proxy_url(url, src_w)
     if is_allegro_cdn(url):
         fallback = ""
         orig = normalize_allegro_image(url) or url
@@ -303,6 +344,17 @@ def _download(url: str, client: httpx.Client | None = None) -> bytes:
             c.close()
 
 
+def _jpeg_draft_size(w: int) -> tuple[int, int]:
+    """Box pro Image.draft.
+
+    Pillow volí scale = min(iw // bw, ih // bh) a pak nejbližší 8/4/2/1.
+    Box (w, w*4) u běžné fotky dá ih // (w*4) == 0 — Fast JPEG iPhonu 15 je
+    1968×2584 — takže se draft neuplatní a dekóduje se celý soubor. Výška 1
+    škáluje jen podle šířky a DCT běží blízko cílové šířky náhledu.
+    """
+    return (max(1, w), 1)
+
+
 def resize_webp(data: bytes, w: int) -> bytes:
     from PIL import Image, ImageOps
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
@@ -317,7 +369,7 @@ def resize_webp(data: bytes, w: int) -> bytes:
         if fmt == "JPEG":
             # draft → load dekóduje hned v cílovém měřítku (Planeo/Fast multi‑MB JPEG, nízká RAM)
             try:
-                im.draft("RGB", (w, w * 4))
+                im.draft("RGB", _jpeg_draft_size(w))
             except Exception:
                 pass
             try:
@@ -381,62 +433,235 @@ def evict(force: bool = False) -> int:
     return n
 
 
-def get(url: str, w: int, client: httpx.Client | None = None) -> bytes:
-    """WebP bajty pro (url, w) – z cache, jinak stáhnout + zmenšit + uložit. Vyhazuje ImageError."""
-    if w not in WIDTHS:
-        raise ImageError("nepodporovaná šířka")
-    if not is_allowed(url):
-        raise ImageError("host není povolený")
-    f = cache_dir() / (_key(url, w) + ".webp")
+class _OrigFetch:
+    """Jedno probíhající stažení originálu, které si rozeberou všechny šířky."""
+
+    def __init__(self) -> None:
+        self.event = threading.Event()
+        self.data: bytes | None = None
+        self.error: BaseException | None = None
+        self.cached_only = False
+        self.waiters = 1
+
+
+_orig: dict[str, _OrigFetch] = {}
+# Leader drží semafor přes stažení (až 12 s ve frontě + samotný download).
+# Následovník na něj nečeká semaforem, jen na tyto bajty, a resize si pak vezme sám.
+_ORIG_WAIT_S = 30.0
+
+
+def _cache_file(url: str, w: int) -> Path:
+    return cache_dir() / (_key(url, w) + ".webp")
+
+
+def _read_cache(url: str, w: int) -> bytes | None:
+    f = _cache_file(url, w)
     try:
         data = f.read_bytes()
         os.utime(f)  # LRU: poslední použití
         return data
     except OSError:
-        pass
+        return None
+
+
+def _resize_store(url: str, w: int, raw: bytes) -> bytes:
+    data = resize_webp(raw, w)
+    f = _cache_file(url, w)
+    tmp = f.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, f)
+    except OSError as e:
+        log.warning("cache obrázků: zápis selhal: %s", e)
+    evict()
+    return data
+
+
+def _remember_fail(url: str) -> None:
+    with _lock:
+        _fail[url] = time.monotonic()
+        if len(_fail) > 2000:
+            # drop oldest half by timestamp
+            old = sorted(_fail, key=_fail.get)[:1000]
+            for k in old:
+                _fail.pop(k, None)
+
+
+def _raise_if_recent_fail(url: str) -> None:
     with _lock:
         t = _fail.get(url)
     if t and time.monotonic() - t < FAIL_TTL_S:
         raise ImageError("nedávno selhalo")
+
+
+def _join_original(fetch: str) -> tuple[bool, _OrigFetch]:
+    with _lock:
+        slot = _orig.get(fetch)
+        if slot is None:
+            slot = _OrigFetch()
+            _orig[fetch] = slot
+            return True, slot
+        slot.waiters += 1
+        return False, slot
+
+
+def _leave_original(fetch: str, slot: _OrigFetch) -> None:
+    with _lock:
+        slot.waiters = max(0, slot.waiters - 1)
+        if slot.waiters == 0 and _orig.get(fetch) is slot:
+            _orig.pop(fetch, None)
+
+
+def _publish_original(
+    slot: _OrigFetch,
+    *,
+    data: bytes | None = None,
+    error: BaseException | None = None,
+) -> None:
+    with _lock:
+        if slot.event.is_set():
+            return
+        slot.data = data
+        slot.error = error
+        slot.cached_only = False
+        slot.event.set()
+
+
+def _await_original(slot: _OrigFetch) -> bytes | None:
+    if not slot.event.wait(_ORIG_WAIT_S):
+        raise ImageError("timeout čekání na stažení")
+    if slot.error is not None:
+        err = slot.error
+        if isinstance(err, ImageError):
+            raise err
+        raise ImageError(type(err).__name__) from err
+    if slot.cached_only:
+        return None
+    if not slot.data:
+        raise ImageError("stažení selhalo")
+    return slot.data
+
+
+def _acquire_resize_sem() -> threading.BoundedSemaphore:
     sem = _resize_sem()
     if not sem.acquire(timeout=12.0):
+        # Mimo záznam failů: vytížení není chyba URL (stejně jako dřív, acquire byl před try).
         raise ImageError("příliš vytíženo")
+    return sem
+
+
+def _leader_get(url: str, w: int, fetch: str, client: httpx.Client | None, slot: _OrigFetch) -> bytes:
     try:
-        # double-check cache: jiný thread mohl mezitím zapsat
-        try:
-            data = f.read_bytes()
-            os.utime(f)
-            return data
-        except OSError:
-            pass
-        try:
-            # Allegro /original/ nenecháme stáhnout ani když někdo trefí /img přímo.
-            fetch = url
-            if is_allegro_cdn(url):
-                fetch = allegro_sized_url(url, allegro_size_for_width(w)) or url
-            data = resize_webp(_download(fetch, client), w)
-        except ImageError:
+        sem = _acquire_resize_sem()
+    except ImageError as e:
+        # Následovníci nesmí čekat na semafor, který leader nedostal.
+        _publish_original(slot, error=e)
+        raise
+    announced = False
+    try:
+        cached = _read_cache(url, w)
+        if cached is not None:
             with _lock:
-                _fail[url] = time.monotonic()
-                if len(_fail) > 2000:
-                    # drop oldest half by timestamp
-                    old = sorted(_fail, key=_fail.get)[:1000]
-                    for k in old:
-                        _fail.pop(k, None)
-            raise
-        tmp = f.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+                if slot.waiters == 1 and not slot.event.is_set():
+                    slot.cached_only = True
+                    slot.data = None
+                    slot.error = None
+                    slot.event.set()
+                    announced = True
+            if announced:
+                return cached
         try:
-            tmp.write_bytes(data)
-            os.replace(tmp, f)
-        except OSError as e:
-            log.warning("cache obrázků: zápis selhal: %s", e)
-        evict()
-        return data
+            raw = _download(fetch, client)
+        except Exception as e:
+            _publish_original(slot, error=e)
+            announced = True
+            if isinstance(e, ImageError):
+                _remember_fail(url)
+            raise
+        _publish_original(slot, data=raw)
+        announced = True
+        if cached is not None:
+            return cached
+        try:
+            return _resize_store(url, w, raw)
+        except ImageError:
+            _remember_fail(url)
+            raise
+    finally:
+        if not announced:
+            _publish_original(slot, error=ImageError("stažení selhalo"))
+        sem.release()
+
+
+def _resize_only(url: str, w: int, raw: bytes) -> bytes:
+    """Zmenší už stažené bajty. Semafor drží jen resize, ne druhé stažení."""
+    sem = _acquire_resize_sem()
+    try:
+        cached = _read_cache(url, w)
+        if cached is not None:
+            return cached
+        try:
+            return _resize_store(url, w, raw)
+        except ImageError:
+            _remember_fail(url)
+            raise
     finally:
         sem.release()
+
+
+def _fetch_and_resize(url: str, w: int, fetch: str, client: httpx.Client | None) -> bytes:
+    """Leader měl svou šířku už v cache a originální bajty nepředal."""
+    sem = _acquire_resize_sem()
+    try:
+        cached = _read_cache(url, w)
+        if cached is not None:
+            return cached
+        try:
+            return _resize_store(url, w, _download(fetch, client))
+        except ImageError:
+            _remember_fail(url)
+            raise
+    finally:
+        sem.release()
+
+
+def get(url: str, w: int, client: httpx.Client | None = None) -> bytes:
+    """WebP bajty pro (url, w) – z cache, jinak stáhnout + zmenšit + uložit. Vyhazuje ImageError.
+
+    Src a srcset stejné originální URL (třeba /img/320 a /img/640) sdílejí jedno stažení,
+    aby se multi‑MB Fast/Planeo JPEG nestahoval dvakrát za sebou pod jedním semaforem.
+    """
+    if w not in WIDTHS:
+        raise ImageError("nepodporovaná šířka")
+    if not is_allowed(url):
+        raise ImageError("host není povolený")
+    cached = _read_cache(url, w)
+    if cached is not None:
+        return cached
+    _raise_if_recent_fail(url)
+
+    # Allegro /original/ nenecháme stáhnout ani když někdo trefí /img přímo.
+    fetch = url
+    if is_allegro_cdn(url):
+        fetch = allegro_sized_url(url, allegro_size_for_width(w)) or url
+
+    leader, slot = _join_original(fetch)
+    try:
+        if leader:
+            return _leader_get(url, w, fetch, client, slot)
+        raw = _await_original(slot)
+        cached = _read_cache(url, w)
+        if cached is not None:
+            return cached
+        if not raw:
+            return _fetch_and_resize(url, w, fetch, client)
+        return _resize_only(url, w, raw)
+    finally:
+        _leave_original(fetch, slot)
 
 
 def clear_failures():
     with _lock:
         _fail.clear()
         _robots.clear()
+        _orig.clear()

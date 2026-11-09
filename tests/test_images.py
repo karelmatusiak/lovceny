@@ -303,10 +303,15 @@ def test_endpoint_rejects_and_falls_back(client_db, monkeypatch):
         raise images.ImageError("HTTP 500")
     monkeypatch.setattr(images, "get", boom)
     r = client.get("/img/160", params={"u": OK_URL}, follow_redirects=False)
-    assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
+    # 200 + 1×1 WebP nespustí onerror a karta zůstane prázdná. Chyba musí být neúspěch.
+    assert r.status_code == 404
+    assert r.status_code != 200
     assert "no-store" in r.headers["cache-control"] and "private" in r.headers["cache-control"]
-    assert r.headers.get("x-lovceny-img") == "placeholder"
-    assert r.content == images.PLACEHOLDER_WEBP
+    assert r.headers.get("x-lovceny-img") == "error"
+    assert r.headers.get("location") is None
+    assert r.content != images.PLACEHOLDER_WEBP
+    with pytest.raises(Exception):
+        Image.open(io.BytesIO(r.content)).load()
 
 
 def test_templates_use_srcset(client_db):
@@ -401,3 +406,185 @@ def test_planeo_template_has_no_orig_fallback(client_db):
     # data-fallback atribut chybí (prázdný fallback) – žádný originál
     assert "data-fallback=\"https://mc-static.fast.eu" not in html
     assert "data-fallback=\"https://data.planeo" not in html
+
+
+# Fast JPEG z homepage karty iPhonu 15 (produkt 96). wsrv.nl ho neobslouží.
+FAST_IPHONE = "https://mc-static.fast.eu/pics/30/30024375/30024375?2226686873"
+
+
+def _dct_scale(iw: int, ih: int, box: tuple[int, int]) -> int:
+    """Stejný výběr 8/4/2/1 jako Pillow JpegImageFile.draft."""
+    scale = min(iw // box[0], ih // box[1])
+    chosen = 1
+    for cand in (8, 4, 2, 1):
+        if scale >= cand:
+            chosen = cand
+            break
+    return chosen
+
+
+def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
+    """Hero karta volá shop_img(url, 180). Na 2×/3× prohlížeč bere srcset, ne src.
+
+    Lokální /img proto nesmí nabízet 640w. Vybraný zdroj je 320, stejně jako src.
+    Prohlížeč se nesmí dostat na wsrv ani na surový multi‑MB JPEG.
+    """
+    from pathlib import Path
+
+    hero = Path(__file__).resolve().parents[1].joinpath("lovceny/templates/index.html").read_text()
+    assert "shop_img(h.product.image_url, 180" in hero
+
+    assert images.wsrv_blocked(FAST_IPHONE)
+    card = images.srcset(FAST_IPHONE, 180)
+    assert card is not None
+    assert card["src"].startswith("/img/320.webp?u=")
+    assert "/img/640.webp" not in card["src"]
+    assert card["sizes"] == "180px"
+    assert card["fallback"] == ""
+    assert [p.split()[-1] for p in card["srcset"].split(", ")] == ["80w", "160w", "320w"]
+    assert "640w" not in card["srcset"]
+    assert "/img/640.webp" not in card["srcset"]
+    blob = card["src"] + card["srcset"] + card["fallback"]
+    assert "wsrv.nl" not in blob
+    assert "https://mc-static.fast.eu" not in blob
+    assert "http://mc-static.fast.eu" not in blob
+    # wsrv karty dál berou 2× (180 → 640) přímo z CDN, bez /img
+    wsrv = images.srcset(OK_URL, 180)
+    assert wsrv is not None
+    assert wsrv["src"].startswith("https://wsrv.nl/?url=") and "w=640" in wsrv["src"]
+    assert "640w" in wsrv["srcset"]
+    assert "/img/" not in wsrv["src"]
+
+
+def test_image_failure_is_not_a_silent_blank_success(client_db, monkeypatch):
+    """Selhání náhledu není 200 s průhledným WebP, který karta bere jako fotku."""
+    client, _, _ = client_db
+
+    def boom(u, w):
+        raise images.ImageError("timeout")
+
+    monkeypatch.setattr(images, "get", boom)
+    r = client.get("/img/640.webp", params={"u": FAST_IPHONE}, follow_redirects=False)
+    assert r.status_code >= 400
+    assert r.status_code != 200
+    assert r.headers.get("location") is None
+    assert "no-store" in r.headers["cache-control"] and "private" in r.headers["cache-control"]
+    assert r.content != images.PLACEHOLDER_WEBP
+    assert FAST_IPHONE not in (r.headers.get("location") or "")
+    loaded = False
+    if r.content:
+        try:
+            Image.open(io.BytesIO(r.content)).load()
+            loaded = True
+        except Exception:
+            loaded = False
+    assert not loaded
+
+
+def _wait_until_shared(url: str):
+    import time
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        with images._lock:
+            slot = images._orig.get(url)
+            if slot is not None and slot.waiters >= 2:
+                return
+        time.sleep(0.01)
+    raise AssertionError("druhá šířka se nepřipojila k probíhajícímu stažení")
+
+
+def test_parallel_widths_download_the_original_once():
+    """src 320 a srcset 640 stejné Fast/Planeo URL nesmí stáhnout JPEG dvakrát."""
+    import threading
+    started = threading.Event()
+    hold = threading.Event()
+
+    def slow(req):
+        started.set()
+        if not hold.wait(timeout=3):
+            return httpx.Response(500)
+        return httpx.Response(200, content=_jpeg(1200, 800), headers={"content-type": "image/jpeg"})
+
+    c, calls = serve({OK_URL: slow})
+    results: dict[int, bytes] = {}
+    errors: dict[int, BaseException] = {}
+
+    def worker(w: int):
+        try:
+            results[w] = images.get(OK_URL, w, client=c)
+        except BaseException as e:  # noqa: BLE001 — test sbírá chybu vlákna
+            errors[w] = e
+
+    threads = [threading.Thread(target=worker, args=(w,)) for w in (320, 640)]
+    for th in threads:
+        th.start()
+    try:
+        assert started.wait(timeout=3)
+        _wait_until_shared(OK_URL)
+    finally:
+        hold.set()
+    for th in threads:
+        th.join(timeout=3)
+    assert not errors, errors
+    assert Image.open(io.BytesIO(results[320])).width == 320
+    assert Image.open(io.BytesIO(results[640])).width == 640
+    assert calls.count(OK_URL) == 1
+
+
+def test_parallel_failed_download_is_not_retried_by_the_other_width():
+    import threading
+    started = threading.Event()
+    hold = threading.Event()
+
+    def slow(req):
+        started.set()
+        hold.wait(timeout=3)
+        return httpx.Response(500)
+
+    c, calls = serve({OK_URL: slow})
+    errors: list[BaseException] = []
+
+    def worker(w: int):
+        try:
+            images.get(OK_URL, w, client=c)
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(w,)) for w in (320, 640)]
+    for th in threads:
+        th.start()
+    try:
+        assert started.wait(timeout=3)
+        _wait_until_shared(OK_URL)
+    finally:
+        hold.set()
+    for th in threads:
+        th.join(timeout=3)
+    assert len(errors) == 2
+    assert all(isinstance(e, images.ImageError) for e in errors)
+    assert calls.count(OK_URL) == 1
+    # fail se pamatuje: další šířka už originál nestahuje
+    with pytest.raises(images.ImageError, match="nedávno"):
+        images.get(OK_URL, 160, client=c)
+    assert calls.count(OK_URL) == 1
+
+
+def test_portrait_jpeg_draft_does_not_decode_full_frame(monkeypatch):
+    """iPhone Fast JPEG je 1968×2584. Box (w, w*4) u 640 px draft vypne (scale 1)."""
+    box = images._jpeg_draft_size(640)
+    assert _dct_scale(1968, 2584, box) >= 2
+    assert _dct_scale(1968, 2584, (640, 640 * 4)) == 1
+    assert _dct_scale(1968, 2584, images._jpeg_draft_size(320)) >= 2
+
+    from PIL import JpegImagePlugin
+    seen = []
+    orig = JpegImagePlugin.JpegImageFile.draft
+
+    def spy(self, mode, size):
+        seen.append((mode, size))
+        return orig(self, mode, size)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "draft", spy)
+    out = images.resize_webp(_jpeg(900, 1200), 320)
+    assert seen == [("RGB", (320, 1))]
+    assert Image.open(io.BytesIO(out)).size == (320, 427)
