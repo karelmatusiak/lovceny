@@ -410,6 +410,7 @@ def test_planeo_template_has_no_orig_fallback(client_db):
 
 # Fast JPEG z homepage karty iPhonu 15 (produkt 96). wsrv.nl ho neobslouží.
 FAST_IPHONE = "https://mc-static.fast.eu/pics/30/30024375/30024375?2226686873"
+WSRV_IPHONE = "https://www.mironet.cz/foto/iphone-15-black.jpg"
 
 
 def _dct_scale(iw: int, ih: int, box: tuple[int, int]) -> int:
@@ -421,6 +422,83 @@ def _dct_scale(iw: int, ih: int, box: tuple[int, int]) -> int:
             chosen = cand
             break
     return chosen
+
+
+def test_prefer_display_image_upgrades_fast_keeps_good_and_normalizes_allegro():
+    """První Fast fotka prohraje s pozdější wsrv URL. Horší příchozí dobrou nenahradí."""
+    assert images.prefer_display_image(None, FAST_IPHONE) == FAST_IPHONE
+    assert images.prefer_display_image(FAST_IPHONE, WSRV_IPHONE) == WSRV_IPHONE
+    assert images.prefer_display_image(WSRV_IPHONE, FAST_IPHONE) == WSRV_IPHONE
+    assert images.prefer_display_image(
+        WSRV_IPHONE, "https://data.planeo.cz/pics/iphone.jpg") == WSRV_IPHONE
+    # jiná stejně spolehlivá fotka (další wsrv host, Allegro) uloženou nepřepisuje
+    other = "https://www.alza.cz/foto/iphone-15.jpg"
+    assert images.is_allowed(other) and not images.wsrv_blocked(other)
+    assert images.prefer_display_image(WSRV_IPHONE, other) == WSRV_IPHONE
+    assert images.prefer_display_image(WSRV_IPHONE, ALLEGRO_ORIG) == WSRV_IPHONE
+    # Fast → Allegro je upgrade; /original/ se uloží jako /s512/, ne přes /img
+    assert images.prefer_display_image(FAST_IPHONE, ALLEGRO_ORIG) == ALLEGRO_S512
+    assert images.prefer_display_image(ALLEGRO_ORIG, FAST_IPHONE) == ALLEGRO_S512
+    assert images.prefer_display_image(ALLEGRO_S256, ALLEGRO_ORIG) == ALLEGRO_S256
+    huge = "https://a.allegroimg.com/s2048/11aa22/abcd/iphone.jpg"
+    assert images.prefer_display_image(None, huge) == "https://a.allegroimg.com/s512/11aa22/abcd/iphone.jpg"
+    assert images.prefer_display_image(huge, FAST_IPHONE) == "https://a.allegroimg.com/s512/11aa22/abcd/iphone.jpg"
+    # prázdný incoming jen normalizuje; surový Fast JPEG dál nejde do prohlížeče
+    assert images.prefer_display_image(FAST_IPHONE, None) == FAST_IPHONE
+    assert images.prefer_display_image(FAST_IPHONE, "  ") == FAST_IPHONE
+    card = images.srcset(images.prefer_display_image(FAST_IPHONE, None), 180)
+    assert card is not None and card["src"].startswith("/img/")
+    assert "https://mc-static.fast.eu" not in card["src"] + card["srcset"] + card["fallback"]
+    good = images.srcset(images.prefer_display_image(FAST_IPHONE, WSRV_IPHONE), 180)
+    assert good is not None and good["src"].startswith("https://wsrv.nl/?url=")
+
+
+def test_assign_image_picks_up_later_wsrv_without_touching_identity(client_db):
+    """Další feed téhož produktu vymění Fast fotku. Id, slug, název a historie ceny zůstanou."""
+    from lovceny.models import PricePoint
+    from lovceny.service import _assign_image, apply_feed
+    from lovceny.shops.feed import FeedItem
+
+    _, db, make = client_db
+    p = make([18990, 17990], name="Apple iPhone 15 128 GB Black", category="telefony")
+    p.image_url = FAST_IPHONE
+    offer = p.offers[0]
+    pid, slug, name, url = p.id, p.slug, p.name, offer.url
+    point_ids = [pt.id for pt in offer.points]
+    assert len(point_ids) >= 2
+    db.commit()
+
+    apply_feed(db, "mironet", [FeedItem(
+        item_id="iphone15", name=name, url=offer.url, price=17990, image=WSRV_IPHONE,
+        category="Elektronika | Mobilní telefony", in_stock=True,
+    )])
+    db.refresh(p)
+    db.refresh(offer)
+    assert p.image_url == WSRV_IPHONE
+    assert p.id == pid and p.slug == slug and p.name == name and offer.url == url
+    assert float(offer.price) == 17990
+    kept = {pt.id for pt in db.query(PricePoint).filter_by(offer_id=offer.id)}
+    assert set(point_ids) <= kept
+
+    apply_feed(db, "mironet", [FeedItem(
+        item_id="iphone15", name=name, url=offer.url, price=17990, image=FAST_IPHONE,
+        category="Elektronika | Mobilní telefony", in_stock=True,
+    )])
+    db.refresh(p)
+    db.refresh(offer)
+    assert p.image_url == WSRV_IPHONE
+    assert p.id == pid and p.slug == slug and p.name == name and offer.url == url
+    kept = {pt.id for pt in db.query(PricePoint).filter_by(offer_id=offer.id)}
+    assert set(point_ids) <= kept
+
+    _assign_image(p, ALLEGRO_ORIG)
+    assert p.image_url == WSRV_IPHONE
+    fresh = make([1000], name="Jen Allegro original", category="sluchatka")
+    fresh.image_url = None
+    _assign_image(fresh, ALLEGRO_ORIG)
+    assert fresh.image_url == ALLEGRO_S512
+    _assign_image(fresh, FAST_IPHONE)
+    assert fresh.image_url == ALLEGRO_S512
 
 
 def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
