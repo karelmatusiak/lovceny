@@ -424,10 +424,10 @@ def _dct_scale(iw: int, ih: int, box: tuple[int, int]) -> int:
 
 
 def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
-    """Hero karta volá shop_img(url, 180). Lokální /img nesmí jako src skočit na 640.
+    """Hero karta volá shop_img(url, 180). Na 2×/3× prohlížeč bere srcset, ne src.
 
-    640 zůstává ve srcsetu pro ostrý displej, až bude v cache. Prohlížeč se nesmí
-    dostat na wsrv ani na surový multi‑MB JPEG.
+    Lokální /img proto nesmí nabízet 640w. Vybraný zdroj je 320, stejně jako src.
+    Prohlížeč se nesmí dostat na wsrv ani na surový multi‑MB JPEG.
     """
     from pathlib import Path
 
@@ -441,16 +441,18 @@ def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
     assert "/img/640.webp" not in card["src"]
     assert card["sizes"] == "180px"
     assert card["fallback"] == ""
-    assert [p.split()[-1] for p in card["srcset"].split(", ")] == ["80w", "160w", "320w", "640w"]
-    assert "/img/640.webp?u=" in card["srcset"]
+    assert [p.split()[-1] for p in card["srcset"].split(", ")] == ["80w", "160w", "320w"]
+    assert "640w" not in card["srcset"]
+    assert "/img/640.webp" not in card["srcset"]
     blob = card["src"] + card["srcset"] + card["fallback"]
     assert "wsrv.nl" not in blob
-    assert not card["src"].startswith("https://mc-static.fast.eu")
-    assert not card["srcset"].startswith("https://mc-static.fast.eu")
+    assert "https://mc-static.fast.eu" not in blob
+    assert "http://mc-static.fast.eu" not in blob
     # wsrv karty dál berou 2× (180 → 640) přímo z CDN, bez /img
     wsrv = images.srcset(OK_URL, 180)
     assert wsrv is not None
     assert wsrv["src"].startswith("https://wsrv.nl/?url=") and "w=640" in wsrv["src"]
+    assert "640w" in wsrv["srcset"]
     assert "/img/" not in wsrv["src"]
 
 

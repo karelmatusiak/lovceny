@@ -24,8 +24,9 @@ import httpx
 log = logging.getLogger("lovceny.images")
 
 WIDTHS = (80, 160, 320, 640)
-# src u lokálního /img (Planeo/Fast). 180px slot × 2 = 360 dřív spadl na 640 a první
-# požadavek tahal multi‑MB JPEG do největšího náhledu. 320 stačí na kartu; 640 zůstává ve srcset.
+# Strop src i srcset u lokálního /img (Planeo/Fast). Prohlížeč s width deskriptory
+# vybere nejmenší kandidát ≥ sizes×DPR a src ignoruje — 180px na 2×/3× by jinak
+# stáhl /img/640.webp. 640 zůstává ve WIDTHS pro wsrv, Allegro a slot širší než strop.
 LOCAL_PROXY_SRC_MAX = 320
 # Těsné limity: 1 velký Shopify JPEG (~1 MB) se v Pillow snadno nafoukne na desítky MB;
 # 4 souběžné PNG 6k×4k lokálně = ~760 MB RSS → OOM na free 512 MiB.
@@ -229,20 +230,34 @@ def _display_width(px: int) -> int:
     return next((w for w in WIDTHS if w >= px * 2), WIDTHS[-1])
 
 
+def _local_proxy_card(url: str) -> bool:
+    """Planeo/Fast a další wsrv-blokované hosty, které jdou přes /img. Ne Allegro."""
+    return wsrv_blocked(url) and not is_allegro_cdn(url)
+
+
 def _src_width(url: str, px: int) -> int:
     """Šířka atributu src.
 
     U wsrv je v pořádku skočit na 2× (CDN to udělá samo). U lokálního /img
-    (Planeo/Fast a další wsrv-blokované hosty kromě Allegra) strop 320:
-    180px karta by jinak dostala 640 a studený náhled by stahoval multi‑MB JPEG
-    do největší rendice dřív, než vyprší timeout. 640 zůstává ve srcsetu.
+    strop 320, dokud CSS slot sám není širší: 180px karta by jinak dostala 640.
     """
     base = _display_width(px)
-    if is_allegro_cdn(url) or not wsrv_blocked(url):
-        return base
-    if base <= LOCAL_PROXY_SRC_MAX:
+    if not _local_proxy_card(url) or base <= LOCAL_PROXY_SRC_MAX or px > LOCAL_PROXY_SRC_MAX:
         return base
     return max(w for w in WIDTHS if w <= LOCAL_PROXY_SRC_MAX)
+
+
+def _srcset_widths(url: str, px: int) -> list[int]:
+    """Kandidáti srcsetu do DPR 3.
+
+    U lokálního /img je strop 320. Jinak 2×/3× displej vybere 640 a src nepoužije.
+    Slot širší než ten strop (žádná současná karta) smí 640, protože 320 by bylo
+    malé i na 1×.
+    """
+    big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
+    if _local_proxy_card(url) and px <= LOCAL_PROXY_SRC_MAX:
+        big = min(big, LOCAL_PROXY_SRC_MAX)
+    return [w for w in WIDTHS if w <= big]
 
 
 def srcset(url: str | None, px: int) -> dict | None:
@@ -253,8 +268,7 @@ def srcset(url: str | None, px: int) -> dict | None:
     Nikdy originál Planeo/Fast – multi‑MB JPEG."""
     if not url or not is_allowed(url):
         return None
-    big = next((w for w in WIDTHS if w >= px * 3), WIDTHS[-1])  # do DPR 3
-    ws = [w for w in WIDTHS if w <= big]
+    ws = _srcset_widths(url, px)
     src_w = _src_width(url, px)
     src = proxy_url(url, src_w)
     local = local_proxy_url(url, src_w)
