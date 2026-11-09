@@ -24,15 +24,14 @@ def client() -> PoliteClient:
 
 
 def _assign_image(product: Product, incoming: str | None) -> None:
-    """Doplní chybějící obrázek. Allegro /original/ (a /s1024+/) přepíše na /s512/ i když už URL máme."""
-    from .images import normalize_allegro_image
-    if product.image_url:
-        fixed = normalize_allegro_image(product.image_url)
-        if fixed and fixed != product.image_url:
-            product.image_url = fixed
-        return
-    if incoming:
-        product.image_url = normalize_allegro_image(incoming)
+    """Uloží fotku produktu. Chybějící doplní; Fast/Planeo nahradí spolehlivější URL.
+
+    Nabídky v DB vlastní fotku neukládají, takže lepší URL přijde až s dalším
+    feedem nebo scrapem. Allegro /original/ a velké /sNNNN/ → /s512/. Horší
+    příchozí fotka už uloženou spolehlivou nepřepíše.
+    """
+    from .images import prefer_display_image
+    product.image_url = prefer_display_image(product.image_url, incoming)
 
 
 def _name_from_url(url: str) -> str:

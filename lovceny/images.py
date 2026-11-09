@@ -184,6 +184,35 @@ def normalize_allegro_image(url: str | None) -> str | None:
     return url
 
 
+def image_is_display_reliable(url: str | None) -> bool:
+    """Fotka, kterou karta ukáže bez lokálního /img na multi‑MB JPEG.
+
+    Spolehlivé: wsrv-kompatibilní povolený host, nebo Allegro CDN (přímá rendice,
+    bez /img). Fast/Planeo sem nepatří — wsrv je blokuje a náhled jde přes /img.
+    """
+    if not url:
+        return False
+    if is_allegro_cdn(url):
+        return True
+    return is_allowed(url) and not wsrv_blocked(url)
+
+
+def prefer_display_image(current: str | None, incoming: str | None) -> str | None:
+    """URL k uložení. Allegro /original/ a /s1024+/ se normalizují na /s512/.
+
+    Prázdný produkt vezme příchozí fotku. Když už nějakou máme, vyměníme ji jen
+    za zřetelně spolehlivější (wsrv-host nebo Allegro místo Fast/Planeo a jiných
+    nespolehlivých). Stejně dobrou ani horší fotku nenecháme přepsat tu uloženou.
+    """
+    cur = normalize_allegro_image((current or "").strip() or None)
+    inc = normalize_allegro_image((incoming or "").strip() or None)
+    if not cur:
+        return inc
+    if inc and image_is_display_reliable(inc) and not image_is_display_reliable(cur):
+        return inc
+    return cur
+
+
 def local_proxy_url(url: str | None, w: int) -> str:
     """Naše cesta končí na .webp → Cloudflare free ji bere jako cacheovatelný asset."""
     return f"/img/{w}.webp?u={quote(url or '', safe='')}"
