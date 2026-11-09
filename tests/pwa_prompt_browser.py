@@ -4,18 +4,36 @@ import base64
 import json
 import os
 import subprocess
+import tempfile
 import time
 import urllib.request
+from pathlib import Path
 
 import websockets
 
 PORT = 8776
 BASE = f"http://127.0.0.1:{PORT}"
+ROOT = Path(__file__).resolve().parents[1]
 FAKE = """({
   preventDefault() {},
   prompt() { return Promise.resolve(); },
   userChoice: Promise.resolve({outcome: 'dismissed'})
 })"""
+
+
+def screenshot_dir() -> Path:
+    """Snímky rozložení. Na agentovi /opt/cursor/artifacts, jinak dočasný adresář."""
+    preferred = Path("/opt/cursor/artifacts")
+    try:
+        preferred.mkdir(parents=True, exist_ok=True)
+        probe = preferred / f".write-probe-{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return preferred
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "lovceny-pwa-artifacts"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 def wait_port():
@@ -148,7 +166,7 @@ async def run(chrome_port):
             "localStorage.setItem('lovceny-pwa', JSON.stringify({sessions:4}));"
             "sessionStorage.removeItem('lovceny-pwa-prompted');"
         )
-        os.makedirs("/opt/cursor/artifacts", exist_ok=True)
+        shots = screenshot_dir()
         for width, name in ((1280, "pwa-fixture-1280.png"), (390, "pwa-fixture-390.png"), (360, "pwa-fixture-360.png")):
             await evaluate("sessionStorage.removeItem('lovceny-pwa-prompted')")
             await goto(BASE + "/kategorie/sluchatka", width, 1600 if width > 500 else 2200)
@@ -185,7 +203,7 @@ async def run(chrome_port):
               return {x:0, y:Math.max(0, top - 12), width:window.innerWidth, height:Math.min(window.innerHeight, bottom - top + 24), scale:1};
             })()""")
             shot = await call("Page.captureScreenshot", {"format": "png", "clip": box})
-            open("/opt/cursor/artifacts/" + name, "wb").write(base64.b64decode(shot["data"]))
+            open(shots / name, "wb").write(base64.b64decode(shot["data"]))
             print(name, metrics)
 
         # 9) úložiště nejde zapsat → po dalším načtení se sama neukáže
@@ -223,10 +241,10 @@ o = Offer(product=p, shop='mironet', url='https://www.mironet.cz/pwa-layout', st
 o.points.append(PricePoint(price=1990, captured_at=now - timedelta(days=1), in_stock=True))
 db.add(p)
 db.commit()
-"""], cwd="/agent/repos/lovceny", env=env)
+"""], cwd=str(ROOT), env=env)
     server = subprocess.Popen(
         ["python3", "-m", "uvicorn", "lovceny.main:app", "--host", "127.0.0.1", "--port", str(PORT)],
-        cwd=str(ROOT) if False else "/agent/repos/lovceny",
+        cwd=str(ROOT),
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     chrome = subprocess.Popen([
@@ -249,6 +267,4 @@ db.commit()
 
 
 if __name__ == "__main__":
-    from pathlib import Path
-    ROOT = Path(__file__).resolve().parents[1]
     main()
