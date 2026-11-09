@@ -4,23 +4,20 @@
 {% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">🛍️</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Které slevy jsou opravdu nejnižší? Kontrola 30 dní (§ 12a) u každé.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
 <header class="hero" id="hledat"><div class="wrap hero-layout">
   <div class="hero-copy">
-    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
     <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
-    <p class="lead">Lovceny hlídá ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy a upozorní tě, až produkt zlevní. Vlož odkaz z e-shopu nebo název produktu.</p>
+    <p class="lead">Vlož odkaz z e-shopu nebo název produktu – ukážeme historii a jestli se sleva vyplatí.</p>
     <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
       <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input name="q" type="text" required placeholder="Např. tichá pračka do 10 tisíc, sluchátka na běhání nebo odkaz z e-shopu…" aria-label="Název produktu nebo odkaz z e-shopu"></label>
       <button class="btn btn-primary" type="submit">Prověřit cenu</button>
     </form>
     {% if AI_SEARCH_ON() %}<p class="ai-hint">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
-    {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
-    {% set n_shops = tracked|length %}
-    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
-    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a></p>
   </div>
   {% if hero_picks %}
   <aside class="hero-picks" aria-labelledby="hero-picks-h">
+    <div class="eyebrow">Napříč kategoriemi</div>
     <h2 id="hero-picks-h" class="hero-picks-title">Teď stojí za to</h2>
+    <p class="hero-picks-note">Slevu ukážeme, jen když je opravdu.</p>
     <div class="hero-picks-row">
       {% for h in hero_picks %}
       {% set hs = get_shop(h.best.shop) %}
@@ -28,23 +25,31 @@
       <div class="hero-pick">
         {% if h.badge %}<span class="hero-pick-badge">{{ h.badge }}</span>{% endif %}
         <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
-          <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 96, priority=(loop.first), alt=dname(h.product)) }}{% else %}{{ img_missing() }}{% endif %}</div>
+          <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 180, priority=(loop.index <= 2), alt=dname(h.product)) }}{% else %}{{ img_missing() }}{% endif %}</div>
+          {% if h.category_name %}<div class="hero-pick-cat">{{ h.category_name }}</div>{% endif %}
           <div class="hero-pick-name" title="{{ h.product.name }}">{{ dname(h.product) }}{% if dname(h.product) != h.product.name %}<span class="sr-only">. Celý název: {{ h.product.name }}</span>{% endif %}</div>
+          <b class="hero-pick-price">{{ h.best.price|czk }}</b>
         </a>
-        <div class="hero-pick-meta"><b>{{ h.best.price|czk }}</b>
-          {% if hs %}<a class="btn btn-shop-sm hero-pick-buy" href="{{ hs.affiliate_link(h.best.url) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
-          {% else %}<span>{{ shop_name }}</span>{% endif %}
-        </div>
+        {% if hs and h.best.in_stock is not false %}
+        <a class="btn btn-shop-sm hero-pick-buy" href="{{ hs.affiliate_link(h.best.url) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
+        {% else %}<span class="hero-pick-shop">{{ shop_name }}</span>{% endif %}
       </div>
       {% endfor %}
     </div>
   </aside>
   {% endif %}
-  <div class="hero-verdicts">
-    <div class="verdicts" aria-label="Možné verdikty">
-      <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
-      <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
-      <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
+  <div class="hero-more">
+    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
+    {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
+    {% set n_shops = tracked|length %}
+    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
+    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a></p>
+    <div class="hero-verdicts">
+      <div class="verdicts" aria-label="Možné verdikty">
+        <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
+        <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
+        <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
+      </div>
     </div>
   </div>
 </div></header>
