@@ -979,22 +979,27 @@ def robots_txt():
 
 # ---------- Obrázky produktů: proxy + zmenšení do WebP ----------
 def _image_proxy_response(w: int, u: str):
-    """Zmenšený WebP z povoleného obchodu. Chyba → 1×1 placeholder (private, no-store), nikdy 302 na originál."""
+    """Zmenšený WebP z povoleného obchodu.
+
+    Chyba → HTTP 404 bez obrázku (private, no-store). 200 s 1×1 průhledným WebP
+    nespustí onerror, takže karta vypadá prázdně. 404 ho spustí a šablona ukáže
+    „fotka chybí“. Nikdy 302 na originál (Planeo/Fast JPEG bývá i >3 MB).
+    """
     if w not in images.WIDTHS or not images.is_allowed(u):
         raise HTTPException(404)
     try:
         data = images.get(u, w)
     except images.ImageError as e:
-        logging.getLogger("lovceny.images").info("obrázek %s (%d): %s → placeholder", u[:120], w, e)
+        logging.getLogger("lovceny.images").info("obrázek %s (%d): %s → chyba náhledu", u[:120], w, e)
         # no-store: Cloudflare nesmí cachovat chybu (dřív se HIT-ovalo 302 na multi‑MB JPEG).
         return Response(
-            images.PLACEHOLDER_WEBP,
-            media_type="image/webp",
+            b"",
+            status_code=404,
             headers={
                 "Cache-Control": "private, no-store",
                 "X-Content-Type-Options": "nosniff",
                 "Content-Security-Policy": "default-src 'none'",
-                "X-Lovceny-Img": "placeholder",
+                "X-Lovceny-Img": "error",
             },
         )
     import hashlib
