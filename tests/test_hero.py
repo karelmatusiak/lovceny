@@ -4,27 +4,33 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from lovceny.db import SessionLocal, init_db
-from lovceny.hero import hero_showcase, clear_cache, _badge_for
+from lovceny.hero import hero_showcase, clear_cache, _badge_for, _family_key
 from lovceny.main import app
 from lovceny.models import Product, Offer, PricePoint, Watch
 from lovceny.util import slugify
 from lovceny.verdict import Verdict, MIN_DAYS
 
 
-def _seed(db, *, name, prices, image="https://img.example/x.jpg", shop="mironet", watches=0):
-    p = Product(name=name, slug=slugify(name) + "-" + str(abs(hash(name)) % 10_000),
-                image_url=image)
-    o = Offer(product=p, shop=shop, url=f"https://www.mironet.cz/{p.slug}",
-              price=prices[-1], status="ok", in_stock=True)
-    now = datetime.now(timezone.utc)
-    for i, pr in enumerate(prices):
-        o.points.append(PricePoint(price=pr, captured_at=now - timedelta(days=len(prices) - 1 - i)))
+def _seed(db, *, name, prices, image="https://img.example/x.jpg", shop="mironet", watches=0,
+          category_slug=None, category=None, in_stock=True, created_at=None, shops=None, commit=True):
+    p = Product(name=name, slug=slugify(name)[:70] + "-" + str(abs(hash(name + (category_slug or ""))) % 1_000_000),
+                image_url=image, category_slug=category_slug, category=category)
+    if created_at is not None:
+        p.created_at = created_at
     db.add(p)
     db.flush()
+    now = datetime.now(timezone.utc)
+    for si, sh in enumerate(shops or (shop,)):
+        o = Offer(product=p, shop=sh, url=f"https://www.{sh}.cz/p/{p.id}-{si}",
+                  price=prices[-1], status="ok", in_stock=in_stock)
+        for i, pr in enumerate(prices):
+            o.points.append(PricePoint(price=pr, captured_at=now - timedelta(days=len(prices) - 1 - i)))
+        db.add(o)
     for i in range(watches):
         db.add(Watch(product_id=p.id, email=f"w{i}-{p.id}@ex.cz", target_price=1,
                      token=f"tok-{p.id}-{i}"))
-    db.commit()
+    if commit:
+        db.commit()
     return p
 
 
@@ -60,10 +66,12 @@ def test_hero_prefers_real_discount_and_badge():
     clear_cache()
     init_db()
     db = SessionLocal()
-    # Silná sleva vs medián (~2000 → 1200)
-    disc = _seed(db, name="Velká sleva hero", prices=[2000] * 8 + [1200], watches=0)
+    # Silná sleva vs medián (~2000 → 1200), jiná kategorie než plochá cena
+    disc = _seed(db, name="Velká sleva hero", prices=[2000] * 8 + [1200], watches=0,
+                 category_slug="notebooky", category="Notebooky")
     # Stabilní cena, hodně hlídání
-    flat = _seed(db, name="Stabilní hlídaný", prices=[1500] * 10, watches=5)
+    flat = _seed(db, name="Stabilní hlídaný", prices=[1500] * 10, watches=5,
+                 category_slug="vysavace", category="Vysavače")
     picks = hero_showcase(db, limit=40)
     assert picks
     pos = {h.product.id: i for i, h in enumerate(picks)}
@@ -79,9 +87,11 @@ def test_hero_thin_history_fallback_no_fake_badge():
     clear_cache()
     init_db()
     db = SessionLocal()
-    # Jen 2 dny historie – málo pro verdikt, ale s obrázkem a cenou
-    a = _seed(db, name="Novinka A", prices=[999, 999], watches=3)
-    b = _seed(db, name="Novinka B", prices=[1999], watches=1)
+    # Jen 2 dny historie – málo pro verdikt, ale s obrázkem a cenou. Dvě kategorie.
+    a = _seed(db, name="Novinka A", prices=[999, 999], watches=3,
+              category_slug="notebooky", category="Notebooky")
+    b = _seed(db, name="Novinka B", prices=[1999], watches=1,
+              category_slug="vysavace", category="Vysavače")
     picks = hero_showcase(db, limit=40)
     ids = {h.product.id for h in picks}
     assert a.id in ids
@@ -110,11 +120,17 @@ def test_home_renders_hero_picks():
     clear_cache()
     init_db()
     db = SessionLocal()
-    _seed(db, name="Hero na homepage", prices=[3000] * 9 + [2100])
+    _seed(db, name="Hero na homepage", prices=[3000] * 9 + [2100],
+          category_slug="notebooky", category="Notebooky")
     html = TestClient(app).get("/").text
     assert "Teď stojí za to" in html
     assert "hero-picks" in html
     assert "Hero na homepage" in html
+    assert 'class="hero-pick-cat">Notebooky' in html
+    assert html.find('action="/hledat"') < html.find('class="hero-picks"')
+    assert html.find('class="hero-picks"') < html.find("Naposledy přidané")
+    assert 'rel="nofollow sponsored noopener"' in html
+    assert 'target="_blank"' in html
     assert "hero-art" not in html
     db.close()
 
@@ -135,3 +151,137 @@ def test_hero_pick_img_css_scales_whole_product():
     assert "max-height:100%" in img.replace(" ", "") or "max-height: 100%" in img
     # Never cover-crop in hero picks
     assert "object-fit:cover" not in css.split(".hero-picks")[1].split("@media (min-width:960px)")[0].replace(" ", "")
+    hero = css.split("/* hero product showcase */", 1)[1]
+    compact = hero.replace(" ", "")
+    assert "overflow-x:auto" not in compact
+    assert "scroll-snap" not in hero
+    assert "150px" not in hero
+    assert "repeat(2,minmax(0,1fr))" in compact
+
+
+def test_family_key_collapses_colour_and_parenthetical_variant():
+    assert _family_key("Modecom Volcano Prometheus") == _family_key(
+        "Modecom Volcano Prometheus (gaming variant)")
+    assert _family_key("Modecom Volcano Prometheus černá") == _family_key(
+        "Modecom Volcano Prometheus bílá")
+    assert _family_key("Sony WH-1000XM5") != _family_key("Sony WH-1000XM4")
+    assert _family_key("iPhone 15 128GB") != _family_key("iPhone 15 Pro 128GB")
+    assert _family_key("iPhone 15 128GB černá") != _family_key("iPhone 15 256GB černá")
+
+
+def test_hero_one_per_category_and_no_near_duplicate_family():
+    clear_cache()
+    init_db()
+    db = SessionLocal()
+    for name, price in (
+        ("Sony WH-1000XM5 černá", 7990),
+        ("Sony WH-1000XM5 bílá", 7890),
+        ("Sony WH-1000XM5 (gaming variant)", 7790),
+    ):
+        _seed(db, name=name, prices=[price], category_slug="sluchatka", category="Sluchátka",
+              shops=("mironet", "datart"))
+    _seed(db, name="JBL Tune 770NC", prices=[1990], category_slug="sluchatka", category="Sluchátka")
+    _seed(db, name="Dyson V15 Detect", prices=[12990], category_slug="vysavace", category="Vysavače")
+    picks = hero_showcase(db, limit=6)
+    slugs = [h.category_slug for h in picks]
+    assert len(slugs) == len(set(slugs))
+    assert slugs.count("sluchatka") == 1
+    sonys = [h for h in picks if "WH-1000XM5" in h.product.name]
+    assert len(sonys) == 1
+    assert any(h.product.name.startswith("Dyson") for h in picks)
+    assert all(h.badge is None or h.badge == "Nejnižší cena" or h.badge.startswith("−") for h in picks)
+    db.close()
+
+
+def test_hero_thin_history_mixes_categories_past_newest_dump():
+    """Čerstvý dump sluchátek nesmí vytlačit starší výrobky z jiných kategorií."""
+    clear_cache()
+    init_db()
+    db = SessionLocal()
+    old = datetime.now(timezone.utc) - timedelta(days=40)
+    mains = [
+        ("Sony WH-1000XM5", "sluchatka", "Sluchátka", 6990),
+        ("Lenovo IdeaPad 5", "notebooky", "Notebooky", 15990),
+        ("Dyson V15 Detect", "vysavace", "Vysavače", 12990),
+        ("DeLonghi Magnifica S", "kavovary", "Kávovary", 8990),
+        ("Samsung Galaxy A55", "telefony", "Mobilní telefony", 9990),
+        ("Apple Watch SE", "chytre-hodinky", "Chytré hodinky a náramky", 6490),
+    ]
+    for name, slug, label, price in mains:
+        _seed(db, name=name, prices=[price], category_slug=slug, category=label,
+              created_at=old, commit=False)
+    # Příslušenství omylem zařazené jako sluchátka do výběru nepatří.
+    _seed(db, name="Náhradní kabel k Sony WH", prices=[299], category_slug="sluchatka",
+          category="Sluchátka", created_at=datetime.now(timezone.utc), commit=False)
+    for i in range(130):
+        _seed(db, name=f"Modecom Volcano Prometheus {i}", prices=[700 + (i % 30)],
+              category_slug="sluchatka", category="Sluchátka",
+              created_at=datetime.now(timezone.utc), commit=False)
+    db.commit()
+    picks = hero_showcase(db, limit=6)
+    slugs = [h.category_slug for h in picks]
+    assert len(picks) == 6
+    assert len(set(slugs)) == 6
+    assert set(slugs) == {slug for _, slug, _, _ in mains}
+    hp = next(h for h in picks if h.category_slug == "sluchatka")
+    assert hp.product.name.startswith("Sony")
+    assert all("kabel" not in h.product.name.lower() for h in picks)
+    assert all(not h.product.name.startswith("Modecom") for h in picks)
+    assert all(h.badge != "Nejnižší cena" for h in picks)
+    assert all(h.best.in_stock is not False and h.best.price is not None for h in picks)
+    db.close()
+
+
+def test_hero_real_discounts_stay_varied_and_honest():
+    clear_cache()
+    init_db()
+    db = SessionLocal()
+    _seed(db, name="Lenovo IdeaPad sleva", prices=[20000] * 9 + [14000],
+          category_slug="notebooky", category="Notebooky")
+    _seed(db, name="Dyson V15 sleva", prices=[15000] * 9 + [11000],
+          category_slug="vysavace", category="Vysavače")
+    _seed(db, name="Sony WH-1000XM5 sleva", prices=[9000] * 9 + [6000],
+          category_slug="sluchatka", category="Sluchátka")
+    _seed(db, name="JBL Tune 770NC sleva", prices=[4000] * 9 + [2500],
+          category_slug="sluchatka", category="Sluchátka")
+    picks = hero_showcase(db, limit=6)
+    by_cat = {h.category_slug: h for h in picks}
+    assert set(by_cat) == {"notebooky", "vysavace", "sluchatka"}
+    for h in picks:
+        assert h.badge == "Nejnižší cena" or (h.badge or "").startswith("−")
+    assert sum(1 for h in picks if h.category_slug == "sluchatka") == 1
+    db.close()
+
+
+def test_hero_oos_not_buyable_and_accessory_not_filed_as_main():
+    clear_cache()
+    init_db()
+    db = SessionLocal()
+    oos = _seed(db, name="Lenovo IdeaPad mimo prodej", prices=[9000],
+                category_slug="notebooky", category="Notebooky", in_stock=False)
+    ok = _seed(db, name="Lenovo IdeaPad koupit", prices=[12000],
+               category_slug="notebooky", category="Notebooky", in_stock=True)
+    phone = _seed(db, name="Samsung Galaxy A55", prices=[8000],
+                  category_slug="telefony", category="Mobilní telefony", in_stock=True)
+    cheap = Offer(product=phone, shop="alza", url=f"https://www.alza.cz/oos-{phone.id}",
+                  price=1000, status="ok", in_stock=False)
+    db.add(cheap)
+    _seed(db, name="USB-C kabel k telefonu", prices=[199],
+          category_slug="telefony", category="Mobilní telefony")
+    db.commit()
+    picks = hero_showcase(db, limit=6)
+    names = {h.product.name for h in picks}
+    assert oos.name not in names
+    assert "USB-C kabel k telefonu" not in names
+    assert ok.name in names
+    phone_pick = next(h for h in picks if h.product.id == phone.id)
+    assert float(phone_pick.best.price) == 8000
+    assert phone_pick.best.in_stock is not False
+    assert phone_pick.best.shop != "alza"
+    html = TestClient(app).get("/").text
+    assert cheap.url not in html
+    assert f'href="{phone_pick.best.url}"' in html or phone_pick.best.url in html
+    assert "hero-pick-buy" in html
+    assert 'rel="nofollow sponsored noopener"' in html
+    assert all("kabel" not in n.lower() for n in names)
+    db.close()
