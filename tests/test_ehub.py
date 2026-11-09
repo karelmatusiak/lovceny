@@ -1,4 +1,4 @@
-"""eHUB affiliate wrapping + Heureka/Shoptet feed matching for iStyle/Sencor/XM.cz/EVOLVEO/Počítače24."""
+"""eHUB affiliate wrapping + Heureka/Shoptet/Google feed matching for iStyle/Sencor/XM.cz/EVOLVEO/Počítače24/JBL."""
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
 
@@ -70,6 +70,7 @@ def test_status_labels_ehub_shops(monkeypatch):
     monkeypatch.delenv("XM_FEED_URL", raising=False)
     monkeypatch.delenv("EVOLVEO_FEED_URL", raising=False)
     monkeypatch.delenv("POCITACE24_FEED_URL", raising=False)
+    monkeypatch.delenv("JBL_FEED_URL", raising=False)
     st, label = get_shop("istyle").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("sencor").status_label()
@@ -79,6 +80,8 @@ def test_status_labels_ehub_shops(monkeypatch):
     st, label = get_shop("evolveo").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("pocitace24").status_label()
+    assert st == "ok" and "feed" in label
+    st, label = get_shop("jbl").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("smarty").status_label()
     assert st == "ok" and "affiliate" in label.lower()
@@ -91,11 +94,13 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("XM_FEED_URL", "")
     monkeypatch.setenv("EVOLVEO_FEED_URL", "")
     monkeypatch.setenv("POCITACE24_FEED_URL", "")
+    monkeypatch.setenv("JBL_FEED_URL", "")
     assert get_shop("istyle").feed_url.startswith("https://")
     assert get_shop("sencor").feed_url.startswith("https://")
     assert get_shop("xm").feed_url.startswith("https://xm.cz/")
     assert get_shop("evolveo").feed_url.startswith("https://feeds.mergado.com/evolveo-cz-heureka")
     assert get_shop("pocitace24").feed_url == "https://www.pocitace24.cz/universal.xml"
+    assert get_shop("jbl").feed_url == "https://www.jbl.cz/gmerchant-JBL-cz.xml"
     monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
     assert get_shop("istyle").feed_url == "https://example.test/istyle.xml"
     monkeypatch.setenv("XM_FEED_URL", "https://example.test/xm.xml")
@@ -104,6 +109,8 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     assert get_shop("evolveo").feed_url == "https://example.test/evolveo.xml"
     monkeypatch.setenv("POCITACE24_FEED_URL", "https://example.test/pocitace24.xml")
     assert get_shop("pocitace24").feed_url == "https://example.test/pocitace24.xml"
+    monkeypatch.setenv("JBL_FEED_URL", "https://example.test/jbl.xml")
+    assert get_shop("jbl").feed_url == "https://example.test/jbl.xml"
 
 
 def test_parse_stream_and_strip_tracking():
@@ -154,7 +161,8 @@ def test_obchody_shows_ehub_partners(client_db):
     c, db, make = client_db
     html = c.get("/obchody").text
     assert "iStyle" in html and "Sencor" in html and "Smarty" in html and "XM.cz" in html and "EVOLVEO" in html
-    assert "Počítače24" in html
+    assert "Počítače24" in html and "JBL" in html
+    assert "partnerského XML feedu" in html
     assert "oficiální feed" in html
     assert "affiliate odkazy" in html  # Smarty zdroj
 
@@ -664,3 +672,163 @@ def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):
     assert "ehub.cz/system/scripts/click.php" in html
     assert "a_bid=f89ce7c7" in html
     assert "nofollow sponsored noopener" in html
+
+
+JBL_FIXTURE = Path(__file__).parent / "fixtures" / "jbl_gmerchant_mini.xml"
+JBL_FEED_DEFAULT = "https://www.jbl.cz/gmerchant-JBL-cz.xml"
+
+
+def test_jbl_shop_registry_and_click_wrapper(monkeypatch):
+    from lovceny.shops import shop_for_url
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    monkeypatch.delenv("JBL_FEED_URL", raising=False)
+    shop = get_shop("jbl")
+    assert shop is not None and shop.name == "JBL" and shop.ehub_bid == "c4f80d1f"
+    assert shop.source == "feed" and shop.status == "ok"
+    assert shop.domains == ["jbl.cz"]
+    assert shop.feed_url_env == "JBL_FEED_URL"
+    assert shop.feed_url == JBL_FEED_DEFAULT
+    assert "partnerského XML feedu" in shop.note and "eHUB" in shop.note
+    assert shop_for_url("https://www.jbl.cz/jbl-tune-510bt-black") is shop
+    assert shop_for_url("https://jbl.cz/produkt") is shop
+    dest = "https://www.jbl.cz/"
+    wrapped = shop.affiliate_link(dest)
+    assert wrapped.startswith("https://ehub.cz/system/scripts/click.php?")
+    q = parse_qs(urlparse(wrapped).query)
+    assert q["a_aid"] == ["667205fc"]
+    assert q["a_bid"] == ["c4f80d1f"]
+    assert unquote(q["desturl"][0]) == dest
+    monkeypatch.setenv("EHUB_AID", "")
+    assert shop.affiliate_link(dest) == dest
+
+
+def test_parse_jbl_google_merchant_rss():
+    """Stejný Google RSS tvar jako 4Home; JBL navíc nemá product_type a má condition."""
+    from lovceny import images
+    items = feed.load(str(JBL_FIXTURE))
+    tune = items[0]
+    assert tune.item_id == "tune-510-black"
+    assert tune.name == "JBL Tune 510BT Black"
+    assert tune.price == 1490
+    assert tune.url == "https://www.jbl.cz/jbl-tune-510bt-black"
+    assert tune.in_stock is True
+    assert tune.condition == "new"
+    assert tune.category is None  # prázdné g:product_type
+    assert tune.description == "Bezdrátová sluchátka na uši."
+    assert "<" not in (tune.description or "")
+    assert tune.image.startswith("https://www.edsi.sk/")
+    assert images.is_allowed(tune.image)
+    bazar = next(it for it in items if "Bazar" in it.name)
+    assert bazar.condition == "used" and bazar.price == 337
+    oos = next(it for it in items if it.name.startswith("JBL Endurance"))
+    assert oos.in_stock is False
+
+
+def test_jbl_feed_keeps_headphones_drops_extras():
+    """Bazar, příslušenství, repro, soundbar a mikrofon nejsou hlavní seed. Sluchátka ano."""
+    from lovceny.categories import accept_feed_item, annotate_jbl_items, jbl_catalog_category
+    raw = feed.load(str(JBL_FIXTURE))
+    assert any("Bazar" in it.name for it in raw)
+    assert any(it.condition == "used" and "Bazar" not in it.name for it in raw)
+    items = {it.name: it for it in annotate_jbl_items(raw)}
+    assert not any("Bazar" in name or name == "JBL Wave Buds2 Black" for name in items)
+
+    def cat(name):
+        it = items[name]
+        return accept_feed_item(it.name, it.category, it.price, url=it.url)
+
+    for name in (
+        "JBL Tune 510BT Black",
+        "JBL Live 770NC White",
+        "JBL Quantum 100 Black",
+        "JBL Wave Beam2 Black",
+        "JBL Tour Pro 3 Black",
+        "TOUR ONE M3 Smart TX, Black",
+        "JBL Endurance Run 2 Wired White",
+        "Yurbuds Focus 300 for Women Purple",
+    ):
+        assert cat(name) == "sluchatka", name
+        assert items[name].category == "Sluchátka"
+    # in-ear pod minimem sluchátek (500 Kč) kategorii má, do seedu ne
+    assert jbl_catalog_category("JBL T110 Black", "Sluchátka do uší.") == "sluchatka"
+    assert cat("JBL T110 Black") is None
+    for name in (
+        "JBL Quantum STREAM",
+        "JBL PartyBox 130",
+        "JBL Flip 7 Black",
+        "JBL Charge 6 Black",
+        "JBL Bar 500 MK2",
+        "JBL Club 102",
+        "JBL HDMI kabel 1.2M",
+        "JBL Náhradní náušníky pro sluchátka TUNE řady 400 a 500-černé",
+        "JBL Partybox Cover 520",
+        "Yurbuds ErgoSport Armband Black Universal",
+        "JBL Smart TX",
+    ):
+        assert cat(name) is None, name
+        assert items[name].category is None
+    assert jbl_catalog_category(
+        "Yurbuds Focus 100 for Women Purple - Bazar", "sportovní sluchátka", condition="used",
+    ) is None
+    assert jbl_catalog_category("JBL Wave Buds2 Black", "True Wireless sluchátka.", condition="used") is None
+
+
+def test_jbl_seed_pick_collapses_colors_and_skips_speakers():
+    from lovceny.categories import annotate_jbl_items
+    from lovceny.shops.feed import FeedItem
+    from seed import pick_feed_create_items, _jbl_family_key, _jbl_line
+    items = annotate_jbl_items(feed.load(str(JBL_FIXTURE)))
+    picked = pick_feed_create_items(
+        items, ("sluchatka",), family_key=_jbl_family_key, spread_by=_jbl_line,
+    )
+    names = [it.name for it in picked]
+    assert sum(1 for n in names if n.startswith("JBL Tune 510BT")) == 1
+    assert "JBL PartyBox 130" not in names
+    assert "JBL Bar 500 MK2" not in names
+    assert "Yurbuds ErgoSport Armband Black Universal" not in names
+    assert "JBL Quantum STREAM" not in names
+    assert any(n.startswith("Yurbuds Focus") for n in names)
+    # Strop na značku by nechal jen drahé Quantum. Střídání řad podrží Wave, Tune i Yurbuds.
+    many = [
+        FeedItem(None, f"JBL Quantum {800 + i}", f"https://www.jbl.cz/q{i}", 9000 - i,
+                 category="Sluchátka", in_stock=True)
+        for i in range(8)
+    ]
+    many.append(FeedItem(None, "JBL Wave Beam2 Black", "https://www.jbl.cz/wave", 1990,
+                         category="Sluchátka", in_stock=True))
+    many.append(FeedItem(None, "JBL Tune 510BT Black", "https://www.jbl.cz/tune", 1490,
+                         category="Sluchátka", in_stock=True))
+    many.append(FeedItem(None, "Yurbuds Focus 300", "https://www.jbl.cz/y", 699,
+                         category="Sluchátka", in_stock=True))
+    spread = pick_feed_create_items(
+        many, ("sluchatka",), family_key=_jbl_family_key, spread_by=_jbl_line,
+    )
+    head = [it.name for it in spread[:6]]
+    assert any("Wave" in n for n in head)
+    assert any("Tune" in n for n in head)
+    assert any("Yurbuds" in n for n in head)
+    assert any("Quantum" in n for n in head)
+
+
+def test_jbl_product_page_ehub_rel_and_oos(client_db, monkeypatch):
+    monkeypatch.delenv("EHUB_AID", raising=False)
+    c, db, make = client_db
+    p = make([1490], name="JBL Tune 510BT Black", shop="jbl", category="sluchatka")
+    o = p.offers[0]
+    o.url = "https://www.jbl.cz/jbl-tune-510bt-black-page/"
+    o.in_stock = True
+    db.commit()
+    html = c.get(f"/produkt/{p.id}").text
+    assert "JBL" in html
+    assert "ehub.cz/system/scripts/click.php" in html
+    assert "a_bid=c4f80d1f" in html
+    assert "a_aid=667205fc" in html
+    assert "nofollow sponsored noopener" in html
+    assert 'class="btn btn-shop"' in html
+    o.in_stock = False
+    db.commit()
+    html_oos = c.get(f"/produkt/{p.id}").text
+    assert "Není skladem" in html_oos
+    assert 'class="btn btn-shop"' not in html_oos
+    assert "Odkaz do obchodu" in html_oos
+    assert "a_bid=c4f80d1f" in html_oos

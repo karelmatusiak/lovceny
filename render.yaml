@@ -34,7 +34,7 @@ services:
         sync: false
       - key: DATART_AFFILIATE_ID
         sync: false
-      # eHUB affiliate (Smarty/iStyle/Sencor/XM.cz/EVOLVEO/Počítače24). Prázdné = vypnuto; jinak výchozí AID v kódu.
+      # eHUB affiliate (Smarty/iStyle/Sencor/XM.cz/EVOLVEO/Počítače24/JBL). Prázdné = vypnuto; jinak výchozí AID v kódu.
       - key: EHUB_AID
         sync: false
       - key: LOVCENY_AFFILIATE
@@ -61,6 +61,8 @@ services:
       - key: ALLEGRO_FEED_URL
         sync: false
       - key: POCITACE24_FEED_URL
+        sync: false
+      - key: JBL_FEED_URL
         sync: false
       # AI hledání – Google Gemini, jen FREE tier (klíč z AI Studia bez billingu). Bez klíče běží hledání bez AI.
       - key: GEMINI_API_KEY

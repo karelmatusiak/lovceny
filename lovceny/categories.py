@@ -573,3 +573,82 @@ def classify(name: str, shop_category: str | None = None, url: str | None = None
         if rx.search(n) and not category_url_conflict(slug, name, url):
             return slug
     return None
+
+
+# JBL.cz (Google Merchant) nemá product_type ani google_product_category.
+# Sluchátka bereme z názvu a popisu. Reproduktory, soundbary, autoaudio a mikrofony
+# vlastní kategorii nemají – do sluchátek je necpeme.
+_JBL_BAZAR_RX = re.compile(r"\bbazar\b")
+_JBL_ACCESSORY_RX = re.compile(
+    r"\b(?:nahradn\w*|nausnik\w*|kabel\w*|hdmi|adapt[eo]r\w*|armband\w*|drzak\w*|"
+    r"popruh\w*|poutk\w*|partycover\w*|cover\b|pouzdr\w*|obal\w*|kryt\w*|filtr\w*|"
+    r"bateri\w*|battery\w*)"
+)
+# Řady, které nejsou sluchátka (repro, soundbar, auto, mikrofon, rádio, powerbanka…).
+_JBL_NOT_HEADPHONE_RX = re.compile(
+    r"\b(?:partybox\w*|partylight\w*|charge\b|flip\b|clip\b|boombox\w*|xtreme\b|pulse\b|"
+    r"grip\b|authentics\b|tuner\b|horizon\w*|spinner\b|basspro\w*|cinema\b|citation\b|"
+    r"onyx\b|club\b|stage(?:\b|\d)|stadium\b|concert\b|infinity\b|legend\b|celebrity\b|"
+    r"cove\b|wind\b|easysing\w*|quantum stream\b|mikrofon\w*|microphone\w*|subwoofer\w*|"
+    r"reproduktor\w*|soundbar\w*|zesilovac\w*|multibeam\b|go essential\b|go \+|go\d+|pbm\d+|"
+    r"mics?\b|bar\b|smart tx\b)"
+)
+_JBL_TOUR_ONE_RX = re.compile(r"\btour one\b")
+_JBL_HEADPHONE_LINE_RX = re.compile(
+    r"\b(?:jbl tune\b|jbl live\b|jbl quantum\b|jbl tour\b|jbl wave\b|jbl endurance\b|"
+    r"jbl vibe\b|jbl soundgear\b|jbl sense\b|jbl jr\d*|jbl junior\b|tour one\b|yurbuds\b|"
+    r"t110\b|t205\b|t210\b|t290\b)"
+)
+_JBL_HEADPHONE_TEXT_RX = re.compile(
+    r"\bsluchat|\bin[- ]ear\b|\bover[- ]ear\b|\bon[- ]ear\b|\bearbuds?\b|\bheadphones?\b|"
+    r"\bearphones?\b|\bdo usi\b|\bna usi\b|\bpres usi\b|\bkolem usi\b"
+)
+
+
+def jbl_is_bazar(name: str, condition: str | None = None) -> bool:
+    """Bazar / used z JBL feedu (g:condition nebo „Bazar“ v názvu)."""
+    if (condition or "").strip().lower() == "used":
+        return True
+    return _JBL_BAZAR_RX.search(_fold(name)) is not None
+
+
+def jbl_catalog_category(
+    name: str,
+    description: str | None = None,
+    *,
+    condition: str | None = None,
+) -> str | None:
+    """Slug pro katalog JBL.cz, nebo None.
+
+    Tune, Live, Quantum (ne Stream), Tour, Wave, in-ear/over-ear a Yurbuds sluchátka ano.
+    Příslušenství, bazar, reproduktory, soundbary, autoaudio a mikrofony ne.
+    """
+    if jbl_is_bazar(name, condition):
+        return None
+    n = _fold(name)
+    if _JBL_ACCESSORY_RX.search(n):
+        return None
+    # „TOUR ONE M3 Smart TX“ jsou sluchátka s vysílačem, ne samotný Smart TX.
+    if _JBL_NOT_HEADPHONE_RX.search(n) and not _JBL_TOUR_ONE_RX.search(n):
+        return None
+    if re.search(r"\bquantum stream\b", n):
+        return None
+    blob = n + _fold(description or "")
+    if _JBL_HEADPHONE_LINE_RX.search(n) or _JBL_HEADPHONE_TEXT_RX.search(blob):
+        return "sluchatka"
+    return None
+
+
+def annotate_jbl_items(items: list) -> list:
+    """Z feedu JBL.cz vyhodí bazar a sluchátkům doplní kategorii pro whitelist seedu."""
+    out = []
+    for it in items:
+        cond = getattr(it, "condition", None)
+        if jbl_is_bazar(getattr(it, "name", ""), cond):
+            continue
+        if jbl_catalog_category(
+            it.name, getattr(it, "description", None), condition=cond,
+        ) == "sluchatka":
+            it.category = "Sluchátka"
+        out.append(it)
+    return out

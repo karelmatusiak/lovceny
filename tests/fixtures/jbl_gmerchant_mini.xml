@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+  <channel>
+    <title/>
+    <link/>
+    <description/>
+    <item>
+      <g:id>tune-510-black</g:id>
+      <title>JBL Tune 510BT Black</title>
+      <g:description>&lt;p&gt;Bezdrátová sluchátka na uši.&lt;/p&gt;</g:description>
+      <link>https://www.jbl.cz/jbl-tune-510bt-black</link>
+      <g:image_link>https://www.edsi.sk/api/v1/image?query=product/tune-510.jpg</g:image_link>
+      <g:price>1490.00 CZK</g:price>
+      <g:brand>JBL</g:brand>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+      <g:gtin>05003634530123</g:gtin>
+      <g:product_type></g:product_type>
+    </item>
+    <item>
+      <g:id>tune-510-white</g:id>
+      <title>JBL Tune 510BT White</title>
+      <g:description>Bezdrátová sluchátka na uši.</g:description>
+      <link>https://www.jbl.cz/jbl-tune-510bt-white</link>
+      <g:price>1490.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>live-770</g:id>
+      <title>JBL Live 770NC White</title>
+      <g:description>Bezdrátová sluchátka přes uši s adaptivním potlačením hluku.</g:description>
+      <link>https://www.jbl.cz/jbl-live-770nc-white</link>
+      <g:price>3399.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>quantum-100</g:id>
+      <title>JBL Quantum 100 Black</title>
+      <g:description>Kabelové sluchátka na uši s odpojitelným mikrofonem.</g:description>
+      <link>https://www.jbl.cz/jbl-quantum-100-black</link>
+      <g:price>999.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>quantum-stream</g:id>
+      <title>JBL Quantum STREAM</title>
+      <g:description>Duální prémiový USB mikrofon pro streamování.</g:description>
+      <link>https://www.jbl.cz/jbl-quantum-stream</link>
+      <g:price>2590.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>wave</g:id>
+      <title>JBL Wave Beam2 Black</title>
+      <g:description>True Wireless sluchátka.</g:description>
+      <link>https://www.jbl.cz/jbl-wave-beam2-black</link>
+      <g:price>1990.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>tour</g:id>
+      <title>JBL Tour Pro 3 Black</title>
+      <g:description>True Wireless sluchátka s potlačením hluku a nabíjecím pouzdrem.</g:description>
+      <link>https://www.jbl.cz/jbl-tour-pro-3-black</link>
+      <g:price>7590.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>tour-tx</g:id>
+      <title>TOUR ONE M3 Smart TX, Black</title>
+      <g:description>Bezdrátová sluchátka na uši s potlačením hluku a JBL Smart Tx.</g:description>
+      <link>https://www.jbl.cz/tour-one-m3-smart-tx-black</link>
+      <g:price>9990.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>endurance</g:id>
+      <title>JBL Endurance Run 2 Wired White</title>
+      <g:description>Voděodolná kabelová sportovní sluchátka do uší.</g:description>
+      <link>https://www.jbl.cz/jbl-endurance-run-2</link>
+      <g:price>649.00 CZK</g:price>
+      <g:availability>out of stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>t110</g:id>
+      <title>JBL T110 Black</title>
+      <g:description>Sluchátka do uší.</g:description>
+      <link>https://www.jbl.cz/jbl-t110-black</link>
+      <g:price>349.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>yurbuds</g:id>
+      <title>Yurbuds Focus 300 for Women Purple</title>
+      <g:description>Lehká sportovní sluchátka pro ženy.</g:description>
+      <link>https://www.jbl.cz/yurbuds-focus-300-for-women-purple</link>
+      <g:price>699.00 CZK</g:price>
+      <g:brand>Yurbuds</g:brand>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>yurbuds-bazar</g:id>
+      <title>Yurbuds Focus 100 for Women Purple - Bazar</title>
+      <g:description>Lehká sportovní sluchátka pro ženy.</g:description>
+      <link>https://www.jbl.cz/yurbuds-focus-100-for-women-purple-17</link>
+      <g:price>337.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>used</g:condition>
+    </item>
+    <item>
+      <g:id>used-no-bazar-word</g:id>
+      <title>JBL Wave Buds2 Black</title>
+      <g:description>True Wireless sluchátka.</g:description>
+      <link>https://www.jbl.cz/jbl-wave-buds2-black-used</link>
+      <g:price>1200.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>used</g:condition>
+    </item>
+    <item>
+      <g:id>armband</g:id>
+      <title>Yurbuds ErgoSport Armband Black Universal</title>
+      <g:description>Nastavitelné pouzdro na ruku pro telefon.</g:description>
+      <link>https://www.jbl.cz/yurbuds-ergosport-armband</link>
+      <g:price>449.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>partybox</g:id>
+      <title>JBL PartyBox 130</title>
+      <g:description>Přenosný party reproduktor.</g:description>
+      <link>https://www.jbl.cz/jbl-partybox-130</link>
+      <g:price>9990.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>flip</g:id>
+      <title>JBL Flip 7 Black</title>
+      <g:description>Přenosný voděodolný reproduktor.</g:description>
+      <link>https://www.jbl.cz/jbl-flip-7-black</link>
+      <g:price>2990.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>charge</g:id>
+      <title>JBL Charge 6 Black</title>
+      <g:description>Přenosný vodotěsný Bluetooth reproduktor.</g:description>
+      <link>https://www.jbl.cz/jbl-charge-6-black</link>
+      <g:price>4390.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>bar</g:id>
+      <title>JBL Bar 500 MK2</title>
+      <g:description>5.1 kanálový systém soundbaru s Dolby Atmos.</g:description>
+      <link>https://www.jbl.cz/jbl-bar-500-mk2</link>
+      <g:price>16390.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>club</g:id>
+      <title>JBL Club 102</title>
+      <g:description>Reproduktory do auta.</g:description>
+      <link>https://www.jbl.cz/jbl-club-102</link>
+      <g:price>4390.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>cable</g:id>
+      <title>JBL HDMI kabel 1.2M</title>
+      <g:description>HDMI kabel k soundbaru.</g:description>
+      <link>https://www.jbl.cz/jbl-hdmi-kabel</link>
+      <g:price>177.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>pads</g:id>
+      <title>JBL Náhradní náušníky pro sluchátka TUNE řady 400 a 500-černé</title>
+      <g:description>Náhradní náušníky pro sluchátka JBL Tune.</g:description>
+      <link>https://www.jbl.cz/jbl-nahradni-nausniky</link>
+      <g:price>181.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>cover</g:id>
+      <title>JBL Partybox Cover 520</title>
+      <g:description>Ochranný obal pro reproduktor.</g:description>
+      <link>https://www.jbl.cz/jbl-partybox-cover-520</link>
+      <g:price>1990.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+    <item>
+      <g:id>smart-tx</g:id>
+      <title>JBL Smart TX</title>
+      <g:description>Inteligentní vysílač Bluetooth.</g:description>
+      <link>https://www.jbl.cz/jbl-smart-tx</link>
+      <g:price>3299.00 CZK</g:price>
+      <g:availability>in stock</g:availability>
+      <g:condition>new</g:condition>
+    </item>
+  </channel>
+</rss>
