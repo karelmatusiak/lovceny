@@ -3,7 +3,9 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -12,6 +14,7 @@ from pathlib import Path
 import websockets
 
 PORT = 8776
+CHROME_PORT = 9240
 BASE = f"http://127.0.0.1:{PORT}"
 ROOT = Path(__file__).resolve().parents[1]
 FAKE = """({
@@ -36,14 +39,202 @@ def screenshot_dir() -> Path:
         return fallback
 
 
-def wait_port():
-    for _ in range(50):
-        try:
-            urllib.request.urlopen(BASE + "/healthz", timeout=0.4)
+def _log_tail(path: Path, limit: int = 6000) -> str:
+    try:
+        text = path.read_text(errors="replace").strip()
+    except OSError as exc:
+        return f"(log {path} se nepodařilo přečíst: {exc})"
+    if not text:
+        return f"(proces nic nevypsal, log {path})"
+    if len(text) > limit:
+        text = text[-limit:]
+    return text
+
+
+def _userns_hint() -> str:
+    knob = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+    try:
+        restricted = knob.read_text().strip() == "1"
+    except OSError:
+        return ""
+    if not restricted:
+        return ""
+    return (
+        "kernel.apparmor_restrict_unprivileged_userns=1, Chrome na tomhle hostu "
+        "často skončí dřív, než otevře DevTools port.\n"
+    )
+
+
+def relax_userns_on_ci() -> None:
+    """Ubuntu 24.04/26.04 (ubuntu-latest) blokuje user namespace přes AppArmor.
+
+    Chrome pak spadne ještě před tím, než začne poslouchat na debug portu.
+    Runner je jednorázový, takže omezení na dobu jobu zvedneme.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true" and os.environ.get("CI") != "true":
+        return
+    knob = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+    try:
+        if knob.read_text().strip() != "1":
             return
-        except Exception:
-            time.sleep(0.1)
-    raise SystemExit("server not up")
+    except OSError:
+        return
+    subprocess.run(
+        ["sudo", "-n", "sysctl", "-w", "kernel.apparmor_restrict_unprivileged_userns=0"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _is_elf(path: Path) -> bool:
+    try:
+        with path.open("rb") as fh:
+            return fh.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def chrome_binary() -> str | None:
+    """Skutečný binární soubor, ne bash obal google-chrome.
+
+    Obal přepisuje stdout/stderr přes process substitution. Když je výstup
+    soubor nebo /dev/null, DevTools port se někdy vůbec neotevře.
+    """
+    raw = os.environ.get("LOVCENY_CHROME") or shutil.which("google-chrome") or shutil.which("google-chrome-stable")
+    if not raw:
+        return None
+    resolved = Path(raw).resolve()
+    for candidate in (resolved.parent / "chrome", Path("/opt/google/chrome/chrome"), resolved, Path(raw)):
+        if candidate.is_file() and _is_elf(candidate):
+            return str(candidate)
+    return raw
+
+
+def chrome_environment(base: dict) -> dict:
+    """Chrome nesmí dědit LD_LIBRARY_PATH z actions/setup-python.
+
+    Ten ukazuje do toolcache s libpython. Chrome má brát systémové knihovny,
+    jinak může spadnout dřív, než otevře debug port.
+    """
+    env = base.copy()
+    env.pop("LD_LIBRARY_PATH", None)
+    env.pop("LD_PRELOAD", None)
+    return env
+
+
+def chrome_command(binary: str, user_data: Path) -> list[str]:
+    return [
+        binary,
+        "--headless=new",
+        "--ozone-platform=headless",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-software-rasterizer",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--hide-scrollbars",
+        f"--remote-debugging-port={CHROME_PORT}",
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-allow-origins=*",
+        f"--user-data-dir={user_data}",
+        "about:blank",
+    ]
+
+
+def _debug_port(user_data: Path) -> int | None:
+    try:
+        line = (user_data / "DevToolsActivePort").read_text(errors="replace").splitlines()[0].strip()
+        port = int(line)
+    except (OSError, ValueError, IndexError):
+        return None
+    if 1 <= port <= 65535:
+        return port
+    return None
+
+
+def _stop(proc: subprocess.Popen | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _not_ready(proc: subprocess.Popen, log_path: Path, message: str) -> SystemExit:
+    """Nejdřív proces ukonči, ať se vyprázdní buffer, a teprve pak čti log."""
+    if proc.poll() is None:
+        _stop(proc)
+    return SystemExit(f"{message}\n{_userns_hint()}{_log_tail(log_path)}")
+
+
+def wait_http(url: str, proc: subprocess.Popen, log_path: Path, what: str, seconds: float = 30.0) -> None:
+    """Čekej, až url odpoví. Connection refused je pořád „ještě ne“, ne úspěch.
+
+    Když proces skončí, nebo se port neotevře, skonči s jeho logem. Neházej
+    dál holé URLError.
+    """
+    deadline = time.monotonic() + seconds
+    last = "zatím bez pokusu"
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            raise _not_ready(
+                proc, log_path,
+                f"{what} skončil s kódem {code}, než {url} začal přijímat spojení.",
+            )
+        try:
+            with urllib.request.urlopen(url, timeout=0.5) as resp:
+                resp.read(128)
+            return
+        except Exception as exc:  # noqa: BLE001 — refused, reset i timeout: zkoušej dál
+            last = f"{type(exc).__name__}: {exc}"
+            time.sleep(0.25)
+    raise _not_ready(
+        proc, log_path,
+        f"{what} se do {seconds:.0f}s neozval na {url} ({last}).",
+    )
+
+
+def wait_chrome(proc: subprocess.Popen, user_data: Path, log_path: Path, seconds: float = 30.0) -> int:
+    """DevTools port. Chrome si ho může zapsat do DevToolsActivePort jinak, než jsme chtěli."""
+    deadline = time.monotonic() + seconds
+    last = "zatím bez pokusu"
+    port = CHROME_PORT
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            raise _not_ready(
+                proc, log_path,
+                f"Chrome skončil s kódem {code}, než DevTools port začal přijímat spojení.",
+            )
+        found = _debug_port(user_data)
+        if found:
+            port = found
+        url = f"http://127.0.0.1:{port}/json/version"
+        try:
+            with urllib.request.urlopen(url, timeout=0.5) as resp:
+                resp.read(256)
+            return port
+        except Exception as exc:  # noqa: BLE001
+            last = f"{type(exc).__name__}: {exc}"
+            time.sleep(0.25)
+    url = f"http://127.0.0.1:{port}/json/version"
+    raise _not_ready(
+        proc, log_path,
+        f"Chrome se do {seconds:.0f}s neozval na {url} ({last}).",
+    )
 
 
 async def run(chrome_port):
@@ -221,12 +412,25 @@ async def run(chrome_port):
         print("PROMPT_OK")
 
 
+def _spawn(argv: list[str], log_path: Path, env: dict, cwd: str | None = None) -> subprocess.Popen:
+    fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        return subprocess.Popen(argv, cwd=cwd, env=env, stdout=fd, stderr=subprocess.STDOUT)
+    finally:
+        os.close(fd)
+
+
 def main():
+    relax_userns_on_ci()
+    binary = chrome_binary()
+    if not binary:
+        raise SystemExit("google-chrome není nainstalovaný")
     env = os.environ.copy()
     env["DATABASE_URL"] = "sqlite:////tmp/lovceny-pwa.db"
+    env["PYTHONUNBUFFERED"] = "1"
     if os.path.exists("/tmp/lovceny-pwa.db"):
         os.remove("/tmp/lovceny-pwa.db")
-    subprocess.check_call(["python3", "-c", """
+    subprocess.check_call([sys.executable, "-c", """
 import os
 os.environ['DATABASE_URL']='sqlite:////tmp/lovceny-pwa.db'
 from datetime import datetime, timedelta, timezone
@@ -242,28 +446,26 @@ o.points.append(PricePoint(price=1990, captured_at=now - timedelta(days=1), in_s
 db.add(p)
 db.commit()
 """], cwd=str(ROOT), env=env)
-    server = subprocess.Popen(
-        ["python3", "-m", "uvicorn", "lovceny.main:app", "--host", "127.0.0.1", "--port", str(PORT)],
-        cwd=str(ROOT),
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    chrome = subprocess.Popen([
-        "google-chrome", "--headless=new", "--disable-gpu", "--no-sandbox",
-        "--remote-debugging-port=9240", "--user-data-dir=/tmp/chrome-pwa-prompt-" + str(os.getpid()),
-        "--hide-scrollbars", "about:blank",
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    server_log = Path(tempfile.mkstemp(prefix="lovceny-uvicorn-", suffix=".log")[1])
+    chrome_log = Path(tempfile.mkstemp(prefix="lovceny-chrome-", suffix=".log")[1])
+    user_data = Path(tempfile.mkdtemp(prefix="lovceny-chrome-profile-"))
+    server = None
+    chrome = None
     try:
-        wait_port()
-        for _ in range(40):
-            try:
-                urllib.request.urlopen("http://127.0.0.1:9240/json/version", timeout=0.4)
-                break
-            except Exception:
-                time.sleep(0.1)
-        asyncio.run(run(9240))
+        server = _spawn(
+            [sys.executable, "-m", "uvicorn", "lovceny.main:app", "--host", "127.0.0.1", "--port", str(PORT)],
+            server_log, env, cwd=str(ROOT),
+        )
+        chrome = _spawn(chrome_command(binary, user_data), chrome_log, chrome_environment(env))
+        wait_http(BASE + "/healthz", server, server_log, "uvicorn")
+        debug_port = wait_chrome(chrome, user_data, chrome_log)
+        asyncio.run(run(debug_port))
     finally:
-        chrome.terminate()
-        server.terminate()
+        _stop(chrome)
+        _stop(server)
+        server_log.unlink(missing_ok=True)
+        chrome_log.unlink(missing_ok=True)
+        shutil.rmtree(user_data, ignore_errors=True)
 
 
 if __name__ == "__main__":
