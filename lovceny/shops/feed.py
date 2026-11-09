@@ -81,6 +81,9 @@ class FeedItem:
     category: str | None = None
     original_price: float | None = None
     in_stock: bool | None = None
+    # Google Merchant: popis a stav (new/used). Heureka je nechává prázdné.
+    description: str | None = None
+    condition: str | None = None
 
 
 def strip_tracking(url: str) -> str:
@@ -554,10 +557,21 @@ def _as_stream(source):
     return source
 
 
+def _html_text(value: str | None) -> str | None:
+    """Google g:description bývá HTML. Na klasifikaci stačí holý text."""
+    if not value or not str(value).strip():
+        return None
+    text = html.unescape(str(value))
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or None
+
+
 def parse_google_xml(source) -> list[FeedItem]:
     """Google Shopping RSS (g:id, title, link, g:price, g:availability, …).
 
     Používáme ho jen jako katalog pro srovnávač. Ne pro Google Shopping / CSS / placenou reklamu.
+    4Home má g:product_type. JBL.cz ho neposílá – popis a g:condition si necháme na třídění.
     """
     out: list[FeedItem] = []
     for _event, el in ET.iterparse(_as_stream(source), events=("end",)):
@@ -589,6 +603,9 @@ def parse_google_xml(source) -> list[FeedItem]:
                 cat = node.text
                 break
         avail = direct["availability"].text if "availability" in direct else None
+        desc = _html_text(direct["description"].text if "description" in direct else None)
+        cond_node = direct.get("condition")
+        condition = (cond_node.text or "").strip().lower() if cond_node is not None and cond_node.text else None
         clean = _clean_product_url(link)
         out.append(FeedItem(
             item_id=item_id or None,
@@ -600,6 +617,8 @@ def parse_google_xml(source) -> list[FeedItem]:
             category=normalize_category(cat),
             original_price=original,
             in_stock=_in_stock_from_text(avail, missing=None),
+            description=desc,
+            condition=condition or None,
         ))
         el.clear()
     return out
@@ -932,9 +951,14 @@ def load_shop(shop) -> list[FeedItem]:
     errors: list[str] = []
     for i, src in enumerate(sources):
         try:
-            return _load_shop_source(shop, src)
+            items = _load_shop_source(shop, src)
         except Exception as e:  # noqa: BLE001 – další URL je záloha
             errors.append(str(e))
             if i + 1 < len(sources):
                 log.warning("feed %s selhal (%s), zkouším zálohu", src, e)
+            continue
+        if getattr(shop, "slug", None) == "jbl":
+            from ..categories import annotate_jbl_items
+            return annotate_jbl_items(items)
+        return items
     raise RuntimeError(errors[-1] if errors else "feed selhal")

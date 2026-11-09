@@ -33,6 +33,7 @@ jobs:
           DYSON_FEED_URL: ${{ secrets.DYSON_FEED_URL }}
           ALLEGRO_FEED_URL: ${{ secrets.ALLEGRO_FEED_URL }}
           POCITACE24_FEED_URL: ${{ secrets.POCITACE24_FEED_URL }}
+          JBL_FEED_URL: ${{ secrets.JBL_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
           DOGNET_CHID: ${{ secrets.DOGNET_CHID }}
           # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.

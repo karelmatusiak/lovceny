@@ -197,17 +197,38 @@ def _feed_brand(name: str) -> str:
     return toks[0] if toks else "other"
 
 
+def _round_robin(items, key_fn, order=()):
+    """Střídá skupiny (nejdražší ve skupině první), ať strop nesežere jen jednu řadu."""
+    buckets: dict[str, list] = {}
+    for it in items:
+        buckets.setdefault(key_fn(it), []).append(it)
+    for group in buckets.values():
+        group.sort(key=lambda x: float(x.price or 0), reverse=True)
+    keys = [k for k in order if k in buckets]
+    keys += [k for k in buckets if k not in keys]
+    out = []
+    while any(buckets.values()):
+        for k in keys:
+            if buckets[k]:
+                out.append(buckets[k].pop(0))
+    return out
+
+
 def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter=None,
                            max_per_brand_cat: int = FEED_MAX_PER_BRAND_CAT,
-                           prefer_ean: bool = False, spread_categories: bool = False):
+                           prefer_ean: bool = False, spread_categories: bool = False,
+                           family_key=None, spread_by=None):
     """1 produkt na barevnou rodinu (nejlevnější skladem) + max N na značku/kategorii (vyšší cena).
 
     prefer_ean: při shodě rodiny nechá položku s GTIN/EAN (párování nabídek).
     spread_categories: střídá kategorie, ať max_create nesežere jen nejdražší značku.
+    spread_by: střídá vlastní skupiny (u JBL řady sluchátek). Brand cap se pak neaplikuje,
+    strop drží max_create volajícího.
     """
     from lovceny.categories import accept_feed_item
     from lovceny.shops.feed import variant_family_key
 
+    key_fn = family_key or variant_family_key
     families: dict[tuple, object] = {}
     for it in items:
         cat = accept_feed_item(it.name, it.category, it.price, url=it.url)
@@ -216,7 +237,7 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
         if brand_filter is not None and not brand_filter(it.name):
             continue
         brand = _feed_brand(it.name)
-        fam = variant_family_key(it.name) or (it.name or "").lower()
+        fam = key_fn(it.name) or (it.name or "").lower()
         key = (cat, brand, fam)
         prev = families.get(key)
         if prev is None:
@@ -240,7 +261,9 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
     picked = []
     for group in by_cb.values():
         group.sort(key=lambda x: float(x.price or 0), reverse=True)
-        picked.extend(group[:max_per_brand_cat])
+        picked.extend(group if spread_by else group[:max_per_brand_cat])
+    if spread_by:
+        return _round_robin(picked, spread_by, getattr(spread_by, "order", ()))
     if not spread_categories:
         picked.sort(key=lambda x: float(x.price or 0), reverse=True)
         return picked
@@ -265,9 +288,49 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
 
 # Obchody, jejichž katalog držíme z feedu (retire špatných nabídek i seed).
 FEED_CATALOG_SHOPS = (
-    "istyle", "sencor", "xm", "evolveo", "pocitace24",
+    "istyle", "sencor", "xm", "evolveo", "pocitace24", "jbl",
     "electronicstar", "4home", "electrolux", "dyson", "allegro",
 )
+
+# Barvy z JBL feedu, které obecný klíč rodiny nezná (latte, squad…). Jinak by cap
+# sežral víc barev jednoho modelu.
+_JBL_EXTRA_COLORS = (
+    "beige", "lavender", "champagne", "latte", "sand", "teal", "peach", "coral",
+    "cyan", "copper", "coper", "ice", "lime", "aqua", "ghost", "squad",
+)
+
+
+def _jbl_family_key(name: str) -> str:
+    from lovceny.shops.feed import variant_family_key
+    n = name or ""
+    for w in _JBL_EXTRA_COLORS:
+        n = re.sub(rf"\b{re.escape(w)}\b", " ", n, flags=re.I)
+    n = re.sub(r"\band\b", " ", n, flags=re.I)
+    return variant_family_key(n)
+
+
+# Pořadí, ve kterém seed střídá řady. Jinak by cap 25 sebral jen Quantum a Tour.
+_JBL_LINE_ORDER = (
+    "tune", "live", "quantum", "tour", "wave", "yurbuds",
+    "endurance", "soundgear", "sense", "jr", "vibe", "other",
+)
+
+
+def _jbl_line(item) -> str:
+    n = _ascii_name(getattr(item, "name", "") or "")
+    if "yurbuds" in n.split():
+        return "yurbuds"
+    for line in ("soundgear", "tune", "live", "quantum", "tour", "wave", "endurance", "vibe"):
+        if re.search(rf"\b{line}\b", n):
+            return line
+    if re.search(r"\bjr\d|\bjunior\b", n):
+        return "jr"
+    if re.search(r"\bsense\b", n):
+        return "sense"
+    return "other"
+
+
+_jbl_line.order = _JBL_LINE_ORDER
 
 
 def allegro_seed_limit(feed_limit: int) -> int:
@@ -285,7 +348,7 @@ def brand_cap_for_shops(shops: set[str]) -> int:
 
 
 def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolveo_limit=25,
-                    pocitace24_limit=25,
+                    pocitace24_limit=25, jbl_limit=25,
                     electronicstar_limit=25, fourhome_limit=25, electrolux_limit=25, dyson_limit=25,
                     allegro_limit=ALLEGRO_SEED_LIMIT,
                     dry_run=False) -> dict:
@@ -306,6 +369,8 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
         ("evolveo", evolveo_limit, ("sluchatka", "chytra-domacnost", "telefony")),
         # universal.xml: notebooky + stolní/repasované počítače. Kabely, brašny, monitory a software ne.
         ("pocitace24", pocitace24_limit, ("notebooky", "pocitace")),
+        # JBL.cz: jen sluchátka. Reproduktory/soundbary nemají kategorii, bazar a příslušenství ne.
+        ("jbl", jbl_limit, ("sluchatka",)),
         # Dognet: jen kategorie, které Lovceny umí (pračky, lednice, kávovary, vysavače).
         ("electronicstar", electronicstar_limit, ("kavovary", "lednice", "vysavace")),
         ("4home", fourhome_limit, ("vysavace", "kavovary", "pracky", "lednice")),
@@ -347,6 +412,9 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             max_per_brand_cat=ALLEGRO_BRAND_CAP if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,
             prefer_ean=slug == "allegro",
             spread_categories=slug == "allegro",
+            family_key=_jbl_family_key if slug == "jbl" else None,
+            # Jedna značka: strop 6 by nechal jen nejdražší Quantum. Řady se střídají, max_create drží ~25.
+            spread_by=_jbl_line if slug == "jbl" else None,
         )
         st_create = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
         st = {
@@ -618,7 +686,7 @@ def main(argv=None):
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--from-feeds", action="store_true",
-                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, Electronic-star, 4Home, Electrolux, Dyson, Allegro)")
+                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, JBL, Electronic-star, 4Home, Electrolux, Dyson, Allegro)")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
@@ -655,7 +723,7 @@ def main(argv=None):
         if a.from_feeds:
             fs = seed_from_feeds(
                 db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-                evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
+                evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit, jbl_limit=a.feed_limit,
                 electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
                 electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
                 allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
@@ -670,7 +738,7 @@ def main(argv=None):
     if a.from_feeds:
         fs = seed_from_feeds(
             db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-            evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit,
+            evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit, jbl_limit=a.feed_limit,
             electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
             electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
             allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
