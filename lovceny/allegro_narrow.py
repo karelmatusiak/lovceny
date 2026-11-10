@@ -1,8 +1,8 @@
 """Allegro-only produkty bez známé značky se vyřadí. URL jde 301 na kategorii.
 
-Známá značka je KNOWN_BRANDS v matching.py: kanonické značky, které už
-v názvech poznáváme (apple, samsung, bosch, …). Produkt, který má nabídku
-i z jiného obchodu, se nesahe. Historie cen zůstane u nabídek.
+Známá značka je KNOWN_BRANDS v matching.py. Guess, Larma a Libeica se dál
+poznají při párování, ale Allegro-only produkt neudrží. Produkt s nabídkou
+z jiného obchodu se nesahe. Historie cen zůstane u nabídek.
 
 Nespouští se při startu. Jednou to zapíše migrace 0003.
 Náhled: python -m lovceny.allegro_narrow
@@ -11,32 +11,39 @@ Zápis:  python -m lovceny.allegro_narrow --apply
 from __future__ import annotations
 
 import json
+import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from .matching import KNOWN_BRANDS, primary_brand
+from .matching import KNOWN_BRANDS, _fold, brands, primary_brand
 from .models import Product, now
 
 
-def is_known_brand(name: str) -> bool:
-    """Značka z KNOWN_BRANDS, ne zmínka platformy v názvu jiného výrobce.
+def manufacturer_brands(name: str) -> set[str]:
+    """Značky výrobce. Platforma v cizím názvu se nepočítá.
 
-    „Google TV“ na televizi Kruger není značka Google. „by Bose“ na Baseusu
-    není Bose. „PS5“ na SteelSeries není Sony.
+    „Google TV“ bez Pixelu není Google. „by Bose“ vedle jiné značky není Bose.
+    „PS5“ u SteelSeries není Sony.
     """
-    from .matching import _fold
-    brand = primary_brand(name or "")
-    if brand not in KNOWN_BRANDS:
-        return False
+    found = set(brands(name or ""))
     folded = _fold(name or "")
-    if brand == "google" and "pixel" not in folded and ("google tv" in folded or "android tv" in folded):
-        return False
-    if brand == "bose" and "baseus" in folded:
-        return False
-    if brand == "sony" and "steelseries" in folded:
-        return False
-    return True
+    if "pixel" not in folded and ("google tv" in folded or "android tv" in folded):
+        found.discard("google")
+    if "by bose" in folded and len(found) > 1:
+        found.discard("bose")
+    if "steelseries" in folded:
+        found.discard("sony")
+    # „pro PC PS4 PS5 Xbox“ je seznam platforem, ne konzole Sony ani Microsoft.
+    if (re.search(r"\bps\s*[45]\b", folded) and re.search(r"\bxbox\b", folded)
+            and "sony" not in folded and "playstation" not in folded and "microsoft" not in folded):
+        found.discard("sony")
+        found.discard("microsoft")
+    return found
+
+
+def is_known_brand(name: str) -> bool:
+    return bool(manufacturer_brands(name) & KNOWN_BRANDS)
 
 
 def allegro_only(product: Product) -> bool:

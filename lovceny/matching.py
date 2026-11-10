@@ -11,7 +11,8 @@ import unicodedata
 from .specs import extract
 
 # Slovo v názvu → kanonická značka. Delší fráze se hledají dřív.
-# KNOWN_BRANDS je tahle množina kanonických značek. Allegro-only produkt bez ní se vyřadí.
+# Párování (Jabra↔Guess, Electrolux↔Larma) potřebuje i značky, které Allegro-only
+# produkt neudrží. Ty jsou v _MATCH_ONLY_BRANDS.
 _BRAND_WORDS: tuple[tuple[str, str], ...] = (
     ("apple", "apple"), ("iphone", "apple"), ("ipad", "apple"), ("macbook", "apple"),
     ("airpods", "apple"), ("imac", "apple"),
@@ -37,7 +38,30 @@ _BRAND_WORDS: tuple[tuple[str, str], ...] = (
     ("haier", "haier"), ("indesit", "indesit"), ("amica", "amica"), ("sharp", "sharp"),
     ("candy", "candy"), ("razer", "razer"), ("logitech", "logitech"),
     ("canon", "canon"), ("nikon", "nikon"), ("fujifilm", "fujifilm"), ("gopro", "gopro"),
+    # Zavedení výrobci z Allegro výpisu a běžný katalog. Ne no-name hodinky a sluchátka.
+    ("sennheiser", "sennheiser"), ("marshall", "marshall"), ("karcher", "karcher"),
+    ("baseus", "baseus"), ("belkin", "belkin"), ("oppo", "oppo"),
+    ("blaupunkt", "blaupunkt"), ("creative", "creative"), ("hyundai", "hyundai"),
+    ("lelit", "lelit"), ("mova", "mova"), ("jimmy", "jimmy"),
+    ("anker", "anker"), ("braun", "braun"), ("tefal", "tefal"),
+    ("steelseries", "steelseries"),
+    ("technisat", "technisat"), ("kruger matz", "kruger"), ("krugermatz", "kruger"),
+    ("hama", "hama"), ("chiq", "chiq"), ("vestfrost", "vestfrost"),
+    ("ryobi", "ryobi"), ("yato", "yato"), ("makita", "makita"),
+    ("ultenic", "ultenic"), ("camry", "camry"), ("adler", "adler"),
+    ("dkny", "dkny"), ("parkside", "parkside"), ("bmw", "bmw"),
+    ("bartscher", "bartscher"), ("myphone", "myphone"), ("vileda", "vileda"),
+    ("black decker", "blackdecker"), ("spigen", "spigen"), ("swissten", "swissten"),
+    ("jlab", "jlab"), ("edifier", "edifier"), ("plantronics", "plantronics"),
+    ("fifine", "fifine"), ("sivga", "sivga"), ("dunu", "dunu"),
+    ("haylou", "haylou"), ("maono", "maono"), ("savio", "savio"),
+    ("mcdodo", "mcdodo"), ("v tac", "vtac"), ("3mk", "3mk"),
+    ("igpsport", "igpsport"), ("tchibo", "tchibo"), ("ilife", "ilife"),
+    ("domo", "domo"), ("lehmann", "lehmann"), ("eureka", "eureka"),
+    ("msi", "msi"),
 )
+# Poznáme je při párování, ale Allegro-only produkt kvůli nim nenecháváme.
+_MATCH_ONLY_BRANDS = frozenset({"guess", "larma", "libeica"})
 # Z názvu identity smažeme jen samotný název značky, ne modelovou řadu (iphone, ps5, switch).
 _BRAND_DROP = {
     "apple": {"apple"},
@@ -102,7 +126,9 @@ def label_from_url(url: str) -> str:
     return prepare_offer_label(slug)
 
 
-KNOWN_BRANDS = frozenset(canon for _word, canon in _BRAND_WORDS)
+KNOWN_BRANDS = frozenset(
+    canon for _word, canon in _BRAND_WORDS if canon not in _MATCH_ONLY_BRANDS
+)
 
 
 def brands(name: str) -> set[str]:

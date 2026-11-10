@@ -5,15 +5,32 @@ from lovceny.models import Offer, PricePoint, Product
 
 
 def test_known_brand_list_is_the_curated_set():
-    assert "apple" in KNOWN_BRANDS and "samsung" in KNOWN_BRANDS and "bosch" in KNOWN_BRANDS
-    assert "wenom" not in KNOWN_BRANDS
     from lovceny.allegro_narrow import is_known_brand
+    from lovceny.matching import brands
+    assert "apple" in KNOWN_BRANDS and "samsung" in KNOWN_BRANDS and "bosch" in KNOWN_BRANDS
+    assert "sennheiser" in KNOWN_BRANDS and "karcher" in KNOWN_BRANDS and "baseus" in KNOWN_BRANDS
+    assert "guess" not in KNOWN_BRANDS and "larma" not in KNOWN_BRANDS
+    assert "guess" in brands("Guess sluchátka bílá")
+    assert "wenom" not in KNOWN_BRANDS and "qcy" not in KNOWN_BRANDS
+    assert "zeblaze" not in KNOWN_BRANDS and "gmktec" not in KNOWN_BRANDS
+    assert "cubot" not in KNOWN_BRANDS and "garett" not in KNOWN_BRANDS
     assert is_known_brand("De'Longhi Magnifica ECAM 22.110")
-    assert not is_known_brand("Cubot Kingkong Dura")
-    assert not is_known_brand("Kruger&Matz 65 palců Google TV")
-    assert not is_known_brand("Baseus Inspire XH1 by Bose")
-    assert not is_known_brand("SteelSeries Arctis GameBuds PS5")
+    assert is_known_brand("Sennheiser HD 250BT Black")
+    assert is_known_brand("Kärcher VC 3")
+    assert is_known_brand("Kruger&Matz 65 palců Google TV")
+    assert is_known_brand("Baseus Inspire XH1 by Bose")
+    assert is_known_brand("SteelSeries Arctis GameBuds PS5")
     assert is_known_brand("Google Pixel 9 128GB")
+    assert is_known_brand("Bose QuietComfort")
+    assert not is_known_brand("Guess Triangle do uší")
+    assert not is_known_brand("Cubot Kingkong Dura")
+    assert not is_known_brand("QCY MeloBuds Pro")
+    assert not is_known_brand("Zeblaze Vibe 8")
+    assert not is_known_brand("GMKtec K16 Mini Počítač")
+    assert not is_known_brand("Garett Kids Nice")
+    assert not is_known_brand("Profesionální Herní Q7 s Mikrofonem pro Pc PS4 PS5 Xbox One")
+    assert is_known_brand("Sony PlayStation 5 Digital")
+    assert is_known_brand("Xbox Series X 1TB")
 
 
 def test_unknown_allegro_only_retires_to_category_and_keeps_history(client_db):
