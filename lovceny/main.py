@@ -1045,6 +1045,7 @@ def status_page(request: Request, db=Depends(get_db)):
     return tpl.TemplateResponse(request, "status.html", {
         "rows": rows, "days": hist["days"], "last_run": last_run, "noindex": True,
         "stale_days": monitor.STALE_DAYS, "min_attempts": monitor.MIN_ATTEMPTS,
+        "partial_pct": monitor.PARTIAL_BLOCK_PERCENT, "partial_min": monitor.PARTIAL_MIN_EVENTS,
         "crumbs": [("Lovceny", "/"), ("Stav obchodů", "/stav")]})
 
 

@@ -2,7 +2,11 @@
 
 Pravidla (vyhodnocuje se po každém běhu, výsledek čte .github/workflows/fetch.yml → GitHub issue):
   failing – v běhu selhala většina požadavků na obchod (a pokusů bylo aspoň MIN_ATTEMPTS),
+  partial – blokace / captcha / robots.txt zasáhly aspoň PARTIAL_BLOCK_PERCENT % pokusů
+            (a aspoň PARTIAL_MIN_EVENTS), ale ne většinu,
   stale   – poslední úspěšně stažená cena obchodu je starší než STALE_DAYS (obchod, který nikdy neuspěl, se nehlásí).
+
+level na /stav: ok | partial | blocked (jen z posledního běhu; stale je samostatný důvod).
 """
 import json
 from collections import Counter, defaultdict
@@ -14,6 +18,9 @@ from sqlalchemy import select, func, delete
 from .models import Offer, ShopRunStat
 
 MIN_ATTEMPTS = 3
+# Částečně blokováno: aspoň 20 % pokusů a aspoň 3 zásahy (1 captcha ze 4 není důvod k issue).
+PARTIAL_BLOCK_PERCENT = 20
+PARTIAL_MIN_EVENTS = 3
 STALE_DAYS = 2
 RETENTION_DAYS = 90
 KINDS = ("ok", "blocked", "captcha", "robots", "errors", "skipped")
@@ -83,6 +90,23 @@ def offer_counts(db) -> dict[str, int]:
     return dict(db.execute(select(Offer.shop, func.count(Offer.id)).group_by(Offer.shop)).all())
 
 
+def block_events(r: ShopRunStat) -> int:
+    """HTTP blokace, captcha a robots.txt. Běžná chyba parseru sem nepatří."""
+    return int(r.blocked or 0) + int(r.captcha or 0) + int(r.robots or 0)
+
+
+def run_level(r: ShopRunStat | None) -> str:
+    """ok | partial | blocked z jednoho běhu. Málo pokusů (pod MIN_ATTEMPTS) = ok."""
+    if r is None or r.attempts < MIN_ATTEMPTS:
+        return "ok"
+    if r.failures * 2 > r.attempts:
+        return "blocked"
+    ev = block_events(r)
+    if ev >= PARTIAL_MIN_EVENTS and ev * 100 >= r.attempts * PARTIAL_BLOCK_PERCENT:
+        return "partial"
+    return "ok"
+
+
 def evaluate(db, run: list[ShopRunStat] | None = None, now: datetime | None = None) -> dict:
     """Zdraví obchodů → {"run_id", "checked_at", "shops": {slug: {...}}}. Jen obchody, které máme v DB."""
     now = now or datetime.now(timezone.utc)
@@ -94,12 +118,19 @@ def evaluate(db, run: list[ShopRunStat] | None = None, now: datetime | None = No
             continue
         reasons = []
         r = run_by.get(s.slug)
-        if r and r.attempts >= MIN_ATTEMPTS and r.failures * 2 > r.attempts:
+        level = run_level(r)
+        if r and level == "blocked":
             parts = [f"{n} {lbl}" for n, lbl in ((r.blocked, "blokováno (HTTP 403/429/503)"),
                      (r.captcha, "ochrana proti botům / captcha"), (r.robots, "zakázáno v robots.txt"),
                      (r.errors, "jiná chyba")) if n]
             reasons.append({"code": "failing", "text": f"V posledním běhu selhalo {r.failures} z {r.attempts} "
                             f"požadavků ({', '.join(parts)})."})
+        elif r and level == "partial":
+            ev = block_events(r)
+            parts = [f"{n} {lbl}" for n, lbl in ((r.blocked, "blokováno (HTTP 403/429/503)"),
+                     (r.captcha, "ochrana proti botům / captcha"), (r.robots, "zakázáno v robots.txt")) if n]
+            reasons.append({"code": "partial", "text": f"V posledním běhu bylo {ev} z {r.attempts} požadavků "
+                            f"blokováno ({', '.join(parts)}), {r.ok} prošlo. Ochranu proti botům neobcházíme."})
         lo = last_ok.get(s.slug)
         # Obchod, který nikdy nevrátil cenu, neoznačujeme jako „stale“ – jinak vypadá,
         # že rozbil produkty. Nabídky bez ceny se na webu stejně schovávají.
@@ -109,7 +140,8 @@ def evaluate(db, run: list[ShopRunStat] | None = None, now: datetime | None = No
             reasons.append({"code": "stale", "text": f"Ceny nejsou aktuální déle než {STALE_DAYS} dny "
                             f"(poslední úspěšné stažení: {when})."})
         out[s.slug] = {
-            "name": s.name, "ok": not reasons, "reasons": reasons, "offers": counts.get(s.slug, 0),
+            "name": s.name, "ok": not reasons, "level": level, "reasons": reasons,
+            "offers": counts.get(s.slug, 0),
             "last_ok": lo.isoformat() if lo else None,
             "run": {k: getattr(r, k) for k in ("attempts", "ok", "blocked", "captcha", "robots", "errors", "skipped")}
                    | {"statuses": json.loads(r.statuses) if r.statuses else {}, "last_error": r.last_error} if r else None,

@@ -114,6 +114,109 @@ def test_evaluate_failing_stale_and_ok(client_db):
     assert monitor.evaluate(db, small, now=now)["shops"]["mironet"]["ok"] is True
 
 
+def test_partial_block_is_not_called_ok(client_db):
+    """26 blokací z 60 (34 OK, 9 přeskočeno) není „v pořádku“ – je to částečně blokováno."""
+    client, db, make = client_db
+    now = datetime.now(timezone.utc)
+    make([1000], shop="mironet")
+    for o in db.query(Offer).filter_by(shop="mironet").all():
+        o.status, o.last_checked = "ok", now
+    db.commit()
+    run = _run(db, "mironet", ok=34, blocked=10, captcha=16, when=now)
+    run.skipped = 9
+    db.commit()
+    h = monitor.evaluate(db, [run], now=now)["shops"]["mironet"]
+    assert h["level"] == "partial" and h["ok"] is False
+    assert [x["code"] for x in h["reasons"]] == ["partial"]
+    assert "26 z 60" in h["reasons"][0]["text"] and "34" in h["reasons"][0]["text"]
+    html = client.get("/stav").text
+    card = html[html.find("Mironet"):html.find("Jak to vyhodnocujeme")]
+    assert "částečně blokováno (26 z 60)" in card
+    assert "st-mid" in card
+    assert "34 OK z 60" in card and "10 HTTP" in card and "16 captcha" in card
+    assert "9 přeskočeno" in card
+    assert "v pořádku" not in card
+    # pod prahem (2 ze 10) pořád v pořádku – šum neotevírá issue
+    quiet = _run(db, "mironet", ok=8, blocked=2, when=now)
+    q = monitor.evaluate(db, [quiet], now=now)["shops"]["mironet"]
+    assert q["level"] == "ok" and q["ok"] is True
+
+
+def test_partial_issue_title():
+    import shop_health_issues as shi
+    assert shi.title_for("Mironet", ["partial"]) == "⚠️ Mironet: část požadavků obchod blokuje"
+
+
+def test_mironet_stale_first_cap_and_backoff(client_db, monkeypatch):
+    """Nejstarší Mironet nabídky první, strop na běh, po 3 blokacích za sebou stop. Captcha se neobchází."""
+    import fetch_prices
+    _, db, make = client_db
+    now = datetime.now(timezone.utc)
+    made = []
+    for age in (1, 40, 5, 20, 8, 15):
+        p = make([1000 + age], name=f"Mironet age {age}")
+        o = p.offers[0]
+        o.last_checked = now - timedelta(hours=age)
+        o.status = "ok"
+        made.append(o)
+    gone = make([100], name="Mironet vyřazený")
+    gone.offers[0].status = "unavailable"
+    gone.offers[0].last_checked = now - timedelta(days=30)
+    planeo = make([500], name="Planeo vedle", shop="planeo")
+    planeo.offers[0].last_checked = now - timedelta(hours=3)
+    planeo.offers[0].status = "ok"
+    db.commit()
+
+    loaded = fetch_prices.load_scrape_offers(db, ["mironet"], 10)
+    assert [o.id for o in loaded] == [o.id for o in sorted(made, key=lambda o: o.last_checked)]
+    assert gone.offers[0].id not in {o.id for o in loaded}
+
+    monkeypatch.setattr(fetch_prices, "MIRONET_MAX_PER_RUN", 6)
+    monkeypatch.setattr(fetch_prices, "MIRONET_BACKOFF_AFTER", 3)
+    called = []
+    script = ["blocked", "ok", "blocked", "blocked", "blocked"]
+
+    def fake(db, o, stats=None):
+        if o.shop == "mironet":
+            st = script[len([c for c in called if c[0] == "mironet"])]
+            called.append((o.shop, o.id))
+            stats.add(o.shop, "blocked" if st == "blocked" else "ok", 403 if st == "blocked" else 200)
+            return st
+        called.append((o.shop, o.id))
+        stats.add(o.shop, "ok", 200)
+        return "ok"
+
+    monkeypatch.setattr(fetch_prices, "update_offer", fake)
+    monkeypatch.setattr(fetch_prices, "check_watches", lambda db: 0)
+    fetch_prices.main(["--min-age-hours", "0", "--limit", "50"])
+    mir = [oid for shop, oid in called if shop == "mironet"]
+    oldest = [o.id for o in sorted(made, key=lambda o: o.last_checked)]
+    # blocked, ok (série se vynuluje), blocked, blocked, blocked → stop. Šestý nejstarší už ne.
+    assert mir == oldest[:5]
+    assert oldest[5] not in mir
+    assert planeo.offers[0].id in [oid for shop, oid in called if shop == "planeo"]
+
+
+def test_mironet_gap_is_slower_with_jitter_and_does_not_bypass(monkeypatch):
+    import random
+    from lovceny.shops import scrape
+    from lovceny.shops.scrape import PoliteClient
+    monkeypatch.setattr(scrape, "MIN_DELAY_S", 6.0)
+    monkeypatch.setattr(scrape, "MIRONET_MIN_DELAY_S", 12.0)
+    monkeypatch.setattr(scrape, "MIRONET_JITTER_S", 4.0)
+    rng = random.Random(1)
+    gaps = [scrape.min_gap("www.mironet.cz", rng) for _ in range(40)]
+    assert min(gaps) >= 12 and max(gaps) <= 16
+    assert max(gaps) - min(gaps) > 0.5
+    assert scrape.min_gap("www.planeo.cz", rng) == 6
+    assert scrape.SCRAPE_CONCURRENCY == 1
+    monkeypatch.setattr(scrape, "MIN_DELAY_S", 0)
+    assert scrape.min_gap("www.mironet.cz", rng) == 0
+    pc = PoliteClient()
+    assert "LovcenyBot" in pc.client.headers["User-Agent"]
+    assert "cf_clearance" not in {k.lower() for k in pc.client.headers}
+
+
 def test_feed_shop_without_url_not_monitored(client_db, monkeypatch):
     _, db, make = client_db
     make([], shop="alza")
@@ -130,7 +233,7 @@ def test_history_and_status_page(client_db):
     hist = monitor.history(db, days=14, now=now)
     assert hist["agg"]["mironet"][now.date()] == [1, 10]
     html = client.get("/stav").text
-    assert "Stav obchodů" in html and "Mironet" in html and "blokuje / selhává" in html
+    assert "Stav obchodů" in html and "Mironet" in html and "blokováno (9 z 10)" in html
     assert 'name="robots" content="noindex' in html
     assert "/stav" in client.get("/").text  # odkaz v patičce
 

@@ -516,12 +516,16 @@ _CARD_STOP = frozenset({
 })
 
 # Značky, které se jen poznají ve zdrojovém textu. Do názvu se nikdy nedoplňují.
-_CARD_BRAND_FOLDS = frozenset(_fold(b) for b in _KNOWN_BRANDS) | frozenset(_fold(b) for b in (
+_EXTRA_BRANDS = (
     "Baseus", "Guess", "Savio", "JLab", "Belkin", "Blitzwolf", "Awei", "Mcdodo", "Modecom",
     "Cubot", "QCY", "Sencor", "Klarstein", "Kärcher", "Dunu", "Sivga", "Maono", "Feegar",
     "WiWU", "DKNY", "BMW", "Poly", "Creative", "Poco", "Lelit", "Pykson", "Rampage",
     "Occamo", "Haylou", "TechniSat", "Marshall", "Elonix", "Edifier", "Plantronics", "Fifine",
-))
+)
+_CARD_BRAND_FOLDS = frozenset(_fold(b) for b in _KNOWN_BRANDS) | frozenset(_fold(b) for b in _EXTRA_BRANDS)
+# Kanonický zápis pro schema.org. Známý seznam přepíše extras (Sencor, JBL, HP…).
+_BRAND_CANON = {_fold(b): b for b in _EXTRA_BRANDS}
+_BRAND_CANON.update({_fold(b): b for b in _KNOWN_BRANDS})
 
 
 _CARD_CATEGORY = frozenset({
@@ -672,6 +676,29 @@ def _brand_index(tokens: list[str]) -> int | None:
         if any(_blocks_brand(p) for p in tokens[:i]):
             continue
         return i
+    return None
+
+
+def title_brand(name: str) -> str | None:
+    """Značka, kterou karty opravdu dají na začátek názvu. Neznámou nehádáme.
+
+    Stejná pravidla jako ``card_label``: známá značka, ne „pro/k Sony“, ne značka
+    až za cizím slovem. MacBook bez Apple, první obecné slovo ani obchod se nedomýšlí.
+    """
+    raw = _clean_ws(name)
+    if not raw:
+        return None
+    prose = short_name(raw)
+    seen: set[str] = set()
+    for source in (prose, raw):
+        if source in seen:
+            continue
+        seen.add(source)
+        tokens = [_slash_dup(t) for t in _split_card_tokens(source)]
+        idx = _brand_index(tokens)
+        if idx is None:
+            continue
+        return _BRAND_CANON.get(_token_fold(tokens[idx]))
     return None
 
 

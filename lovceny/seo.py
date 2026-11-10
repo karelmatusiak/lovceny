@@ -1,5 +1,6 @@
 """Strukturovaná data (JSON-LD), sitemap.xml a robots.txt. Absolutní URL podle PUBLIC_URL."""
 import json
+import re
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape
 
@@ -9,6 +10,9 @@ from sqlalchemy import select
 from .categories import CATEGORIES
 from .models import Product
 from .web import public_url
+
+_GTIN_LEN = {8: "gtin8", 12: "gtin12", 13: "gtin13", 14: "gtin14"}
+_AVAIL_OK = {"https://schema.org/InStock", "https://schema.org/OutOfStock"}
 
 
 def jsonld(obj) -> Markup:
@@ -27,6 +31,22 @@ def breadcrumb_ld(crumbs) -> dict:
                                 for i, (name, url) in enumerate(crumbs)]}
 
 
+def schema_gtin(ean: str | None) -> tuple[str, str] | None:
+    """(schema.org klíč, číslice) jen pro GTIN-8/12/13/14. Jinak nic – nehádat."""
+    digits = re.sub(r"\D", "", ean or "")
+    key = _GTIN_LEN.get(len(digits))
+    return (key, digits) if key else None
+
+
+def product_brand_name(p) -> str | None:
+    """Značka z pole produktu, jinak ze stejné extrakce jako nadpisy. Neznámou vynechat."""
+    raw = getattr(p, "brand", None)
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    from .names import title_brand
+    return title_brand(getattr(p, "name", "") or "")
+
+
 def product_ld(p: Product, offers, verdict=None) -> dict:
     from .names import short_name
     from .shops import get_shop
@@ -34,11 +54,15 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
     priced = [o for o in offers if o.price is not None]
     d = {"@context": "https://schema.org", "@type": "Product", "name": getattr(p, "display_name", None) or short_name(p.name),
          "url": _abs(f"/produkt/{p.id}-{p.slug}")}
+    brand = product_brand_name(p)
+    if brand:
+        d["brand"] = {"@type": "Brand", "name": brand}
     if p.image_url:
         from .images import normalize_allegro_image
         d["image"] = normalize_allegro_image(p.image_url)
-    if p.ean:
-        d["gtin13" if len(p.ean) == 13 else "gtin"] = p.ean
+    gtin = schema_gtin(getattr(p, "ean", None))
+    if gtin:
+        d[gtin[0]] = gtin[1]
     from .categories import BY_SLUG
     cat = BY_SLUG.get(p.category_slug or "")
     if cat:
@@ -57,6 +81,88 @@ def product_ld(p: Product, offers, verdict=None) -> dict:
                                              else "https://schema.org/OutOfStock")}
                            if o.in_stock is not None else {})} for o in sorted(priced, key=lambda o: float(o.price))]}
     return d
+
+
+def validate_product_ld(d: dict) -> list[str]:
+    """Kontrola Product JSON-LD pro stránku s cenou. Prázdný seznam = v pořádku.
+
+    Vyžaduje name, image, offers (AggregateOffer: lowPrice, highPrice, offerCount,
+    priceCurrency CZK, availability). gtin* a brand jen když jsou uvedené, a pak
+    musí mít platný tvar. Nevolá se při renderu – neshodí stránku bez fotky.
+    """
+    errors = []
+    if d.get("@context") != "https://schema.org":
+        errors.append("@context")
+    if d.get("@type") != "Product":
+        errors.append("@type")
+    if not str(d.get("name") or "").strip():
+        errors.append("name")
+    if not str(d.get("url") or "").startswith("http"):
+        errors.append("url")
+    image = d.get("image")
+    if isinstance(image, list):
+        image = image[0] if image else None
+    if isinstance(image, dict):
+        image = image.get("url")
+    if not str(image or "").startswith("http"):
+        errors.append("image")
+    if "brand" in d:
+        b = d["brand"]
+        if not isinstance(b, dict) or b.get("@type") != "Brand" or not str(b.get("name") or "").strip():
+            errors.append("brand")
+    for key, val in d.items():
+        if not key.startswith("gtin"):
+            continue
+        digits = str(val or "")
+        if key not in _GTIN_LEN.values() or not digits.isdigit() or _GTIN_LEN.get(len(digits)) != key:
+            errors.append(key)
+    offers = d.get("offers")
+    if not isinstance(offers, dict) or offers.get("@type") != "AggregateOffer":
+        errors.append("offers")
+        return errors
+    if offers.get("priceCurrency") != "CZK":
+        errors.append("priceCurrency")
+    if offers.get("availability") not in _AVAIL_OK:
+        errors.append("availability")
+    try:
+        low, high = float(offers["lowPrice"]), float(offers["highPrice"])
+        count = int(offers["offerCount"])
+    except (KeyError, TypeError, ValueError):
+        errors.append("aggregate prices")
+        return errors
+    if count < 1 or low <= 0 or high <= 0 or low > high:
+        errors.append("aggregate prices")
+    nested = offers.get("offers")
+    if not isinstance(nested, list) or len(nested) != count:
+        errors.append("offerCount")
+        return errors
+    prices = []
+    for i, o in enumerate(nested):
+        if not isinstance(o, dict) or o.get("@type") != "Offer":
+            errors.append(f"offer[{i}]")
+            continue
+        if o.get("priceCurrency") != "CZK":
+            errors.append(f"offer[{i}].priceCurrency")
+        if not str(o.get("url") or "").startswith("http"):
+            errors.append(f"offer[{i}].url")
+        seller = o.get("seller") or {}
+        if seller.get("@type") != "Organization" or not str(seller.get("name") or "").strip():
+            errors.append(f"offer[{i}].seller")
+        avail = o.get("availability")
+        if avail is not None and avail not in _AVAIL_OK:
+            errors.append(f"offer[{i}].availability")
+        try:
+            price = float(o["price"])
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"offer[{i}].price")
+            continue
+        if price <= 0:
+            errors.append(f"offer[{i}].price")
+        else:
+            prices.append(price)
+    if prices and (abs(min(prices) - low) > 0.001 or abs(max(prices) - high) > 0.001):
+        errors.append("lowPrice/highPrice")
+    return errors
 
 
 def itemlist_ld(rows, path: str, start: int = 0) -> dict:

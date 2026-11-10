@@ -1,5 +1,6 @@
 """Šetrné stahování stránek produktů a čtení ceny z JSON-LD / meta tagů."""
 import json
+import random
 import re
 import time
 import logging
@@ -18,6 +19,11 @@ USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like G
               "Chrome/129.0 Safari/537.36 LovcenyBot/0.1 (+" + BOT_INFO_URL + ")")
 ROBOTS_AGENT = "LovcenyBot"
 MIN_DELAY_S = 6.0  # min. rozestup dvou požadavků na stejnou doménu
+# Mironet při ~60 stránkách za běh vrací captcha. Delší pauza s rozptylem, pořád jeden
+# požadavek naráz. Captcha se neobchází – Blocked ji jen pojmenuje a fetch běh utne.
+MIRONET_MIN_DELAY_S = 12.0
+MIRONET_JITTER_S = 4.0
+SCRAPE_CONCURRENCY = 1  # PoliteClient je sériový; u Mironetu to nesmíme zvyšovat
 
 BLOCK_MARKERS = ("bobcmn", "cf-chl", "challenge-platform", "Please enable JS", "captcha", "Access Denied")
 
@@ -60,6 +66,21 @@ class ScrapeResult:
     category: str | None
 
 
+def min_gap(host: str, rng: random.Random | None = None) -> float:
+    """Rozestup před dalším požadavkem na doménu. MIN_DELAY_S <= 0 (testy) = nečekat.
+
+    Mironet: 12–16 s. Ostatní domény: MIN_DELAY_S. Žádné obcházení captcha.
+    """
+    if MIN_DELAY_S <= 0:
+        return 0.0
+    host = (host or "").split(":")[0].lower()
+    if host == "mironet.cz" or host.endswith(".mironet.cz"):
+        span = MIRONET_JITTER_S if MIRONET_JITTER_S > 0 else 0.0
+        roll = (rng or random).uniform(0, span) if span else 0.0
+        return MIRONET_MIN_DELAY_S + roll
+    return MIN_DELAY_S
+
+
 class PoliteClient:
     def __init__(self):
         self.client = httpx.Client(headers={"User-Agent": USER_AGENT, "Accept-Language": "cs-CZ,cs;q=0.9"},
@@ -85,7 +106,7 @@ class PoliteClient:
         if not self.allowed(url):
             raise Blocked("robots.txt nepovoluje", kind="robots")
         host = urlparse(url).netloc
-        wait = self._last.get(host, 0) + MIN_DELAY_S - time.monotonic()
+        wait = self._last.get(host, 0) + min_gap(host) - time.monotonic()
         if wait > 0:
             time.sleep(wait)
         r = self.client.get(url)

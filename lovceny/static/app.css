@@ -14,7 +14,7 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}.p-full-name{margin:4px 
 .tbl{width:100%;border-collapse:collapse;font-size:15px}.tbl th,.tbl td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line)}
 .tbl tr:last-child td{border-bottom:0}.muted{color:var(--muted)}
 .st{font-size:12.5px;font-weight:800;border-radius:999px;padding:3px 10px}.st-ok{background:var(--green-50);color:#0F6B40}
-.st-bad{background:var(--red-50);color:#A3221B}.st-wait{background:var(--amber-50);color:#7F4B00}
+.st-bad{background:var(--red-50);color:#A3221B}.st-wait,.st-mid{background:var(--amber-50);color:#7F4B00}
 /* živé hledání */
 .live-loading{display:flex;gap:14px;align-items:center;padding:18px 20px;border-radius:14px;background:var(--accent-50, #FFF4EE)}
 .spinner{width:26px;height:26px;border-radius:50%;border:3px solid #FFD2BD;border-top-color:var(--accent, #FF7A45);animation:spin .8s linear infinite;flex:none}
@@ -290,7 +290,7 @@ main:focus{outline:none}
 .st-reasons{margin:0;padding-left:18px;font-size:14px;color:#8F1F18}
 .st-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:0}
 .st-facts div{background:var(--soft);border-radius:12px;padding:8px 10px}.st-facts dt{font-size:12px;color:var(--muted);font-weight:700}
-.st-facts dd{margin:0;font-weight:800;font-size:15px;white-space:nowrap}.st-facts small{font-weight:400;color:var(--muted)}
+.st-facts dd{margin:0;font-weight:800;font-size:15px}.st-facts small{font-weight:400;color:var(--muted)}
 .st-bars{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;height:34px;margin-top:4px}
 .st-bar{display:block;border-radius:4px}
 .b-ok{background:#169B5B}.b-mid{background:#E08A00}.b-bad{background:#D93A3A}.st-bar.b-none{background:#DCE3DF}

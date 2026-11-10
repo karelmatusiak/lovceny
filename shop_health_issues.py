@@ -19,7 +19,8 @@ import httpx
 LABEL = "stav-obchodu"
 MARK = re.compile(r"<!-- lovceny-health:(?P<key>[\w-]+) codes=(?P<codes>[\w,]*) -->")
 RUN_KEY = "_beh"
-SHORT = {"failing": "obchod blokuje stahování cen", "stale": "ceny nejsou aktuální"}
+SHORT = {"failing": "obchod blokuje stahování cen", "partial": "část požadavků obchod blokuje",
+         "stale": "ceny nejsou aktuální"}
 
 
 class GitHub:
