@@ -105,7 +105,9 @@ def buyable_offers(offers) -> list:
 
 
 def priced_offers(offers) -> list:
-    return [o for o in offers if getattr(o, "price", None) is not None]
+    from .offer_trust import offer_is_captcha_hidden
+    return [o for o in offers
+            if getattr(o, "price", None) is not None and not offer_is_captcha_hidden(o)]
 
 
 def best_buyable_offer(offers, cutoffs=None):

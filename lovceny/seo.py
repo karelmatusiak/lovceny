@@ -174,6 +174,17 @@ def itemlist_ld(rows, path: str, start: int = 0) -> dict:
 STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday"]
 
 
+def indexable_static_pages() -> list[str]:
+    """Stránky ve sitemapě. Vypnuté vedlejší funkce tam nejsou, dokud se znovu nezapnou."""
+    from .features import budget_on, digest_on, extension_on
+    gated = {
+        "/rozsireni": extension_on,
+        "/prehled": digest_on,
+        "/hlidat-rozpocet": budget_on,
+    }
+    return [path for path in STATIC_PAGES if gated.get(path, lambda: True)()]
+
+
 def _sale_category_slugs(db) -> set[str]:
     """Kategorie, jejichž /ve-sleve má aspoň jeden produkt. Prázdné do sitemapy nepatří."""
     from .main import _cat_rows, _ve_sleve_rows
@@ -189,7 +200,7 @@ def sitemap_xml(db) -> str:
     from .models import Offer
     from .offer_trust import offer_is_promoted, use_cutoffs
     base = public_url()
-    urls = [(base + p, None) for p in STATIC_PAGES]
+    urls = [(base + p, None) for p in indexable_static_pages()]
     sale_slugs = _sale_category_slugs(db)
     for c in CATEGORIES:
         urls.append((f"{base}/kategorie/{c.slug}", None))

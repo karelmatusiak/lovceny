@@ -40,7 +40,8 @@ def subject() -> str:
 
 
 def enabled() -> bool:
-    return bool(public_key() and _private_key())
+    from .features import push_on
+    return push_on() and bool(public_key() and _private_key())
 
 
 def valid_endpoint(url: str) -> bool:

@@ -21,6 +21,10 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from lovceny.features import digest_on
+    if not digest_on():
+        print("Týdenní přehled je vypnutý (fáze 1). Nic neukládám ani neposílám.")
+        return 0
     init_db()
     with SessionLocal() as db:
         if a.dry_run:

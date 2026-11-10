@@ -115,7 +115,7 @@
   {% endif %}
 </div></section>
 
-<section class="bf-optin-sec"><div class="wrap">
+{% if PUSH_ON() %}<section class="bf-optin-sec"><div class="wrap">
   <div class="card dg-optin topic-optin" id="bf-optin" data-vapid="{{ push_key }}" data-topic="black-friday" data-store="lovceny-black-friday">
     <div class="dg-optin-ico" aria-hidden="true">🔔</div>
     <div class="dg-optin-main">
@@ -132,8 +132,8 @@
       {% else %}<p class="ov-muted">Upozornění v prohlížeči teď nejsou zapnutá.</p>{% endif %}
     </div>
   </div>
-  <p class="bf-also">Hlídáš konkrétní věc? <a href="/hlidat-rozpocet">Nastav hlídání podle rozpočtu</a> – třeba „televize do 15 000 Kč“ – nebo si u produktu zapni hlídání ceny.</p>
-</div></section>
+  <p class="bf-also">{% if BUDGET_ON() %}Hlídáš konkrétní věc? <a href="/hlidat-rozpocet">Nastav hlídání podle rozpočtu</a> – třeba „televize do 15 000 Kč“ – nebo si u produktu zapni hlídání ceny.{% else %}Hlídáš konkrétní věc? U produktu si zapni hlídání ceny.{% endif %}</p>
+</div></section>{% else %}<section class="bf-optin-sec"><div class="wrap"><p class="bf-also">Hlídáš konkrétní věc? U produktu si zapni hlídání ceny.</p></div></section>{% endif %}
 
 <section class="bf-law" id="paragraf-12a"><div class="wrap">
   <div class="card bf-law-card">

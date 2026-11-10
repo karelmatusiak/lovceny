@@ -81,7 +81,7 @@
     <div class="card ov-step"><span class="num">2</span><h2 class="h3">Ověříme cenu</h2><p>U obchodů, které čtení dovolují, načteme aktuální cenu ze stránky. Ostatní neobcházíme – najdeme produkt podle názvu jinde.</p></div>
     <div class="card ov-step"><span class="num">3</span><h2 class="h3">Uvidíš fakta</h2><p>Nejnižší cenu za 30 dní (pokud produkt sledujeme), verdikt a nejlevnější nabídky v dalších obchodech.</p></div>
   </div>
-  <p class="ov-muted ov-foot">Ověřený odkaz si můžeš poslat dál – výsledek má vlastní adresu. Rychleji to jde s naším <a href="/rozsireni">rozšířením do prohlížeče</a>. Odkaz, který vložíš, neukládáme.</p>
+  <p class="ov-muted ov-foot">Ověřený odkaz si můžeš poslat dál – výsledek má vlastní adresu.{% if EXTENSION_ON() %} Rychleji to jde s naším <a href="/rozsireni">rozšířením do prohlížeče</a>.{% endif %} Odkaz, který vložíš, neukládáme.</p>
   {% endif %}
 </div></section>
 {% endblock %}

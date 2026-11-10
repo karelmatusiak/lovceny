@@ -135,8 +135,8 @@
 
 <section><div class="wrap">
   <p class="live-note">Metodika: <a href="/jak-radime">Kupuj = do 3 % nad minimem 90 dní</a>. Úspora = rozdíl oproti mediánu 90 dní. Demo historie se{% if include_demo %} <b>započítává</b> a je označená{% else %} <b>nezapočítává</b>{% endif %}. Žebříček není placený.</p>
-  {% include "_digest_optin.html" %}
-  <p class="live-note"><a href="/prehled">Archiv týdenních přehledů →</a></p>
+  {% if DIGEST_ON() %}{% include "_digest_optin.html" %}
+  <p class="live-note"><a href="/prehled">Archiv týdenních přehledů →</a></p>{% endif %}
 </div></section>
 {% endblock %}
-{% block scripts %}{{ super() }}<script src="{{ static('digest.js') }}" defer></script>{% endblock %}
+{% block scripts %}{{ super() }}{% if DIGEST_ON() %}<script src="{{ static('digest.js') }}" defer></script>{% endif %}{% endblock %}

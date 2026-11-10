@@ -80,6 +80,36 @@ def offer_is_blocked(offer) -> bool:
     return getattr(offer, "status", None) == "blocked"
 
 
+# Texty z lovceny.shops.scrape.Blocked(kind="captcha") a starších běhů.
+_CAPTCHA_MARKERS = (
+    "ochrana proti botum",
+    "captcha",
+    "js challenge",
+    "challenge-platform",
+)
+
+
+def _error_fold(value: str | None) -> str:
+    import unicodedata
+    raw = unicodedata.normalize("NFKD", value or "")
+    return raw.encode("ascii", "ignore").decode().lower()
+
+
+def offer_is_captcha_hidden(offer) -> bool:
+    """Mironet, jehož poslední stažení spadlo na captchu, se vůbec neukazuje.
+
+    Řádek, cena i historie v databázi zůstávají. Jiný obchod se statusem
+    blocked (třeba Softcom) se dál ukáže bez tlačítka Koupit. Obyčejné
+    HTTP 403 bez textu ochrany se taky dál ukáže, jen bez Koupit.
+    """
+    if getattr(offer, "shop", None) != "mironet":
+        return False
+    if not offer_is_blocked(offer):
+        return False
+    err = _error_fold(getattr(offer, "last_error", None))
+    return any(marker in err for marker in _CAPTCHA_MARKERS)
+
+
 def offer_is_stale(offer, cutoffs=None, now: datetime | None = None) -> bool:
     """Dva běhy, ve kterých byla na řadě, ji neviděly, nebo je úspěch starší než 4 dny.
 

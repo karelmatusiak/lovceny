@@ -157,9 +157,9 @@ def main(argv=None):
     except Exception as e:  # noqa: BLE001 – upozornění nesmí shodit souhrn stahování
         db.rollback()
         log.error("Hlídání cen selhalo: %s", e)
-    # 3b) upozornění v prohlížeči (Web Push) – jen když jsou nastavené VAPID klíče
-    from lovceny import push
-    if push.enabled():
+    # 3b) upozornění v prohlížeči. Fáze 1 je má vypnutá (lovceny.features.push_on).
+    from lovceny import features, push
+    if features.push_on() and push.enabled():
         try:
             log.info("Web Push: %s", push.check_push(db))
         except Exception as e:  # noqa: BLE001
@@ -167,20 +167,26 @@ def main(argv=None):
             log.error("Web Push selhal: %s", e)
         log.info("Úklid push odběrů (24 měsíců): %d", push.cleanup_push(db))
     else:
-        log.info("Web Push vypnutý (chybí VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)")
-    # 3c) v7: hlídání podle rozpočtu (push; e-mail jen s EMAIL_BACKEND) + Black Friday přehled (jen v BF/CM)
+        log.info("Web Push vypnutý (fáze 1, nebo chybí VAPID klíče)")
+    # 3c) rozpočet je ve fázi 1 vypnutý. Black Friday stránka zůstává; push přehled ne.
     from lovceny import budget, blackfriday
-    try:
-        log.info("Hlídání rozpočtu: %s", budget.check_budgets(db))
-        log.info("Úklid hlídání rozpočtu: %d", budget.cleanup(db))
-    except Exception as e:  # noqa: BLE001 – nesmí shodit souhrn stahování
-        db.rollback()
-        log.error("Hlídání rozpočtu selhalo: %s", e)
-    try:
-        log.info("Black Friday přehled: %s", blackfriday.run_digest(db))
-    except Exception as e:  # noqa: BLE001
-        db.rollback()
-        log.error("Black Friday přehled selhal: %s", e)
+    if features.budget_on():
+        try:
+            log.info("Hlídání rozpočtu: %s", budget.check_budgets(db))
+            log.info("Úklid hlídání rozpočtu: %d", budget.cleanup(db))
+        except Exception as e:  # noqa: BLE001 – nesmí shodit souhrn stahování
+            db.rollback()
+            log.error("Hlídání rozpočtu selhalo: %s", e)
+    else:
+        log.info("Hlídání rozpočtu je vypnuté (fáze 1)")
+    if features.push_on():
+        try:
+            log.info("Black Friday přehled: %s", blackfriday.run_digest(db))
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.error("Black Friday přehled selhal: %s", e)
+    else:
+        log.info("Black Friday push přehled je vypnutý (fáze 1)")
     log.info("Úklid hlídání (24 měsíců / nepotvrzená / zrušená): %s", cleanup_watches(db))
     try:
         log.info("Úklid cenových glitchů: %d", scrub_outlier_price_points(db))

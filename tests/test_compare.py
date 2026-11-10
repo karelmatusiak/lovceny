@@ -78,7 +78,7 @@ def test_compare_tray_reserves_room_above_the_bar():
     c = TestClient(app)
     page = c.get("/kategorie/sluchatka?znacka=Sony&od=1&do=1&skladem=1").text
     assert "Žádný produkt neodpovídá filtrům" in page
-    assert 'id="hlidat-rozpocet"' in page and 'id="bw-max"' in page
+    assert 'id="hlidat-rozpocet"' not in page and 'id="bw-max"' not in page
     assert 'id="cmp-bar" class="cmp-bar" hidden' in page
     assert 'id="pwa-install"' in page and 'id="cmp-go"' in page
     db.close()

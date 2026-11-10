@@ -63,6 +63,7 @@ def test_offline_page(client_db):
 
 
 def test_push_ios_hint_and_pwa_js(client_db, monkeypatch):
+    monkeypatch.setenv("LOVCENY_FEATURE_PUSH", "1")
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "privatekeyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     client, _, make = client_db
