@@ -140,6 +140,12 @@ def main(argv=None):
         db.rollback()
         log.error("Úklid cenových glitchů selhal: %s", e)
     try:
+        from lovceny.catalog_repair import repair_catalog
+        log.info("Úklid katalogu: %s", {k: v for k, v in repair_catalog(db).items() if k != "samples"})
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.error("Úklid katalogu selhal: %s", e)
+    try:
         from lovceny import catcache, deals, hero
         from lovceny.main import clear_display_names_cache
         catcache.clear()

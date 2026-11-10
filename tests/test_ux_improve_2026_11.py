@@ -99,9 +99,9 @@ def test_category_filters_brand_price_stock():
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     for name, price, stock in [
-        ("Samsung Filter TV", 12000, True),
-        ("LG Filter TV", 9000, True),
-        ("Samsung Filter OOS", 11000, False),
+        ("Samsung QLED TV", 12000, True),
+        ("LG QLED TV", 9000, True),
+        ("Samsung QLED OOS", 11000, False),
     ]:
         p = Product(name=name, slug=name.lower().replace(" ", "-"), category_slug="televize",
                     category="Televize")
@@ -117,13 +117,13 @@ def test_category_filters_brand_price_stock():
     assert "cat-filters" in html
     assert "Samsung" in html and "LG" in html
     html_b = c.get("/kategorie/televize", params={"znacka": "Samsung"}).text
-    assert "Samsung Filter TV" in html_b
-    assert "LG Filter TV" not in html_b
+    assert "Samsung QLED TV" in html_b
+    assert "LG QLED TV" not in html_b
     html_p = c.get("/kategorie/televize", params={"do": "10000"}).text
-    assert "LG Filter TV" in html_p
-    assert "Samsung Filter TV" not in html_p
+    assert "LG QLED TV" in html_p
+    assert "Samsung QLED TV" not in html_p
     html_s = c.get("/kategorie/televize", params={"skladem": "1"}).text
-    assert "Samsung Filter OOS" not in html_s
+    assert "Samsung QLED OOS" not in html_s
 
 
 def test_pro_obchody_affiliate_section():

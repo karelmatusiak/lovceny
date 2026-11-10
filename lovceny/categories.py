@@ -22,7 +22,7 @@ CATEGORIES: list[Category] = [
              ("iphone", "smartphone", "mobilni telefon", "galaxy s", "galaxy a", "galaxy z", "redmi", "pixel", "motorola moto", "xiaomi 1", "poco", "honor", "realme", "nothing phone"), "📱"),
     Category("notebooky", "Notebooky", "notebooků",
              "Notebooky pro práci, školu i hraní: MacBook, Lenovo, ASUS, HP, Acer a další. Řazeno jen podle ceny.",
-             ("notebook", "macbook", "ideapad", "thinkpad", "vivobook", "zenbook", "aspire", "inspiron", "latitude", "probook", "elitebook", "tuf gaming", "laptop"), "💻"),
+             ("notebook", "macbook", "ideapad", "thinkpad", "vivobook", "zenbook", "aspire", "inspiron", "latitude", "probook", "elitebook", "tuf gaming", "laptop", "surface pro", "surface laptop", "surface go"), "💻"),
     Category("pocitace", "Stolní počítače", "stolních počítačů",
              "Stolní počítače a repasované kancelářské sestavy. U každé konfigurace vidíš historii ceny a verdikt, jestli kupovat hned, nebo počkat.",
              ("thinkcentre", "optiplex", "prodesk", "elitedesk", "thinkstation", "pc24 gaming",
@@ -44,8 +44,8 @@ CATEGORIES: list[Category] = [
              "Tyčové, robotické i klasické vysavače. Dyson, Roborock, Xiaomi, Rowenta, Electrolux, ETA a další.",
              ("vysavac", "robot vacuum", "dyson v", "roborock", "roomba", "tycovy"), "🧹"),
     Category("konzole", "Herní konzole", "herních konzolí",
-             "PlayStation 5, Xbox Series a Nintendo Switch včetně ovladačů. Kdy kupovat a kdy počkat na akci.",
-             ("playstation", "xbox", "nintendo switch", "herni konzole", "dualsense", "ps5"), "🎮"),
+             "PlayStation 5, Xbox Series a Nintendo Switch. Kdy kupovat a kdy počkat na akci.",
+             ("playstation", "xbox", "nintendo switch", "herni konzole", "ps5"), "🎮"),
     Category("chytre-hodinky", "Chytré hodinky a náramky", "chytrých hodinek",
              "Apple Watch, Samsung Galaxy Watch, Garmin, Xiaomi Smart Band, Amazfit. Ceny a historie z českých obchodů.",
              ("apple watch", "galaxy watch", "chytre hodinky", "smart band", "smartwatch", "garmin", "amazfit", "fitness naramek", "chytry naramek"), "⌚"),
@@ -113,7 +113,7 @@ CATEGORY_INTROS: dict[str, tuple[str, ...]] = {
         'Často zlevňují na Black Friday a při letních akcích. Viz Kdy nakupovat.',
     ),
     'konzole': (
-        'Sledujeme PlayStation, Xbox a Nintendo Switch včetně běžných balíčků a ovladačů, kde to obchody dovolují číst.',
+        'Sledujeme PlayStation, Xbox a Nintendo Switch včetně běžných balíčků. Ovladače, kabely a další příslušenství do výpisu konzolí nepatří.',
         'U konzolí pozor na „slevy“ na starší sklady a bundle – historie ceny ukáže, jestli je dnešek opravdu výhodný.',
         'Herní konzole a balíčky bývají nejvýhodnější kolem Black Friday. Kalendář: Kdy nakupovat.',
     ),
@@ -337,10 +337,42 @@ def _allegro_leaf_accessory(shop_category: str | None) -> bool:
 
 
 def _standalone_remote(name_folded: str) -> bool:
-    """Ovladač jako samostatný výrobek. Herní ovladač (DualSense, Xbox, Switch) ne."""
+    """Dálkový ovladač k televizi. Herní ovladač řeší _game_controller."""
     if not re.search(r"(^| )ovladac( |$)", name_folded):
         return False
     if re.search(r"dualsense|playstation|xbox|nintendo|joy-?con|gamepad", name_folded):
+        return False
+    return True
+
+
+def _looks_like_console(name_folded: str) -> bool:
+    """Samotná konzole (případně s ovladačem v balení), ne ovladač jako výrobek."""
+    n = name_folded
+    if re.match(r"\s*(ovladac|controller|gamepad|dualsense|dualshock|joy)", n):
+        return False
+    if re.search(r"\b(ovladac\w*|controller|gamepad|charging|nabijec)\b", n):
+        # „s ovladačem“ / „včetně ovladače“ je pořád konzole
+        if not re.search(r"\b(s|vcetne)\s+ovladac", n) and not re.search(r"ovladacem\b", n):
+            return False
+    if re.search(r"\b(konzole|console)\b", n):
+        return True
+    if re.search(r"\b(playstation\s*[45]|\bps[45]\b|xbox|nintendo switch)\b", n) and re.search(
+        r"\b(slim|oled|digital|disk\w*|mechanik\w*|blu-?ray|\d+\s*tb|\d+\s*gb)\b", n
+    ):
+        return True
+    return False
+
+
+def _game_controller(name_folded: str) -> bool:
+    """Ovladač, Joy-Con, DualSense. Konzole, která ovladač jen obsahuje, ne."""
+    n = name_folded
+    hit = re.search(r"\b(dualsense|dualshock|gamepad|controller)\b|\bjoy-?con\b|\bovladac", n)
+    if not hit:
+        return False
+    # Konzole „s ovladačem“ / „včetně ovladače“, ne samotný ovladač.
+    if re.search(r"\b(s|vcetne)\s+ovladac", n) or re.search(r"\bovladacem\b", n):
+        return False
+    if _looks_like_console(n):
         return False
     return True
 
@@ -353,6 +385,8 @@ def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
         return True
     if _standalone_remote(n):
+        return True
+    if _game_controller(n):
         return True
     if _is_allegro_path(shop_category):
         # Rodič „Telefony a příslušenství“ nesmí shodit samotný telefon.
@@ -553,6 +587,22 @@ def accept_feed_item(
     if price < min_p:
         return None
     return feed_slug
+
+
+def category_keywords_hit(name: str, slug: str | None) -> bool:
+    """True = název nese klíčové slovo nebo vzor dané kategorie (ne shop path)."""
+    if not slug or slug not in BY_SLUG:
+        return False
+    n = _fold(name)
+    hay = n
+    for k in BY_SLUG[slug].keywords:
+        k2 = _fold(k).strip() if not str(k).startswith(" ") else _fold(k)[1:-1]
+        if k2 and re.search(r"\b" + re.escape(k2), hay):
+            return True
+    for s, rx in _PATTERNS:
+        if s == slug and rx.search(n.strip()):
+            return True
+    return False
 
 
 def classify(name: str, shop_category: str | None = None, url: str | None = None) -> str | None:

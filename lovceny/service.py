@@ -229,21 +229,46 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     by_id = {o.external_id: o for o in offers if o.external_id}
     by_ean_offer = {o.product.ean: o for o in offers if o.product.ean}
     products = list(db.scalars(select(Product)).all())
-    by_ean_prod = {p.ean: p for p in products if p.ean}
+    by_ean_prod: dict[str, Product] = {}
+    for p in products:
+        if not p.ean:
+            continue
+        prev = by_ean_prod.get(p.ean)
+        if prev is None or (prev.retired_at is not None and p.retired_at is None):
+            by_ean_prod[p.ean] = p
     # kanonický název → produkt; kolize = None (nepárovat)
     by_canon: dict[str, Product | None] = {}
     for p in products:
+        if p.retired_at is not None:
+            continue
         key = canonicalize_name(p.name)
         if not key:
             continue
         by_canon[key] = None if key in by_canon else p
 
+    def follow_redirect(p: Product | None) -> Product | None:
+        """Sloučená duplicita ukazuje na přeživšího. Ostatní retired řádky necháme být."""
+        seen: set[int] = set()
+        while p is not None and p.retired_at is not None and p.redirect_product_id and p.id not in seen:
+            seen.add(p.id)
+            p = db.get(Product, p.redirect_product_id)
+        return p
+
     def find_by_name(feed_name: str) -> Product | None:
         key = canonicalize_name(feed_name)
-        hit = by_canon.get(key)
-        if hit is not None:
+        hit = follow_redirect(by_canon.get(key)) if key else None
+        if hit is not None and hit.retired_at is None:
             return hit
-        found = [p for p in products if names_match(p.name, feed_name)]
+        found = []
+        seen_ids: set[int] = set()
+        for p in products:
+            if not names_match(p.name, feed_name):
+                continue
+            c = follow_redirect(p)
+            if c is None or c.id in seen_ids:
+                continue
+            seen_ids.add(c.id)
+            found.append(c)
         if not found:
             return None
         if len(found) == 1:
@@ -253,6 +278,19 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if len(without) == 1:
             return without[0]
         return None  # nejednoznačné → konzervativně přeskočit
+
+    def find_by_identity(feed_name: str, cat_slug: str | None) -> Product | None:
+        """Stejná značka a model (Herní sluchátka … vs Sluchátka …) – nepřidávat druhý produkt."""
+        from .matching import same_model
+        if not cat_slug:
+            return None
+        hits = [
+            p for p in products
+            if p.retired_at is None and same_model(p.name or "", p.category_slug, feed_name, cat_slug)
+        ]
+        if not hits:
+            return None
+        return min(hits, key=lambda p: p.id)
 
     def clean_category_label(name: str, feed_cat: str | None) -> tuple[str | None, str | None]:
         """(category_slug, lidský label) – nikdy surový Heureka CATEGORYTEXT."""
@@ -311,13 +349,15 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             if not accepted:
                 stats["skipped"] += 1
                 continue
-            prod = by_ean_prod.get(it.ean) if it.ean else None
-            # EAN v katalogu nesmí přebít jasný konflikt názvů (LG TV ← ASUS monitor)
+            prod = follow_redirect(by_ean_prod.get(it.ean)) if it.ean else None
+            # EAN v katalogu nesmí přebít jasný konflikt názvů (LG TV ← ASUS monitor, 1550 W ← 1360 W)
             if prod is not None and it.name and offer_conflicts_product(prod.name, clean, it.name):
                 stats["skipped_mismatch"] += 1
                 prod = None
             if prod is None:
                 prod = find_by_name(it.name)
+            if prod is None:
+                prod = find_by_identity(it.name, accepted if isinstance(accepted, str) else None)
             if prod is not None:
                 # už má tento obchod nabídku na produktu? pak aktualizuj tu
                 existing = next((x for x in prod.offers if x.shop == shop_slug), None)

@@ -31,7 +31,8 @@ def init_db():
 # Jednoduché doplnění sloupců do existujících tabulek (create_all je nepřidá). Idempotentní.
 _ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
                 ("products", "category_slug", "VARCHAR(40)"),
-                ("products", "retired_at", "TIMESTAMP WITH TIME ZONE")]
+                ("products", "retired_at", "TIMESTAMP WITH TIME ZONE"),
+                ("products", "redirect_product_id", "INTEGER")]
 
 
 def _migrate():
