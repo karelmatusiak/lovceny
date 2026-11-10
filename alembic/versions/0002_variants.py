@@ -34,10 +34,12 @@ def upgrade() -> None:
     if "variant_id" not in offer_cols:
         op.add_column("offers", sa.Column("variant_id", sa.Integer(), nullable=True))
         op.create_index("ix_offers_variant_id", "offers", ["variant_id"])
+    from lovceny.migrate_log import log_counts
     from lovceny.variant_merge import apply_variant_merges
     from sqlalchemy.orm import Session
     session = Session(bind=bind)
-    apply_variant_merges(session, dry_run=False)
+    stats = apply_variant_merges(session, dry_run=False)
+    log_counts("0002_variants", groups=stats["groups"], retired=stats["retired"])
     session.flush()
 
 

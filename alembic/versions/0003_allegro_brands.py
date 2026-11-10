@@ -17,8 +17,10 @@ def upgrade() -> None:
     from alembic import op
     from sqlalchemy.orm import Session
     from lovceny.allegro_narrow import apply_allegro_narrow
+    from lovceny.migrate_log import log_counts
     session = Session(bind=op.get_bind())
-    apply_allegro_narrow(session, dry_run=False)
+    stats = apply_allegro_narrow(session, dry_run=False)
+    log_counts("0003_allegro_brands", keep=stats["keep"], retire=stats["retire"])
     session.flush()
 
 
