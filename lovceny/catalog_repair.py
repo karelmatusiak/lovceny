@@ -18,7 +18,7 @@ import threading
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .categories import BY_SLUG, _fold, classify, is_accessory_text
+from .categories import BY_SLUG, _fold, is_accessory_text
 from .matching import (
     label_from_url, listing_overlap, primary_brand, same_model, strong_listing_mismatch,
 )
@@ -99,12 +99,11 @@ def _relocate_offer(db: Session, offer: Offer, label: str, products: list[Produc
     if target is not None:
         offer.product_id = target.id
         return "reattached"
-    cat = classify(label)
     prod = Product(
         name=label[:300],
         slug=slugify(label)[:200],
-        category_slug=cat,
-        category=BY_SLUG[cat].name if cat and cat in BY_SLUG else None,
+        category_slug=None,
+        needs_review=True,
     )
     db.add(prod)
     db.flush()

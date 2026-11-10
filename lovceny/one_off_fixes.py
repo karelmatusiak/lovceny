@@ -1,8 +1,8 @@
 """Jednorázové opravy, které už v katalogu proběhly a nepatří do obecného úklidu.
 
 Motorola Edge a Gigabyte A16 omylem v televizích, Surface Pro schovaný pod
-adresou Xboxu. Spouští se jen ručně (`seed.py --one-off-fixes`, bez `--apply`
-jen náhled). Start webu ani stahování cen je nespouští.
+adresou Xboxu. Přepínač v seed.py je pryč. Funkce zůstává pro testy a ruční import.
+Start webu ani stahování cen ji nespouští.
 """
 from __future__ import annotations
 

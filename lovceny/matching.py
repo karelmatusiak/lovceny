@@ -122,6 +122,19 @@ def primary_brand(name: str) -> str | None:
     return None
 
 
+def brand_and_mpn(name: str) -> tuple[str, frozenset[str]] | None:
+    """Značka a silné kódy výrobce z názvu. Slabé tokeny (pro2, air15) sem nepatří."""
+    brand = primary_brand(name)
+    if not brand:
+        return None
+    from .shops.feed import _mpn_tokens, canonicalize_name
+    raw = _mpn_tokens(canonicalize_name(name or ""))
+    strong = frozenset(token for token in raw if len(token) >= 5 and any(ch.isdigit() for ch in token))
+    if not strong:
+        return None
+    return brand, strong
+
+
 def _num(text: str | None) -> float | None:
     if not text:
         return None

@@ -21,7 +21,7 @@ from .models import Product, Offer, Watch, PricePoint
 from .verdict import compute, MIN_DAYS, Verdict
 from .deals import _points_for, include_demo
 from .availability import best_buyable_offer, offer_is_buyable
-from .categories import BY_SLUG, classify, is_accessory_text
+from .categories import BY_SLUG, is_accessory_text
 from .names import guess_brand
 from .shops.feed import variant_family_key
 
@@ -127,9 +127,7 @@ def _bucket(category_slug: str | None, name: str, shop_category: str | None) -> 
     slug = (category_slug or "").strip()
     if slug in BY_SLUG:
         return slug
-    guessed = classify(name or "", shop_category)
-    if guessed in BY_SLUG:
-        return guessed
+    # Bez uložené kategorie produkt nezíská kategorii z názvu. Hero ho nezařadí do odhadnutého regálu.
     return "_ostatni"
 
 
