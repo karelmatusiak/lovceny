@@ -28,48 +28,15 @@ def listing_withheld(product) -> bool:
 
 
 def queue_listing_review(db: Session) -> dict:
-    """Označí nezařazené a beznázvové produkty a vloží je do fronty. Opakovaný běh je no-op."""
-    from .triage import enqueue
-    approved = set(db.scalars(
-        select(TriageDecision.product_id).where(
-            TriageDecision.kind == "confirm_listing",
-            TriageDecision.status == "approved",
-            TriageDecision.product_id.isnot(None),
-        )
-    ).all())
-    products = list(db.scalars(
-        select(Product)
-        .where(Product.retired_at.is_(None))
-        .options(selectinload(Product.offers))
-    ).all())
-    flagged = 0
-    queued = 0
-    for product in products:
-        if product.id in approved:
-            continue
-        if product.catalog_hidden and product.category_slug:
-            continue
-        missing_category = not product.category_slug
-        from_url = name_is_from_url(product)
-        if not missing_category and not from_url:
-            continue
-        if not product.needs_review:
-            product.needs_review = True
-            flagged += 1
-        why = []
-        if missing_category:
-            why.append("nemá kategorii")
-        if from_url:
-            why.append("název je složený z adresy stránky")
-        reason = "Výpis čeká na schválení: " + " a ".join(why) + "."
-        if enqueue(
-            db, kind="confirm_listing", fingerprint=f"confirm_listing:{product.id}",
-            summary=f"Schválit „{(product.name or '')[:80]}“ do výpisů",
-            reason=reason, product_id=product.id, proposed_category=product.category_slug,
-        ):
-            queued += 1
+    """Publikuje produkt jen při jisté kategorii a ověřené nabídce. Jinak ho schová.
+
+    Fronta na to nečeká. Opakovaný běh už viditelné produkty nemění.
+    """
+    from .auto_resolve import review_listings
+    stats = review_listings(db)
     db.commit()
-    return {"flagged": flagged, "queued": queued, "checked": len(products)}
+    stats["checked"] = stats["published"] + stats["hidden"]
+    return stats
 
 
 def apply_confirm_listing(db: Session, decision) -> tuple[bool, str]:

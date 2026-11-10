@@ -110,7 +110,8 @@ _ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
                 ("offers", "gtin", "VARCHAR(14)"),
                 ("offers", "last_ok_at", "TIMESTAMP WITH TIME ZONE"),
                 ("offers", "due_at", "TIMESTAMP WITH TIME ZONE"),
-                ("offers", "due_prev", "TIMESTAMP WITH TIME ZONE")]
+                ("offers", "due_prev", "TIMESTAMP WITH TIME ZONE"),
+                ("offers", "withheld", "BOOLEAN NOT NULL DEFAULT FALSE")]
 
 
 # Indexy, které create_all na existující tabulku nepřidá. Idempotentní (SQLite i Postgres).

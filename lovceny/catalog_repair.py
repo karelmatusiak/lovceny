@@ -1,9 +1,9 @@
 """Idempotentní úklid katalogu: cizí nabídky, duplicity, kategorie.
 
-Rizikové kroky (sloučení, odpojení, vyřazení, změna kategorie existujícího produktu)
-se samy nezapíšou. Jdou do fronty /admin/trideni. Po schválení platí totéž co dřív:
-nemazat historii cen, sloučený produkt dostane 301 na přeživšího, příslušenství
-zmizí z výpisu (category_slug = NULL) a řádek zůstane.
+Sloučení, odpojení a změna kategorie se zapíšou hned, když je signál jistý
+(kód výrobce, GTIN, nebo kategorie z pravidel). Shoda jen podle názvu nabídku
+schová. Historie cen se nemaže, sloučený produkt dostane 301 na nejnižší id,
+příslušenství zmizí z výpisu a řádek zůstane.
 Spuštění jen ručně: `python seed.py --repair-catalog` (náhled) a `--apply`,
 nebo akce v /admin. Start webu ani stahování cen ho nespouští.
 Zámek brání dvěma ručním běhům najednou.
@@ -163,33 +163,9 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
         "audit": [],
     }
     from .gtin import gtins_conflict
-    from .triage import category_label, enqueue
+    from .matching import model_family
     products = list(db.scalars(select(Product)).all())
-
-    # Vrátit nabídky, které minulý běh odtrhl jen kvůli slugu (8/128 → 8128gb, barva, „pro“).
-    for shell in list(products):
-        if not _is_split_shell(shell):
-            continue
-        host = _host_for_shell(shell, products)
-        if host is None:
-            continue
-        offer = shell.offers[0]
-        stats["restored"] += 1
-        stats["audit"].append({
-            "id": host.id, "title": host.name, "category": host.category_slug,
-            "reason": f"reattach-slug offer {offer.id}",
-        })
-        if len(stats["samples"]) < 40:
-            stats["samples"].append(f"restore #{offer.id} -> #{host.id} {(host.name or '')[:60]}")
-        if enqueue(
-            db, kind="reattach", fingerprint=f"reattach:{offer.id}:{host.id}",
-            summary=f"Vrátit nabídku #{offer.id} na produkt #{host.id}",
-            reason="Nabídka se odtrhla jen podle slugu v URL. Návrat čeká na schválení, historie cen zůstane u nabídky.",
-            shop=offer.shop, product_id=host.id, other_product_id=shell.id, offer_id=offer.id,
-        ):
-            stats["queued"] += 1
-        else:
-            stats["restored"] -= 1
+    # Návrat podle slugu v URL je shoda názvu. Bez GTIN nebo kódu výrobce se neprovede.
 
     active = [p for p in products if p.retired_at is None and not p.catalog_hidden]
 
@@ -205,25 +181,22 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             kind = "move"
         if len(stats["samples"]) < 30:
             stats["samples"].append(f"{kind} #{p.id} {p.category_slug}->{new_slug} {(p.name or '')[:80]}")
-        proposed = "accessory" if new_slug is None else new_slug
-        label_to = "příslušenství" if proposed == "accessory" else category_label(proposed)
-        if not enqueue(
-            db, kind="recategorize", fingerprint=f"recategorize:{p.id}:{proposed}",
-            summary=f"Změnit kategorii produktu #{p.id} na {label_to}",
-            reason="Úklid katalogu navrhuje změnu kategorie. Sama se nezapíše.",
-            product_id=p.id, proposed_category=proposed,
-        ):
-            if kind == "accessory":
-                stats["accessories_cleared"] -= 1
-            else:
-                stats["recategorized"] -= 1
-        else:
-            stats["queued"] += 1
+        if dry_run:
+            continue
+        if kind == "accessory":
+            p.category_slug = None
+            p.category = None
+            p.needs_review = True
+        elif new_slug in BY_SLUG:
+            p.category_slug = new_slug
+            p.category = BY_SLUG[new_slug].name
 
     for p in active:
         if p.retired_at is not None:
             continue
         for offer in list(p.offers):
+            if getattr(offer, "withheld", False):
+                continue
             label = label_from_url(offer.url)
             if len(label) < 8 or not strong_listing_mismatch(p.name or "", label):
                 continue
@@ -234,17 +207,10 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             })
             if len(stats["samples"]) < 30:
                 stats["samples"].append(f"detach #{offer.id} from #{p.id} {label[:80]}")
-            if not enqueue(
-                db, kind="detach", fingerprint=f"detach:{offer.id}",
-                summary=f"Odpojit nabídku #{offer.id} od produktu #{p.id}",
-                reason=("Název nabídky nesedí na produkt. Po schválení se přesune a historie cen zůstane u ní. "
-                        "Když produktu nezůstane žádná nabídka, vyřadí se (301 na kategorii)."),
-                shop=offer.shop, product_id=p.id, offer_id=offer.id,
-                payload={"label": label[:300], "clear_ean": None},
-            ):
-                stats["offers_detached"] -= 1
-            else:
-                stats["queued"] += 1
+            if dry_run:
+                continue
+            from .auto_resolve import settle_disputed_offer
+            settle_disputed_offer(db, offer, label=label, products=products)
 
     # Vyřazený ovladač bez kategorie by 301 na /. Patří na stránku své kategorie.
     for p in products:
@@ -293,7 +259,11 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
         for loser in ranked[1:]:
             if loser.id == survivor.id or loser.retired_at is not None:
                 continue
-            if not same_model(survivor.name or "", survivor.category_slug, loser.name or "", loser.category_slug):
+            if model_family(survivor.name or "", survivor.category_slug) != model_family(
+                loser.name or "", loser.category_slug
+            ):
+                continue
+            if model_family(survivor.name or "", survivor.category_slug) is None:
                 continue
             if gtins_conflict(survivor, loser):
                 stats["gtin_blocked"] += 1
@@ -307,16 +277,10 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
                 stats["samples"].append(
                     f"merge #{loser.id} -> #{survivor.id} {(loser.name or '')[:60]}"
                 )
-            pair = f"{min(loser.id, survivor.id)}:{max(loser.id, survivor.id)}"
-            if not enqueue(
-                db, kind="merge", fingerprint=f"merge:{pair}",
-                summary=f"Sloučit produkt #{loser.id} do #{survivor.id}",
-                reason="Stejný model podle názvu. Různá GTIN sloučení blokují. Po schválení zůstane slug, URL a historie cen přeživšího.",
-                product_id=survivor.id, other_product_id=loser.id,
-            ):
-                stats["products_merged"] -= 1
-            else:
-                stats["queued"] += 1
+            if dry_run:
+                continue
+            from .variant_merge import merge_variant_group
+            merge_variant_group(db, [survivor, loser])
 
     if dry_run:
         db.rollback()

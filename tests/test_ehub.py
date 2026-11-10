@@ -189,14 +189,13 @@ def test_apply_feed_attach_by_name_color():
         in_stock=True,
     )
     st = apply_feed(db, "istyle", [item])
-    assert st["attached"] == 0 and st["queued"] >= 1, st
+    assert st["attached"] == 0 and st["created"] == 0, st
     assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 0
     from lovceny.triage import approve_pending
-    approve_pending(db)
-    assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 1
-    # create_missing True nesmí vytvořit duplicitu – URL/název už sedí
+    assert approve_pending(db) == 0
+    assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 0
     st2 = apply_feed(db, "istyle", [item], create_missing=True, max_create=5)
-    assert st2["matched"] == 1 and st2["created"] == 0, st2
+    assert st2["created"] == 0, st2
     assert db.query(Product).count() == 1
     db.refresh(p)
     assert p.category is None or "|" not in (p.category or "")
@@ -257,13 +256,10 @@ def test_apply_feed_detaches_mismatched_ehub_url(client_db):
         category="Mobily", in_stock=True,
     )]
     st = apply_feed(db, "istyle", items, create_missing=False)
-    assert st["detached"] + st["reattached"] >= 1, st
-    from lovceny.triage import approve_pending
-    approve_pending(db)
+    assert st["detached"] + st.get("hidden", 0) >= 1, st
     db.refresh(air)
-    # AirPods už nemá istyle URL na iPhone
-    urls = [x.url for x in air.offers]
-    assert not any("iphone-18-pro" in u for u in urls), urls
+    shown = [x.url for x in air.offers if not x.withheld]
+    assert not any("iphone-18-pro" in u for u in shown), [(x.url, x.withheld) for x in air.offers]
 
 
 def test_accept_feed_item_orca_and_filter():
@@ -509,11 +505,9 @@ def test_apply_feed_skips_ean_mismatch_tv_monitor(client_db):
         in_stock=True,
     )]
     st = apply_feed(db, "xm", items, create_missing=False)
-    from lovceny.triage import approve_pending
-    approve_pending(db)
     db.refresh(tv)
-    urls = [o.url for o in tv.offers if o.shop == "xm"]
-    assert not urls, (urls, st)
+    shown = [o.url for o in tv.offers if o.shop == "xm" and not o.withheld]
+    assert not shown, (shown, st)
     assert st.get("detached", 0) >= 1
     assert tv.ean is None  # otrávené EAN pryč
 

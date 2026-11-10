@@ -68,7 +68,7 @@ def part_label(row: dict) -> str:
 def plan_part_code_groups(products: list[Product]) -> list[list[tuple[Product, dict]]]:
     buckets: dict[str, list[tuple[Product, dict]]] = {}
     for product in products:
-        if product.retired_at is not None or product.catalog_hidden or product.needs_review:
+        if product.retired_at is not None or product.catalog_hidden:
             continue
         found = identify_product(product)
         if found is None:

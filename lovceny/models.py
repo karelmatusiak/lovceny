@@ -54,6 +54,8 @@ class Offer(Base):
     last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Varianta modelu (barva, paměť). NULL = ještě nepřiřazeno.
     variant_id: Mapped[int | None] = mapped_column(ForeignKey("variants.id"), nullable=True, index=True)
+    # Sporná nabídka: řádek a historie cen zůstávají, na webu se neukáže a nemá Koupit.
+    withheld: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     # Poslední dva běhy, ve kterých tahle nabídka byla na řadě (ne celý obchod).
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     due_prev: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -301,7 +303,7 @@ class TriageDecision(Base):
     __tablename__ = "triage_decisions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     fingerprint: Mapped[str] = mapped_column(String(200), unique=True)
-    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | approved | rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | approved | rejected | auto
     kind: Mapped[str] = mapped_column(String(32), index=True)
     shop: Mapped[str | None] = mapped_column(String(40))
     shop_category: Mapped[str | None] = mapped_column(Text)

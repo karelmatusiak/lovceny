@@ -9,10 +9,10 @@ from lovceny.triage import ensure_mappings, resolve_category
 
 def test_alembic_baseline_is_idempotent():
     init_db()
-    assert _head() == "0004_part_codes"
+    assert _head() == "0005_auto_resolve"
     assert _revision() == _head()
     init_db()
-    assert _revision() == "0004_part_codes"
+    assert _revision() == "0005_auto_resolve"
 
 
 def test_category_comes_from_mapping_not_the_title(client_db):
@@ -48,7 +48,8 @@ def test_brand_and_manufacturer_code_attaches_title_does_not(client_db):
     queued = apply_feed(db, "alza", [by_title], create_missing=True)
     assert queued["attached"] == 0 and queued["created"] == 0
     assert db.query(Offer).filter_by(url="https://www.alza.cz/jen-nazev").count() == 0
-    assert db.query(TriageDecision).filter_by(kind="title_match", product_id=titled.id).count() == 1
+    row = db.query(TriageDecision).filter_by(kind="title_match", product_id=titled.id).one()
+    assert row.status == "auto"
 
 
 def test_page_url_goes_to_the_queue(client_db):

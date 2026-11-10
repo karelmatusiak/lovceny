@@ -207,10 +207,11 @@ def product_summary(p: Product):
     Verdikt počítáme z koupitelné ceny; když žádná není, z poslední známé
     (historie zůstává), ale `best` je None → UI bez CTA.
     """
-    best = best_buyable_offer(p.offers)
-    last = last_known_offer(p.offers)
+    visible = [o for o in p.offers if not getattr(o, "withheld", False)]
+    best = best_buyable_offer(visible)
+    last = last_known_offer(visible)
     ref = best or last
-    pts = [pt for o in p.offers for pt in o.points]
+    pts = [pt for o in visible for pt in o.points]
     v = compute(pts, float(ref.price) if ref else None,
                 float(ref.original_price) if ref and ref.original_price else None)
     return best, v
@@ -582,6 +583,11 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     else:
         share_price = ""
     review = bool(p.needs_review)
+    if review:
+        best = None
+        unverified_head = None
+        offers = []
+        display_price = None
     # JSON-LD nebere neověřenou cenu. Není-skladem v agregaci zůstane (highPrice).
     schema_offers = [o for o in offers if o.id not in notes]
     return tpl.TemplateResponse(request, "product.html", {
@@ -1245,8 +1251,10 @@ def _triage_groups(db):
     from .models import TriageDecision
     from .triage import CATEGORY_KINDS, category_label, ensure_mappings, path_key
     ensure_mappings(db)
-    rows = list(db.scalars(select(TriageDecision).where(TriageDecision.status == "pending")
-                           .order_by(TriageDecision.id)).all())
+    rows = list(db.scalars(
+        select(TriageDecision).where(TriageDecision.status.in_(("pending", "auto")))
+        .order_by(TriageDecision.id.desc()).limit(200)
+    ).all())
     pids = {i for d in rows for i in (d.product_id, d.other_product_id) if i}
     oids = {d.offer_id for d in rows if d.offer_id}
     products = {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(pids))).all()} if pids else {}
@@ -1362,43 +1370,33 @@ def _pending(db, decision_id: int):
 
 
 @app.post("/admin/trideni/{decision_id}/schvalit")
+def _rules_only():
+    return RedirectResponse(
+        "/admin/trideni?ok=" + quote("Rozhodují pravidla. Tahle stránka je jen záznam."),
+        status_code=303,
+    )
+
+
+@app.post("/admin/trideni/{decision_id}/schvalit")
 def triage_approve(decision_id: int, request: Request, _=Depends(require_admin), db=Depends(get_db)):
-    from .triage import approve
-    actor = _admin_actor(request) or "admin"
-    ok, detail = approve(db, _pending(db, decision_id), actor)
-    db.commit()
-    msg = "Schváleno." if ok else detail
-    return RedirectResponse(f"/admin/trideni?ok={quote(msg)}", status_code=303)
+    return _rules_only()
 
 
 @app.post("/admin/trideni/{decision_id}/zamitnout")
 def triage_reject(decision_id: int, request: Request, _=Depends(require_admin), db=Depends(get_db)):
-    from .triage import reject
-    actor = _admin_actor(request) or "admin"
-    reject(db, _pending(db, decision_id), actor)
-    db.commit()
-    return RedirectResponse(f"/admin/trideni?ok={quote('Zamítnuto.')}", status_code=303)
+    return _rules_only()
 
 
 @app.post("/admin/trideni/{decision_id}/kategorie")
 def triage_set_category(decision_id: int, request: Request, kategorie: str = Form(...),
                         _=Depends(require_admin), db=Depends(get_db)):
-    from .triage import approve
-    actor = _admin_actor(request) or "admin"
-    ok, detail = approve(db, _pending(db, decision_id), actor, category=kategorie)
-    db.commit()
-    msg = "Kategorie změněna a schválena." if ok else detail
-    return RedirectResponse(f"/admin/trideni?ok={quote(msg)}", status_code=303)
+    return _rules_only()
 
 
 @app.post("/admin/trideni/mapovat")
 def triage_map(request: Request, shop: str = Form(...), shop_category: str = Form(...),
                kategorie: str = Form(...), _=Depends(require_admin), db=Depends(get_db)):
-    from .triage import map_shop_category
-    actor = _admin_actor(request) or "admin"
-    n = map_shop_category(db, shop, shop_category, kategorie, actor)
-    db.commit()
-    return RedirectResponse(f"/admin/trideni?ok={quote(f'Mapování uloženo, schváleno položek: {n}.')}", status_code=303)
+    return _rules_only()
 
 
 # ---------- O nás, FAQ, kontakt ----------

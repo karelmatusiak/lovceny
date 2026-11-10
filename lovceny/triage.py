@@ -1,8 +1,7 @@
-"""Deterministické třídění: mapování kategorií obchodu, fronta rozhodnutí, zápis po schválení.
+"""Deterministické třídění: mapování kategorií obchodu a záznam rozhodnutí.
 
-Kategorii určuje jen tabulka mapování. Co v ní není, čeká ve frontě bez odhadu z názvu.
-Stejné platné GTIN se připojí samo. Sloučení, odpojení, vyřazení a změna kategorie existujícího
-produktu čekají na /admin/trideni.
+Kategorii určuje jen tabulka mapování. Co v ní není, se na web nedostane.
+Stejné platné GTIN se připojí samo. /admin/trideni je jen záznam, neschvaluje se.
 """
 from __future__ import annotations
 

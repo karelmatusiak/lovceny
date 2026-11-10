@@ -94,7 +94,7 @@ def plan_variant_merges(products: list[Product]) -> list[list[Product]]:
     """Skupiny aktivních produktů, které jsou jeden model. Jednotlivce nevrací."""
     buckets: dict[tuple, list[Product]] = {}
     for product in products:
-        if product.retired_at is not None or product.catalog_hidden or product.needs_review:
+        if product.retired_at is not None or product.catalog_hidden:
             continue
         key = model_family(product.name or "", product.category_slug)
         if key is None:

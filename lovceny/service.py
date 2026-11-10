@@ -234,10 +234,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     from .gtin import normalize_gtin
     from .models import ShopCategoryMapping
     from .shops.feed import canonicalize_name, names_match, offer_conflicts_product, strip_tracking
-    from .triage import (
-        ensure_mappings, queue_category, queue_detach, queue_model_mismatch, queue_title_match,
-        resolve_category,
-    )
+    from .triage import ensure_mappings, resolve_category
 
     shop = get_shop(shop_slug)
     trail = bool(shop and shop.trailing_slash)
@@ -383,11 +380,19 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         return clear_model_conflict(prod.name or "", it.name or label_from_url(clean))
 
     def refuse_attach(prod: Product, it: FeedItem, clean: str) -> None:
-        if queue_model_mismatch(db, shop=shop_slug, product_id=prod.id, item=it, clean_url=clean):
-            stats["queued"] += 1
+        from .auto_resolve import record_auto
+        record_auto(
+            db, kind="model_mismatch", fingerprint=f"mismatch:{shop_slug}:{clean}"[:200],
+            summary=f"Nepřipojovat „{(it.name or '')[:80]}“ k produktu #{prod.id}",
+            reason="Adresa nebo název patří k jinému modelu. Pravidlo nabídku nepřipojí.",
+            outcome="hidden", shop=shop_slug, shop_category=it.category, product_id=prod.id,
+            payload={"url": clean, "name": it.name, "ean": it.ean},
+        )
         stats["skipped_mismatch"] += 1
+        stats["hidden"] = stats.get("hidden", 0) + 1
 
     def propose_detach(offer: Offer, it: FeedItem, clean: str) -> None:
+        from .auto_resolve import record_auto, settle_disputed_offer
         by_url.pop(clean_url(offer.url), None)
         by_url.pop(clean, None)
         if offer.external_id:
@@ -396,13 +401,18 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if clear:
             forget_gtin(clear)
         stamp(offer, it)
-        if queue_detach(
-            db, offer_id=offer.id, product_id=offer.product_id, shop=shop_slug,
-            label=it.name or "", shop_category=it.category, clear_ean=clear,
-            reason="Název nabídky nesedí na produkt. Odpojení čeká na schválení, historie cen zůstane u nabídky.",
-        ):
-            stats["detached"] += 1
-            stats["queued"] += 1
+        result = settle_disputed_offer(db, offer, label=it.name or "", clear_ean=clear, products=products)
+        record_auto(
+            db, kind="detach", fingerprint=f"detach:{offer.id}",
+            summary=f"Odpojit nabídku #{offer.id} od produktu #{offer.product_id}",
+            reason="Název nabídky nesedí. Přesun jen podle GTIN nebo kódu výrobce, jinak se nabídka schová.",
+            outcome="detached" if result == "detached" else "hidden",
+            shop=shop_slug, shop_category=it.category, product_id=offer.product_id, offer_id=offer.id,
+            payload={"label": (it.name or "")[:300], "clear_ean": clear},
+        )
+        stats["detached"] += 1
+        if result == "hidden":
+            stats["hidden"] = stats.get("hidden", 0) + 1
 
     def bind_offer(prod: Product, clean: str, it: FeedItem) -> Offer:
         existing = next((x for x in prod.offers if x.shop == shop_slug), None)
@@ -463,10 +473,16 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 if named is None and res.slug:
                     named = find_by_identity(it.name, res.slug)
                 if named is not None and named.retired_at is None:
-                    if queue_title_match(db, shop=shop_slug, product_id=named.id, item=it,
-                                         clean_url=clean, gtin=None):
-                        stats["queued"] += 1
+                    from .auto_resolve import record_auto
+                    record_auto(
+                        db, kind="title_match", fingerprint=f"title:{shop_slug}:{clean}",
+                        summary=f"Nepřipojovat „{(it.name or '')[:80]}“ k produktu #{named.id}",
+                        reason="Shoda jen podle názvu. Nabídka se nepřipojuje a zůstane mimo katalog.",
+                        outcome="hidden", shop=shop_slug, shop_category=it.category, product_id=named.id,
+                        payload={"url": clean, "name": it.name},
+                    )
                     stats["skipped"] += 1
+                    stats["hidden"] = stats.get("hidden", 0) + 1
                     continue
             if prod is not None:
                 o = bind_offer(prod, clean, it)
@@ -499,13 +515,15 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                     by_canon[key] = None if key in by_canon else prod
                 fresh = True
                 if hidden:
-                    kind = "unmapped_category"
-                    reason = "Kategorie obchodu není v mapování."
-                    if queue_category(
-                        db, kind=kind, product_id=prod.id, shop=shop_slug, shop_category=it.category,
-                        proposed=res.slug, summary=f"Zařadit „{it.name[:80]}“ ({reason})", reason=reason,
-                    ):
-                        stats["queued"] += 1
+                    from .auto_resolve import record_auto
+                    prod.needs_review = True
+                    record_auto(
+                        db, kind="unmapped_category", fingerprint=f"unmapped_category:{prod.id}:none",
+                        summary=f"Skrýt „{(it.name or '')[:80]}“",
+                        reason="Kategorie obchodu není v mapování. Produkt zůstane mimo web.",
+                        outcome="hidden", shop=shop_slug, shop_category=it.category, product_id=prod.id,
+                    )
+                    stats["hidden"] = stats.get("hidden", 0) + 1
                     held += 1
                 else:
                     created += 1
@@ -530,28 +548,21 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         assign_ean(o.product, it.ean)
         stamp(o, it)
         _assign_image(o.product, it.image)
-        if not fresh and res.slug and o.product.category_slug != res.slug and res.action == "high":
-            kind = "recategorize"
-            reason = "Mapování kategorie obchodu. U existujícího produktu se samo nezapíše."
-            if queue_category(
-                db, kind=kind, product_id=o.product.id, shop=shop_slug, shop_category=it.category,
-                proposed=res.slug,
-                summary=f"Kategorie produktu #{o.product.id}: {o.product.category_slug or 'bez'} → {res.slug}",
-                reason=reason,
-            ):
-                stats["queued"] += 1
-        elif not fresh and res.action == "unmapped" and (it.category or "").strip() and not o.product.category_slug:
-            if queue_category(
-                db, kind="unmapped_category", product_id=o.product.id, shop=shop_slug,
-                shop_category=it.category, proposed=None,
-                summary=f"Nemáme mapování kategorie obchodu u produktu #{o.product.id}",
-                reason="Cesta kategorie obchodu není v tabulce mapování.",
-            ):
-                stats["queued"] += 1
-        elif o.product.category_slug and o.product.category and "|" in o.product.category:
+        if o.product.category_slug and o.product.category and "|" in o.product.category:
             o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
         remember_gtin(o.gtin, o.product, o)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
+        from .categories import is_accessory_text
+        if not fresh and res.action == "high" and res.slug in BY_SLUG and not is_accessory_text(o.product.name or ""):
+            if o.product.category_slug != res.slug:
+                o.product.category_slug = res.slug
+                o.product.category = BY_SLUG[res.slug].name
+            if o.product.catalog_hidden or o.product.needs_review:
+                from .auto_resolve import apply_listing
+                apply_listing(db, o.product)
+        elif not fresh and res.action == "unmapped" and (it.category or "").strip() and not o.product.category_slug:
+            o.product.needs_review = True
+            o.product.catalog_hidden = True
     # Celý feed je jeden pohled na obchod: každá jeho nabídka byla na řadě,
     # i ta, která v souboru chyběla. Rotující scrape (Mironet) sem nepatří.
     from .offer_trust import note_offer_due
@@ -638,8 +649,9 @@ def cleanup_watches(db: Session, now: datetime | None = None) -> dict:
 def search_db(db: Session, q: str, limit: int = 30) -> list[Product]:
     from sqlalchemy import or_
     from sqlalchemy.orm import selectinload
-    stmt = (select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
-            .options(selectinload(Product.offers)))
+    stmt = (select(Product).where(
+        Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False),
+    ).options(selectinload(Product.offers)))
     for t in q.split():
         stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
     return list(db.scalars(stmt.limit(limit)).all())
@@ -652,7 +664,8 @@ def search_feed_offers(db: Session, q: str, limit: int = 30):
     feed_slugs = [s.slug for s in SHOPS.values() if s.source == "feed"]
     stmt = select(Offer).join(Product).where(
         Offer.shop.in_(feed_slugs), Offer.price.is_not(None), Product.retired_at.is_(None),
-        Product.catalog_hidden.is_(False))
+        Product.catalog_hidden.is_(False), Product.needs_review.is_(False),
+        Offer.withheld.is_(False))
     for t in q.split():
         stmt = stmt.where(Product.name.ilike(f"%{t}%"))
     return [SearchHit(o.shop, o.product.name, float(o.price), get_shop(o.shop).affiliate_link(o.url),
