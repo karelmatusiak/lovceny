@@ -52,13 +52,30 @@ class Offer(Base):
     last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Poslední úspěšně zapsaná cena (ne blokace). NULL u starých řádků = last_checked, pokud status je ok.
     last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Varianta modelu (barva, paměť). NULL = ještě nepřiřazeno.
+    variant_id: Mapped[int | None] = mapped_column(ForeignKey("variants.id"), nullable=True, index=True)
     # Poslední dva běhy, ve kterých tahle nabídka byla na řadě (ne celý obchod).
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     due_prev: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     product: Mapped[Product] = relationship(back_populates="offers")
+    variant: Mapped["Variant | None"] = relationship(back_populates="offers")
     points: Mapped[list["PricePoint"]] = relationship(back_populates="offer", cascade="all, delete-orphan",
                                                       order_by="PricePoint.captured_at")
     __table_args__ = (Index("ix_offers_last_checked", "last_checked"),)
+
+
+class Variant(Base):
+    """Barva nebo konfigurace jedné stránky modelu. source_product_id je původní produkt."""
+    __tablename__ = "variants"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    source_product_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    signature: Mapped[str] = mapped_column(String(200))
+    label: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    product: Mapped[Product] = relationship()
+    offers: Mapped[list["Offer"]] = relationship(back_populates="variant")
+    __table_args__ = (UniqueConstraint("product_id", "signature", name="ux_variant_signature"),)
 
 
 class PricePoint(Base):

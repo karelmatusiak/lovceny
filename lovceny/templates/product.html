@@ -11,7 +11,7 @@
     <div class="p-info">
       <div class="p-head">
         <div class="p-img p-hero">{% if p.image_url %}{{ shop_img(p.image_url, 400, priority=true, sizes="(max-width: 560px) min(320px, calc(100vw - 62px)), 120px", box=320) }}{% else %}{{ img_missing() }}{% endif %}</div>
-        <div class="p-title"><h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>{% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}<div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
+        <div class="p-title"><h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>{% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}{% if variants %}<p class="p-cat">Varianty: {% for v in variants %}<span class="offer-best-tag">{{ v.label }}</span> {% endfor %}</p>{% endif %}<div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
       </div>
       <div class="price-row">
         {% if best %}<span class="price">{{ best.price|czk }}</span>
@@ -63,7 +63,7 @@
         {% set is_best = best and o.id == best.id %}
         {% set note = offer_notes.get(o.id) if offer_notes is defined else none %}
         <div class="offer{% if is_best %} offer-best{% endif %}{% if note %} offer-unverified{% elif is_oos %} offer-oos{% endif %}">
-          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if is_best %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
+          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if variant_labels and o.variant_id %} · {{ variant_labels[o.variant_id] }}{% endif %}{% if is_best %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
             <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span class="stock-oos">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span class="offer-quiet">Připravujeme cenu{% if s.source=='feed' %} z feedu{% endif %}</span>
             {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>

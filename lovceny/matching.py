@@ -308,6 +308,30 @@ def model_identity(name: str, category: str | None) -> tuple | None:
     return (category, brand, tokens, sig)
 
 
+def model_family(name: str, category: str | None) -> tuple | None:
+    """Stejný model bez barvy, úložiště a operační paměti.
+
+    iPhone 15 128GB černá a iPhone 15 256GB bílá jsou jedna rodina.
+    iPhone 15 a iPhone 15 Pro ne. 55\" a 65\" televize ne. Příslušenství ne.
+    """
+    key = model_identity(name, category)
+    if not key:
+        return None
+    cat, brand, tokens, sig = key
+    from .shops.feed import _COLOR_CANON
+    colors = set(_COLOR_CANON.values())
+    kept = []
+    for token in tokens:
+        if token in colors or re.fullmatch(r"\d+(?:gb|tb)", token):
+            continue
+        kept.append(token)
+    tokens = tuple(kept)
+    if not _tokens_strong(tokens):
+        return None
+    sig = tuple((k, v) for k, v in sig if k not in ("storage", "ram"))
+    return (cat, brand, tokens, sig)
+
+
 def model_identity_loose_color(name: str, category: str | None) -> tuple | None:
     """Jako model_identity, ale bez barvy – na srovnání dvojice, kde barvu má jen jeden."""
     key = model_identity(name, category)
