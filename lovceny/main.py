@@ -14,7 +14,7 @@ from sqlalchemy import select, func, or_
 
 from .db import SessionLocal, init_db
 from .models import Product, Offer, PricePoint, Watch, PushSubscription
-from .categories import CATEGORIES, BY_SLUG, classify, is_accessory_text
+from .categories import CATEGORIES, BY_SLUG, is_accessory_text
 from . import push as pushmod
 from . import seo
 from .web import static_url, canonical, public_url, CacheHeadersMiddleware, add_compression, AnalyticsMiddleware
@@ -247,7 +247,7 @@ def _slevy_promo(rows):
 def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     """Karty produktů s aspoň jednou cenou – bez ceny do výpisů nepatří."""
     from sqlalchemy.orm import selectinload
-    q = (select(Product).where(Product.retired_at.is_(None))
+    q = (select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
          .options(selectinload(Product.offers).selectinload(Offer.points)))
     if order == "watched":
         watched_ids = [r[0] for r in db.execute(
@@ -326,7 +326,7 @@ def home(request: Request, db=Depends(get_db)):
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     cat_counts = dict(db.execute(
         select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None))
+        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
         .group_by(Product.category_slug)).all())
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
@@ -521,7 +521,7 @@ def preview(request: Request, url: str = "", db=Depends(get_db)):
 @app.api_route("/produkt/{pid:int}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str = "", db=Depends(get_db)):
     p = db.get(Product, pid)
-    if not p:
+    if not p or p.catalog_hidden:
         raise HTTPException(404)
     # Soft-retired: 301 na kategorii (nebo /), ať staré URL nepřijdou o SEO/uživatele.
     if p.retired_at is not None:
@@ -835,10 +835,9 @@ def _cat_rows(db, c):
             p = by_id.get(pid)
             if not p or p.retired_at is not None:
                 continue
-            if is_accessory_text(p.name or "", p.category):
+            if p.catalog_hidden:
                 continue
-            guessed = classify(p.name or "")
-            if guessed and guessed != c.slug:
+            if is_accessory_text(p.name or "", p.category):
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
             if best is None:
@@ -850,15 +849,15 @@ def _cat_rows(db, c):
         return out
 
     products = db.scalars(select(Product).where(
-        Product.category_slug == c.slug, Product.retired_at.is_(None))
+        Product.category_slug == c.slug, Product.retired_at.is_(None),
+        Product.catalog_hidden.is_(False))
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     rows = []
     payload = []
     for p in products:
+        # Výpis je to, co ukazuje stránka produktu (category_slug). classify() z názvu
+        # sem nepatří: 6,67" u telefonu a „for Xbox“ u sluchátek by je z kategorie vyřadily.
         if is_accessory_text(p.name or "", p.category):
-            continue
-        guessed = classify(p.name or "")
-        if guessed and guessed != c.slug:
             continue
         buyable, v = product_summary(p)
         # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.
@@ -953,7 +952,7 @@ CAT_VIEWS = {
 def categories_index(request: Request, db=Depends(get_db)):
     counts = dict(db.execute(
         select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None))
+        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
         .group_by(Product.category_slug)).all())
     crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
     return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
@@ -1118,26 +1117,46 @@ def status_page(request: Request, db=Depends(get_db)):
         "crumbs": [("Lovceny", "/"), ("Stav obchodů", "/stav")]})
 
 
-# ---------- Admin (analytika, zprávy) ----------
-def require_admin(request: Request):
+# ---------- Admin (analytika, zprávy, třídění) ----------
+_ADMIN_HEADERS = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
+_ADMIN_AUTH = {"WWW-Authenticate": 'Basic realm="Lovceny admin", charset="UTF-8"'}
+
+
+def _admin_presented(request: Request) -> tuple[str, str]:
+    """(kdo, tajemství) z Basic, Bearer nebo cookie. Token v URL se nebere."""
     import base64
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("basic "):
+        try:
+            raw = base64.b64decode(auth[6:]).decode("utf-8", "replace")
+        except ValueError:
+            return "", ""
+        user, _, password = raw.partition(":")
+        return (user or "basic")[:80], password
+    if auth.lower().startswith("bearer "):
+        return "bearer", auth[7:].strip()
+    cookie = request.cookies.get("lovceny_admin", "")
+    if cookie:
+        return "cookie", cookie
+    return "", ""
+
+
+def _admin_actor(request: Request) -> str | None:
     import hmac
     import os
     token = os.environ.get("ADMIN_TOKEN", "")
     if len(token) < 16:  # nenastavený / slabý token → admin neexistuje
         raise HTTPException(404)
-    auth = request.headers.get("authorization", "")
-    given = ""
-    if auth.lower().startswith("basic "):
-        try:
-            given = base64.b64decode(auth[6:]).decode("utf-8", "replace").partition(":")[2]
-        except ValueError:
-            given = ""
-    elif auth.lower().startswith("bearer "):
-        given = auth[7:].strip()
-    if not hmac.compare_digest(given.encode(), token.encode()):
-        raise HTTPException(401, "Přihlášení vyžadováno", headers={"WWW-Authenticate": 'Basic realm="Lovceny admin", charset="UTF-8"'})
-    return True
+    actor, given = _admin_presented(request)
+    if given and hmac.compare_digest(given.encode(), token.encode()):
+        return actor
+    return None
+
+
+def require_admin(request: Request):
+    if _admin_actor(request):
+        return True
+    raise HTTPException(401, "Přihlášení vyžadováno", headers=_ADMIN_AUTH)
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -1147,7 +1166,157 @@ def admin(request: Request, dni: int = 30, _=Depends(require_admin), db=Depends(
     rep = analytics.report(db, days=dni)
     msgs = db.scalars(select(ContactMessage).order_by(ContactMessage.created_at.desc()).limit(50)).all()
     return tpl.TemplateResponse(request, "admin.html", {"r": rep, "msgs": msgs, "dni": dni, "noindex": True},
-                                headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
+                                headers=_ADMIN_HEADERS)
+
+
+def _triage_groups(db):
+    from .models import TriageDecision
+    from .triage import CATEGORY_KINDS, category_label, ensure_mappings, path_key
+    ensure_mappings(db)
+    rows = list(db.scalars(select(TriageDecision).where(TriageDecision.status == "pending")
+                           .order_by(TriageDecision.id)).all())
+    pids = {i for d in rows for i in (d.product_id, d.other_product_id) if i}
+    oids = {d.offer_id for d in rows if d.offer_id}
+    products = {p.id: p for p in db.scalars(select(Product).where(Product.id.in_(pids))).all()} if pids else {}
+    offers = {o.id: o for o in db.scalars(select(Offer).where(Offer.id.in_(oids))).all()} if oids else {}
+    views = []
+    for d in rows:
+        p = products.get(d.product_id)
+        other = products.get(d.other_product_id)
+        offer = offers.get(d.offer_id)
+        views.append({
+            "d": d, "product": p, "other": other, "offer": offer,
+            "proposed": category_label(d.proposed_category) if d.proposed_category else "",
+            "path_key": path_key(d.shop_category or ""),
+        })
+    specs = (
+        ("Kategorie", CATEGORY_KINDS),
+        ("Shoda podle názvu", frozenset({"title_match"})),
+        ("Sloučení", frozenset({"merge"})),
+        ("Odpojení a přesun", frozenset({"detach", "reattach"})),
+        ("Vyřazení", frozenset({"retire"})),
+    )
+    used = set()
+    groups = []
+    for title, kinds in specs:
+        items = [v for v in views if v["d"].kind in kinds]
+        used.update(id(v["d"]) for v in items)
+        buckets = []
+        if title == "Kategorie":
+            order = []
+            by = {}
+            for v in items:
+                key = (v["d"].shop or "", v["path_key"])
+                if key not in by:
+                    order.append(key)
+                    by[key] = []
+                by[key].append(v)
+            for key in order:
+                buckets.append({
+                    "shop": key[0], "path_key": key[1],
+                    "shop_category": by[key][0]["d"].shop_category or "",
+                    "items": by[key], "bulk": bool(key[0] and key[1]),
+                })
+        else:
+            buckets.append({"items": items, "bulk": False, "shop": "", "shop_category": "", "path_key": ""})
+        groups.append({"title": title, "count": len(items), "buckets": buckets})
+    rest = [v for v in views if id(v["d"]) not in used]
+    if rest:
+        groups.append({"title": "Ostatní", "count": len(rest),
+                       "buckets": [{"items": rest, "bulk": False, "shop": "", "shop_category": "", "path_key": ""}]})
+    return groups
+
+
+def _triage_targets():
+    return [(c.slug, c.name) for c in CATEGORIES] + [
+        ("accessory", "Příslušenství (není hlavní produkt)"),
+        ("ignore", "Ignorovat"),
+    ]
+
+
+@app.get("/admin/trideni", response_class=HTMLResponse)
+def triage_page(request: Request, ok: str = "", db=Depends(get_db)):
+    actor = _admin_actor(request)
+    headers = {**_ADMIN_HEADERS, **_ADMIN_AUTH}
+    if not actor:
+        return tpl.TemplateResponse(request, "admin_trideni.html", {
+            "login": True, "noindex": True, "groups": [], "targets": [], "seeded": 0, "ok": "",
+        }, status_code=401, headers=headers)
+    from .models import ShopCategoryMapping
+    from sqlalchemy import func
+    from .triage import ensure_mappings
+    seeded = ensure_mappings(db)
+    db.commit()
+    n = db.scalar(select(func.count()).select_from(ShopCategoryMapping).where(ShopCategoryMapping.source == "seed")) or 0
+    return tpl.TemplateResponse(request, "admin_trideni.html", {
+        "login": False, "noindex": True, "groups": _triage_groups(db), "targets": _triage_targets(),
+        "seeded": n or seeded, "ok": ok, "actor": actor,
+    }, headers=_ADMIN_HEADERS)
+
+
+@app.post("/admin/trideni/prihlaseni")
+def triage_login(request: Request, heslo: str = Form("")):
+    import hmac
+    import os
+    token = os.environ.get("ADMIN_TOKEN", "")
+    if len(token) < 16:
+        raise HTTPException(404)
+    if not heslo or not hmac.compare_digest(heslo.encode(), token.encode()):
+        raise HTTPException(401, "Přihlášení vyžadováno", headers=_ADMIN_AUTH)
+    secure = (request.url.scheme == "https"
+              or request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower() == "https")
+    resp = RedirectResponse("/admin/trideni", status_code=303)
+    resp.set_cookie("lovceny_admin", token, httponly=True, secure=secure, samesite="lax",
+                    max_age=12 * 3600, path="/admin")
+    return resp
+
+
+def _pending(db, decision_id: int):
+    from .models import TriageDecision
+    row = db.get(TriageDecision, decision_id)
+    if row is None or row.status != "pending":
+        raise HTTPException(404)
+    return row
+
+
+@app.post("/admin/trideni/{decision_id}/schvalit")
+def triage_approve(decision_id: int, request: Request, _=Depends(require_admin), db=Depends(get_db)):
+    from .triage import approve
+    actor = _admin_actor(request) or "admin"
+    ok, detail = approve(db, _pending(db, decision_id), actor)
+    db.commit()
+    msg = "Schváleno." if ok else detail
+    return RedirectResponse(f"/admin/trideni?ok={quote(msg)}", status_code=303)
+
+
+@app.post("/admin/trideni/{decision_id}/zamitnout")
+def triage_reject(decision_id: int, request: Request, _=Depends(require_admin), db=Depends(get_db)):
+    from .triage import reject
+    actor = _admin_actor(request) or "admin"
+    reject(db, _pending(db, decision_id), actor)
+    db.commit()
+    return RedirectResponse(f"/admin/trideni?ok={quote('Zamítnuto.')}", status_code=303)
+
+
+@app.post("/admin/trideni/{decision_id}/kategorie")
+def triage_set_category(decision_id: int, request: Request, kategorie: str = Form(...),
+                        _=Depends(require_admin), db=Depends(get_db)):
+    from .triage import approve
+    actor = _admin_actor(request) or "admin"
+    ok, detail = approve(db, _pending(db, decision_id), actor, category=kategorie)
+    db.commit()
+    msg = "Kategorie změněna a schválena." if ok else detail
+    return RedirectResponse(f"/admin/trideni?ok={quote(msg)}", status_code=303)
+
+
+@app.post("/admin/trideni/mapovat")
+def triage_map(request: Request, shop: str = Form(...), shop_category: str = Form(...),
+               kategorie: str = Form(...), _=Depends(require_admin), db=Depends(get_db)):
+    from .triage import map_shop_category
+    actor = _admin_actor(request) or "admin"
+    n = map_shop_category(db, shop, shop_category, kategorie, actor)
+    db.commit()
+    return RedirectResponse(f"/admin/trideni?ok={quote(f'Mapování uloženo, schváleno položek: {n}.')}", status_code=303)
 
 
 # ---------- O nás, FAQ, kontakt ----------

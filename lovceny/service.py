@@ -207,11 +207,18 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                max_create: int | None = None) -> dict:
     """Spáruje položky feedu s nabídkami a zapíše ceny.
 
-    Párování: URL → ITEM_ID → EAN nabídky obchodu → EAN produktu → konzervativní shoda názvu
-    (barvy CZ↔EN, kapacita, varianta, MPN). create_missing jen když žádná shoda.
+    Párování: URL → ITEM_ID → platné GTIN (vysoká jistota). Shoda jen podle názvu
+    jde do fronty /admin/trideni. Kategorie z mapování obchodu; odhad z názvu je nízká jistota.
     """
+    from sqlalchemy import select as sa_select
+
+    from .categories import BY_SLUG
+    from .gtin import normalize_gtin
+    from .models import ShopCategoryMapping
     from .shops.feed import canonicalize_name, names_match, offer_conflicts_product, strip_tracking
-    from .categories import BY_SLUG, accept_feed_item, classify, is_accessory_text
+    from .triage import (
+        ensure_mappings, queue_category, queue_detach, queue_title_match, resolve_category,
+    )
 
     shop = get_shop(shop_slug)
     trail = bool(shop and shop.trailing_slash)
@@ -223,19 +230,30 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             return shop.canonical_url(u)
         return u
 
-    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0, "detached": 0, "reattached": 0, "skipped_mismatch": 0}
+    stats = {"matched": 0, "created": 0, "attached": 0, "skipped": 0, "skipped_accessory": 0,
+             "detached": 0, "reattached": 0, "skipped_mismatch": 0, "queued": 0}
+    ensure_mappings(db)
+    map_rows = list(db.scalars(sa_select(ShopCategoryMapping).where(ShopCategoryMapping.shop == shop_slug)).all())
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
     by_url = {clean_url(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
-    by_ean_offer = {o.product.ean: o for o in offers if o.product.ean}
     products = list(db.scalars(select(Product)).all())
-    by_ean_prod: dict[str, Product] = {}
+    by_gtin: dict[str, Product] = {}
+    by_gtin_offer: dict[str, Offer] = {}
+
+    def remember_gtin(g: str | None, prod: Product, offer: Offer | None = None) -> None:
+        if not g:
+            return
+        prev = by_gtin.get(g)
+        if prev is None or (prev.retired_at is not None and prod.retired_at is None):
+            by_gtin[g] = prod
+        if offer is not None and g not in by_gtin_offer:
+            by_gtin_offer[g] = offer
+
     for p in products:
-        if not p.ean:
-            continue
-        prev = by_ean_prod.get(p.ean)
-        if prev is None or (prev.retired_at is not None and p.retired_at is None):
-            by_ean_prod[p.ean] = p
+        remember_gtin(normalize_gtin(p.ean), p)
+    for o in offers:
+        remember_gtin(o.gtin or normalize_gtin(o.product.ean), o.product, o)
     # kanonický název → produkt; kolize = None (nepárovat)
     by_canon: dict[str, Product | None] = {}
     for p in products:
@@ -292,94 +310,115 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             return None
         return min(hits, key=lambda p: p.id)
 
-    def clean_category_label(name: str, feed_cat: str | None) -> tuple[str | None, str | None]:
-        """(category_slug, lidský label) – nikdy surový Heureka CATEGORYTEXT."""
-        slug = classify(name, feed_cat)
-        label = BY_SLUG[slug].name if slug and slug in BY_SLUG else None
-        return slug, label
+    def stamp(offer: Offer, it: FeedItem) -> str | None:
+        if it.category:
+            offer.shop_category = it.category
+        g = normalize_gtin(it.ean)
+        if g:
+            offer.gtin = g
+        return g
 
+    def assign_ean(product: Product, raw: str | None) -> None:
+        if product.ean or not raw:
+            return
+        product.ean = normalize_gtin(raw) or raw
+
+    def forget_gtin(raw: str | None) -> None:
+        g = normalize_gtin(raw)
+        if g:
+            by_gtin.pop(g, None)
+            by_gtin_offer.pop(g, None)
+
+    def propose_detach(offer: Offer, it: FeedItem, clean: str) -> None:
+        by_url.pop(clean_url(offer.url), None)
+        by_url.pop(clean, None)
+        if offer.external_id:
+            by_id.pop(offer.external_id, None)
+        clear = it.ean if offer.product.ean and it.ean and offer.product.ean == it.ean else None
+        if clear:
+            forget_gtin(clear)
+        stamp(offer, it)
+        if queue_detach(
+            db, offer_id=offer.id, product_id=offer.product_id, shop=shop_slug,
+            label=it.name or "", shop_category=it.category, clear_ean=clear,
+            reason="Název nabídky nesedí na produkt. Odpojení čeká na schválení, historie cen zůstane u nabídky.",
+        ):
+            stats["detached"] += 1
+            stats["queued"] += 1
+
+    def bind_offer(prod: Product, clean: str, it: FeedItem) -> Offer:
+        existing = next((x for x in prod.offers if x.shop == shop_slug), None)
+        if existing is not None:
+            by_url[clean] = existing
+            stats["matched"] += 1
+            return existing
+        offer = Offer(product=prod, shop=shop_slug, url=clean)
+        db.add(offer)
+        db.flush()
+        prod.offers.append(offer)
+        by_url[clean] = offer
+        if it.item_id:
+            by_id[it.item_id] = offer
+        g = stamp(offer, it)
+        remember_gtin(g or normalize_gtin(prod.ean), prod, offer)
+        stats["attached"] += 1
+        return offer
+
+    held = 0
     created = 0
     for it in items:
-        # Příslušenství / náhradní díly nikdy nepřipojovat ani nevytvářet (filtr ≠ vysavač).
-        if is_accessory_text(it.name, it.category):
+        res = resolve_category(db, shop_slug, it.name, it.category, it.price, url=it.url, rows=map_rows)
+        # Příslušenství / explicitní mapování accessory se jako hlavní produkt nezaloží.
+        if res.action == "accessory":
             stats["skipped_accessory"] += 1
             continue
         clean = clean_url(it.url)
+        gtin = normalize_gtin(it.ean)
         o = by_url.get(clean) or by_id.get(it.item_id)
-        # EAN/name soft-match jen když položka projde whitelist + min. cenou
-        accepted = accept_feed_item(it.name, it.category, it.price, url=it.url)
-        # Historicky špatně soft-matchnuté desturl (AirPods→iPhone): odpoj / přesuň
+        fresh = False
         if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
-            correct = find_by_name(it.name) if accepted else None
-            # vyhoď z indexů před přesunem/smazáním
-            by_url.pop(clean_url(o.url), None)
-            if o.external_id:
-                by_id.pop(o.external_id, None)
-            # otrávené EAN z chybného soft-match (LG TV ← ASUS EAN)
-            if o.product.ean and it.ean and o.product.ean == it.ean and (
-                correct is None or correct.id != o.product_id
-            ):
-                by_ean_prod.pop(it.ean, None)
-                by_ean_offer.pop(it.ean, None)
-                o.product.ean = None
-            if correct is not None and correct.id != o.product_id:
-                other = next((x for x in correct.offers if x.shop == shop_slug and x.id != o.id), None)
-                if other is not None:
-                    db.delete(o)
-                    o = other
-                    stats["detached"] += 1
-                else:
-                    o.product = correct
-                    stats["reattached"] += 1
-            else:
-                db.delete(o)
-                o = None
-                stats["detached"] += 1
-            if o is not None:
-                by_url[clean] = o
-                if o.external_id:
-                    by_id[o.external_id] = o
-        if o is None and accepted:
-            o = by_ean_offer.get(it.ean) if it.ean else None
-            # EAN na nabídce jiného produktu, ale názvy kolidují → nevěřit EAN
-            if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
+            propose_detach(o, it, clean)
+            continue
+        blocked = False
+        if o is None and gtin and not blocked:
+            shop_offer = by_gtin_offer.get(gtin)
+            if shop_offer is not None and it.name and offer_conflicts_product(shop_offer.product.name, clean, it.name):
                 stats["skipped_mismatch"] += 1
-                o = None
-        if o is None:
-            if not accepted:
-                stats["skipped"] += 1
-                continue
-            prod = follow_redirect(by_ean_prod.get(it.ean)) if it.ean else None
-            # EAN v katalogu nesmí přebít jasný konflikt názvů (LG TV ← ASUS monitor, 1550 W ← 1360 W)
+                blocked = True
+            elif shop_offer is not None:
+                o = shop_offer
+        if o is None and not blocked:
+            prod = follow_redirect(by_gtin.get(gtin)) if gtin else None
             if prod is not None and it.name and offer_conflicts_product(prod.name, clean, it.name):
                 stats["skipped_mismatch"] += 1
                 prod = None
-            if prod is None:
-                prod = find_by_name(it.name)
-            if prod is None:
-                prod = find_by_identity(it.name, accepted if isinstance(accepted, str) else None)
+                blocked = True
+            if prod is None and not gtin and not blocked:
+                named = find_by_name(it.name)
+                if named is None and res.slug:
+                    named = find_by_identity(it.name, res.slug)
+                if named is not None and named.retired_at is None:
+                    if queue_title_match(db, shop=shop_slug, product_id=named.id, item=it,
+                                         clean_url=clean, gtin=None):
+                        stats["queued"] += 1
+                    stats["skipped"] += 1
+                    continue
             if prod is not None:
-                # už má tento obchod nabídku na produktu? pak aktualizuj tu
-                existing = next((x for x in prod.offers if x.shop == shop_slug), None)
-                if existing is not None:
-                    o = existing
-                    by_url[clean] = o
-                    stats["matched"] += 1
-                else:
-                    o = Offer(product=prod, shop=shop_slug, url=clean)
-                    db.add(o)
-                    db.flush()
-                    by_url[clean] = o
-                    if it.item_id:
-                        by_id[it.item_id] = o
-                    if prod.ean:
-                        by_ean_offer[prod.ean] = o
-                    stats["attached"] += 1
-            elif create_missing and accepted and (max_create is None or created < max_create):
-                cat_slug = accepted
-                cat_label = BY_SLUG[cat_slug].name if cat_slug in BY_SLUG else None
-                prod = Product(name=it.name, slug=slugify(it.name), ean=it.ean,
-                               category=cat_label, category_slug=cat_slug)
+                o = bind_offer(prod, clean, it)
+            elif blocked or res.action == "skip":
+                stats["skipped"] += 1
+                continue
+            elif create_missing and res.action in ("high", "low", "unmapped") and (
+                max_create is None or created + held < max_create
+            ):
+                hidden = res.action != "high"
+                cat_slug = res.slug if res.action == "high" else None
+                cat_label = BY_SLUG[cat_slug].name if cat_slug and cat_slug in BY_SLUG else None
+                prod = Product(
+                    name=it.name, slug=slugify(it.name), category=cat_label, category_slug=cat_slug,
+                    catalog_hidden=hidden,
+                )
+                assign_ean(prod, it.ean)
                 _assign_image(prod, it.image)
                 o = Offer(product=prod, shop=shop_slug, url=clean)
                 db.add(o)
@@ -388,47 +427,67 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 by_url[clean] = o
                 if it.item_id:
                     by_id[it.item_id] = o
-                if it.ean:
-                    by_ean_prod[it.ean] = prod
-                    by_ean_offer[it.ean] = o
-                by_canon[canonicalize_name(it.name)] = prod
-                created += 1
-                stats["created"] += 1
+                g = stamp(o, it)
+                remember_gtin(g or normalize_gtin(prod.ean), prod, o)
+                key = canonicalize_name(it.name)
+                if key:
+                    by_canon[key] = None if key in by_canon else prod
+                fresh = True
+                if hidden:
+                    kind = "fallback_category" if res.action == "low" else "unmapped_category"
+                    reason = ("Kategorie je jen odhad z názvu." if res.action == "low"
+                              else "Kategorie obchodu není v mapování.")
+                    if queue_category(
+                        db, kind=kind, product_id=prod.id, shop=shop_slug, shop_category=it.category,
+                        proposed=res.slug, summary=f"Zařadit „{it.name[:80]}“ ({reason})", reason=reason,
+                    ):
+                        stats["queued"] += 1
+                    held += 1
+                else:
+                    created += 1
+                    stats["created"] += 1
             else:
                 stats["skipped"] += 1
                 continue
-        else:
+        elif o is not None and not fresh:
             stats["matched"] += 1
+        if o is None:
+            continue
         if it.name and offer_conflicts_product(o.product.name, clean, it.name):
-            # Nenechávat špatný desturl – odpoj (případně vyčisti EAN z feedu)
-            by_url.pop(clean_url(o.url), None)
-            by_url.pop(clean, None)
-            if o.external_id:
-                by_id.pop(o.external_id, None)
-            if o.product.ean and it.ean and o.product.ean == it.ean:
-                o.product.ean = None
-                by_ean_prod.pop(it.ean, None)
-                by_ean_offer.pop(it.ean, None)
-            db.delete(o)
-            stats["detached"] += 1
+            propose_detach(o, it, clean)
             stats["skipped_mismatch"] += 1
             continue
         if o.product.retired_at is not None:
-            o.product.retired_at = None  # feed znovu nabízí → vrať do katalogu
-        o.url = clean  # sjednotit bez UTM
+            o.product.retired_at = None
+        o.url = clean
         o.external_id = it.item_id or o.external_id
         if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
             o.product.name, o.product.slug = it.name, slugify(it.name)
-        o.product.ean = o.product.ean or it.ean
+        assign_ean(o.product, it.ean)
+        stamp(o, it)
         _assign_image(o.product, it.image)
-        if not o.product.category_slug:
-            slug, label = clean_category_label(o.product.name, it.category)
-            o.product.category_slug = slug
-            if not o.product.category or "|" in (o.product.category or ""):
-                o.product.category = label
-        elif o.product.category and "|" in o.product.category:
-            # oprav surový Heureka path z dřívějších importů
+        if not fresh and res.slug and o.product.category_slug != res.slug and res.action in ("high", "low"):
+            kind = "recategorize" if res.action == "high" else "fallback_category"
+            reason = ("Mapování kategorie obchodu. U existujícího produktu se samo nezapíše."
+                      if res.action == "high" else "Odhad kategorie z názvu, nízká jistota.")
+            if queue_category(
+                db, kind=kind, product_id=o.product.id, shop=shop_slug, shop_category=it.category,
+                proposed=res.slug,
+                summary=f"Kategorie produktu #{o.product.id}: {o.product.category_slug or 'bez'} → {res.slug}",
+                reason=reason,
+            ):
+                stats["queued"] += 1
+        elif not fresh and res.action == "unmapped" and (it.category or "").strip() and not o.product.category_slug:
+            if queue_category(
+                db, kind="unmapped_category", product_id=o.product.id, shop=shop_slug,
+                shop_category=it.category, proposed=None,
+                summary=f"Nemáme mapování kategorie obchodu u produktu #{o.product.id}",
+                reason="Cesta kategorie obchodu není v tabulce mapování.",
+            ):
+                stats["queued"] += 1
+        elif o.product.category_slug and o.product.category and "|" in o.product.category:
             o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
+        remember_gtin(o.gtin, o.product, o)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
     db.commit()
     return stats
@@ -510,7 +569,7 @@ def cleanup_watches(db: Session, now: datetime | None = None) -> dict:
 def search_db(db: Session, q: str, limit: int = 30) -> list[Product]:
     from sqlalchemy import or_
     from sqlalchemy.orm import selectinload
-    stmt = (select(Product).where(Product.retired_at.is_(None))
+    stmt = (select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
             .options(selectinload(Product.offers)))
     for t in q.split():
         stmt = stmt.where(or_(Product.name.ilike(f"%{t}%"), Product.ean == t))
@@ -523,7 +582,8 @@ def search_feed_offers(db: Session, q: str, limit: int = 30):
     from .shops.search import SearchHit
     feed_slugs = [s.slug for s in SHOPS.values() if s.source == "feed"]
     stmt = select(Offer).join(Product).where(
-        Offer.shop.in_(feed_slugs), Offer.price.is_not(None), Product.retired_at.is_(None))
+        Offer.shop.in_(feed_slugs), Offer.price.is_not(None), Product.retired_at.is_(None),
+        Product.catalog_hidden.is_(False))
     for t in q.split():
         stmt = stmt.where(Product.name.ilike(f"%{t}%"))
     return [SearchHit(o.shop, o.product.name, float(o.price), get_shop(o.shop).affiliate_link(o.url),

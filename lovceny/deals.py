@@ -130,7 +130,7 @@ def _points_for(p: Product, allow_demo: bool) -> tuple[list, bool]:
 def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 500) -> list[DealRow]:
     allow = include_demo() if allow_demo is None else allow_demo
     products = db.scalars(
-        select(Product).where(Product.retired_at.is_(None))
+        select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
         .order_by(Product.created_at.desc()).limit(limit_products)
     ).all()
     offers_by = load_offers_for(db, products)
@@ -275,7 +275,7 @@ def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]
         _name_rows(out)
         return out
     products = db.scalars(
-        select(Product).where(Product.retired_at.is_(None))
+        select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
         .order_by(Product.created_at.desc()).limit(500)
     ).all()
     offers_by = load_offers_for(db, products)

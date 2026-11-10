@@ -4,7 +4,7 @@
 <section style="padding-top:16px"><div class="wrap admin">
   <div class="eyebrow">Admin</div><h1 class="page-h1">Statistiky návštěvnosti</h1>
   <p class="sub">Anonymní data bez cookies a osobních údajů. Unikátní návštěvníci = denní otisky (sůl se každý den mění a po 24 h mažeme).</p>
-  <nav class="adm-seg" aria-label="Období">{% for d in (7, 30, 90) %}<a href="/admin?dni={{ d }}"{% if d == dni %} aria-current="page"{% endif %}>{{ d }} dní</a>{% endfor %}<a href="/stav">Stav obchodů →</a></nav>
+  <nav class="adm-seg" aria-label="Období">{% for d in (7, 30, 90) %}<a href="/admin?dni={{ d }}"{% if d == dni %} aria-current="page"{% endif %}>{{ d }} dní</a>{% endfor %}<a href="/admin/trideni">Třídění katalogu</a><a href="/stav">Stav obchodů →</a></nav>
   <div class="adm-kpis">
     <div class="card kpi"><span>Zobrazení</span><b>{{ r.total_views }}</b><small>za {{ dni }} dní</small></div>
     <div class="card kpi"><span>Návštěvníci dnes</span><b>{{ r.today_uniques }}</b><small>unikátní (dnešní otisk)</small></div>

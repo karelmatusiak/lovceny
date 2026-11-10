@@ -1,12 +1,15 @@
 """Idempotentní úklid katalogu: cizí nabídky, duplicity, kategorie.
 
-Nemaze historii cen. Sloučený produkt dostane 301 na přeživšího (redirect_product_id).
-Příslušenství zmizí z výpisu kategorie (category_slug = NULL), řádek zůstane.
+Rizikové kroky (sloučení, odpojení, vyřazení, změna kategorie existujícího produktu)
+se samy nezapíšou. Jdou do fronty /admin/trideni. Po schválení platí totéž co dřív:
+nemazat historii cen, sloučený produkt dostane 301 na přeživšího, příslušenství
+zmizí z výpisu (category_slug = NULL) a řádek zůstane.
 Spuštění: vlákno po startu webu (port se váže hned), fetch_prices.py a
 `python seed.py --repair-catalog`. Zámek brání dvěma běhům najednou.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import threading
@@ -161,9 +164,13 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
         "empty_retired": 0,
         "restored": 0,
         "redirect_fixed": 0,
+        "gtin_blocked": 0,
+        "queued": 0,
         "samples": [],
         "audit": [],
     }
+    from .gtin import gtins_conflict
+    from .triage import category_label, enqueue
     products = list(db.scalars(select(Product)).all())
 
     # Vrátit nabídky, které minulý běh odtrhl jen kvůli slugu (8/128 → 8128gb, barva, „pro“).
@@ -181,19 +188,17 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
         })
         if len(stats["samples"]) < 40:
             stats["samples"].append(f"restore #{offer.id} -> #{host.id} {(host.name or '')[:60]}")
-        if dry_run:
-            continue
-        offer.product_id = host.id
-        if host.retired_at is not None and not host.redirect_product_id:
-            host.retired_at = None
-        db.flush()
-        shell.redirect_product_id = host.id
-        shell.retired_at = now()
+        if enqueue(
+            db, kind="reattach", fingerprint=f"reattach:{offer.id}:{host.id}",
+            summary=f"Vrátit nabídku #{offer.id} na produkt #{host.id}",
+            reason="Nabídka se odtrhla jen podle slugu v URL. Návrat čeká na schválení, historie cen zůstane u nabídky.",
+            shop=offer.shop, product_id=host.id, other_product_id=shell.id, offer_id=offer.id,
+        ):
+            stats["queued"] += 1
+        else:
+            stats["restored"] -= 1
 
-    if not dry_run:
-        db.flush()
-        products = list(db.scalars(select(Product)).all())
-    active = [p for p in products if p.retired_at is None]
+    active = [p for p in products if p.retired_at is None and not p.catalog_hidden]
 
     for p in active:
         new_slug = _desired_category(p.name or "", p.category_slug)
@@ -207,14 +212,21 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             kind = "move"
         if len(stats["samples"]) < 30:
             stats["samples"].append(f"{kind} #{p.id} {p.category_slug}->{new_slug} {(p.name or '')[:80]}")
-        if not dry_run:
-            p.category_slug = new_slug
-            p.category = BY_SLUG[new_slug].name if new_slug and new_slug in BY_SLUG else None
+        proposed = "accessory" if new_slug is None else new_slug
+        label_to = "příslušenství" if proposed == "accessory" else category_label(proposed)
+        if not enqueue(
+            db, kind="recategorize", fingerprint=f"recategorize:{p.id}:{proposed}",
+            summary=f"Změnit kategorii produktu #{p.id} na {label_to}",
+            reason="Úklid katalogu navrhuje změnu kategorie. Sama se nezapíše.",
+            product_id=p.id, proposed_category=proposed,
+        ):
+            if kind == "accessory":
+                stats["accessories_cleared"] -= 1
+            else:
+                stats["recategorized"] -= 1
+        else:
+            stats["queued"] += 1
 
-    if not dry_run:
-        db.flush()
-
-    detached_hosts: set[int] = set()
     for p in active:
         if p.retired_at is not None:
             continue
@@ -227,26 +239,19 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
                 "id": p.id, "title": p.name, "category": p.category_slug,
                 "reason": f"detach-strong {label[:80]}",
             })
-            detached_hosts.add(p.id)
             if len(stats["samples"]) < 30:
                 stats["samples"].append(f"detach #{offer.id} from #{p.id} {label[:80]}")
-            if dry_run:
-                continue
-            how = _relocate_offer(db, offer, label, products)
-            stats["offers_split" if how == "split" else "offers_reattached"] += 1
-    if not dry_run:
-        db.flush()
-        for pid in detached_hosts:
-            n_offers = db.scalar(select(func.count()).select_from(Offer).where(Offer.product_id == pid)) or 0
-            if n_offers:
-                continue
-            host = db.get(Product, pid)
-            if host is None or host.retired_at is not None:
-                continue
-            host.retired_at = now()
-            stats["empty_retired"] += 1
-            if len(stats["samples"]) < 30:
-                stats["samples"].append(f"retire-empty #{pid} {(host.name or '')[:80]}")
+            if not enqueue(
+                db, kind="detach", fingerprint=f"detach:{offer.id}",
+                summary=f"Odpojit nabídku #{offer.id} od produktu #{p.id}",
+                reason=("Název nabídky nesedí na produkt. Po schválení se přesune a historie cen zůstane u ní. "
+                        "Když produktu nezůstane žádná nabídka, vyřadí se (301 na kategorii)."),
+                shop=offer.shop, product_id=p.id, offer_id=offer.id,
+                payload={"label": label[:300], "clear_ean": None},
+            ):
+                stats["offers_detached"] -= 1
+            else:
+                stats["queued"] += 1
 
     # Vyřazený ovladač bez kategorie by 301 na /. Patří na stránku své kategorie.
     for p in products:
@@ -264,9 +269,7 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             p.category = BY_SLUG[cat].name if cat in BY_SLUG else p.category
 
     # Sloučení duplicit mezi tím, co zůstalo aktivní. Jen stejná kategorie a značka.
-    fresh = [p for p in products if p.retired_at is None]
-    if not dry_run:
-        fresh = list(db.scalars(select(Product).where(Product.retired_at.is_(None))).all())
+    fresh = [p for p in products if p.retired_at is None and not p.catalog_hidden]
     buckets: dict[tuple, list[Product]] = {}
     for p in fresh:
         brand = primary_brand(p.name or "")
@@ -299,19 +302,28 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
                 continue
             if not same_model(survivor.name or "", survivor.category_slug, loser.name or "", loser.category_slug):
                 continue
+            if gtins_conflict(survivor, loser):
+                stats["gtin_blocked"] += 1
+                if len(stats["samples"]) < 30:
+                    stats["samples"].append(
+                        f"gtin-block #{loser.id} /= #{survivor.id} {(loser.name or '')[:60]}"
+                    )
+                continue
             stats["products_merged"] += 1
             if len(stats["samples"]) < 30:
                 stats["samples"].append(
                     f"merge #{loser.id} -> #{survivor.id} {(loser.name or '')[:60]}"
                 )
-            if dry_run:
-                continue
-            _move_dependents(db, loser, survivor)
-            db.flush()
-            loser.redirect_product_id = survivor.id
-            loser.retired_at = now()
-            # EAN necháváme. apply_feed u retired řádku s redirect_product_id
-            # pokračuje na přeživšího a novou nabídku připojí tam.
+            pair = f"{min(loser.id, survivor.id)}:{max(loser.id, survivor.id)}"
+            if not enqueue(
+                db, kind="merge", fingerprint=f"merge:{pair}",
+                summary=f"Sloučit produkt #{loser.id} do #{survivor.id}",
+                reason="Stejný model podle názvu. Různá GTIN sloučení blokují. Po schválení zůstane slug, URL a historie cen přeživšího.",
+                product_id=survivor.id, other_product_id=loser.id,
+            ):
+                stats["products_merged"] -= 1
+            else:
+                stats["queued"] += 1
 
     if dry_run:
         db.rollback()
@@ -327,6 +339,138 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
     for line in stats["samples"]:
         log.info("  %s", line)
     return stats
+
+
+def execute_decision(db: Session, decision) -> tuple[bool, str]:
+    """Provede schválené rozhodnutí. Slug, URL a historii cen nemaže."""
+    kind = decision.kind
+    if kind in ("recategorize", "fallback_category", "unmapped_category"):
+        return _apply_category(db, decision)
+    if kind == "title_match":
+        return _apply_title(db, decision)
+    if kind == "merge":
+        return _apply_merge(db, decision)
+    if kind == "detach":
+        return _apply_detach(db, decision)
+    if kind == "reattach":
+        return _apply_reattach(db, decision)
+    if kind == "retire":
+        return _apply_retire(db, decision)
+    return False, "neznámý typ rozhodnutí"
+
+
+def _payload(decision) -> dict:
+    if not decision.payload:
+        return {}
+    try:
+        data = json.loads(decision.payload)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _apply_category(db: Session, decision) -> tuple[bool, str]:
+    product = db.get(Product, decision.product_id)
+    if product is None:
+        return True, "produkt už neexistuje"
+    target = decision.proposed_category
+    if target in BY_SLUG:
+        product.category_slug = target
+        product.category = BY_SLUG[target].name
+        product.catalog_hidden = False
+        return True, f"kategorie {BY_SLUG[target].name}"
+    product.category_slug = None
+    product.category = None
+    if decision.kind in ("unmapped_category", "fallback_category") and target in ("accessory", "ignore", None, ""):
+        product.catalog_hidden = True
+    return True, "kategorie zrušena"
+
+
+def _apply_title(db: Session, decision) -> tuple[bool, str]:
+    from .service import record_price
+    product = db.get(Product, decision.product_id)
+    if product is None or product.retired_at is not None:
+        return False, "produkt už není aktivní"
+    data = _payload(decision)
+    url = data.get("url") or ""
+    if not url:
+        return False, "chybí URL nabídky"
+    existing = db.scalar(select(Offer).where(Offer.url == url))
+    if existing is not None and existing.product_id != product.id:
+        return False, "URL už patří jinému produktu"
+    if existing is None:
+        existing = Offer(
+            product=product, shop=data.get("shop") or decision.shop or "", url=url,
+            external_id=data.get("item_id"), status="pending",
+        )
+        db.add(existing)
+        db.flush()
+    if data.get("shop_category"):
+        existing.shop_category = data["shop_category"]
+    if data.get("gtin"):
+        existing.gtin = data["gtin"]
+    record_price(db, existing, data.get("price"), data.get("original_price"), data.get("in_stock"), "feed")
+    return True, f"nabídka připojena k produktu #{product.id}"
+
+
+def _apply_merge(db: Session, decision) -> tuple[bool, str]:
+    from .gtin import gtins_conflict
+    survivor = db.get(Product, decision.product_id)
+    loser = db.get(Product, decision.other_product_id)
+    if survivor is None or loser is None or survivor.id == loser.id:
+        return True, "už sloučeno"
+    if survivor.retired_at is not None or loser.retired_at is not None:
+        return True, "už není aktivní"
+    if gtins_conflict(survivor, loser):
+        return False, "různá GTIN, sloučení je zablokované"
+    _move_dependents(db, loser, survivor)
+    db.flush()
+    loser.redirect_product_id = survivor.id
+    loser.retired_at = now()
+    return True, f"#{loser.id} sloučen do #{survivor.id}"
+
+
+def _apply_detach(db: Session, decision) -> tuple[bool, str]:
+    offer = db.get(Offer, decision.offer_id)
+    if offer is None:
+        return True, "nabídka už není"
+    data = _payload(decision)
+    label = data.get("label") or label_from_url(offer.url)
+    origin_id = offer.product_id
+    products = list(db.scalars(select(Product)).all())
+    _relocate_offer(db, offer, label, products)
+    origin = db.get(Product, origin_id)
+    clear = data.get("clear_ean")
+    if origin is not None and clear and origin.ean == clear:
+        origin.ean = None
+    if origin is not None and origin.id != offer.product_id:
+        n_offers = db.scalar(select(func.count()).select_from(Offer).where(Offer.product_id == origin.id)) or 0
+        if n_offers == 0 and origin.retired_at is None and not origin.redirect_product_id:
+            origin.retired_at = now()
+    return True, "nabídka odpojena"
+
+
+def _apply_reattach(db: Session, decision) -> tuple[bool, str]:
+    offer = db.get(Offer, decision.offer_id)
+    host = db.get(Product, decision.product_id)
+    shell = db.get(Product, decision.other_product_id)
+    if offer is None or host is None or shell is None:
+        return True, "už neplatí"
+    offer.product_id = host.id
+    if host.retired_at is not None and not host.redirect_product_id:
+        host.retired_at = None
+    if shell.id != host.id:
+        shell.redirect_product_id = host.id
+        shell.retired_at = now()
+    return True, "nabídka vrácena"
+
+
+def _apply_retire(db: Session, decision) -> tuple[bool, str]:
+    product = db.get(Product, decision.product_id)
+    if product is None or product.retired_at is not None:
+        return True, "už vyřazeno"
+    product.retired_at = now()
+    return True, "vyřazeno"
 
 
 def repair_catalog_locked(db: Session, dry_run: bool = False) -> dict:

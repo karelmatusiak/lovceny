@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Třídění katalogu | Lovceny{% endblock %}
+{% block description %}Fronta rozhodnutí o kategoriích a párování nabídek.{% endblock %}
+{% block body %}
+<section style="padding-top:16px"><div class="wrap admin">
+  <div class="eyebrow">Admin</div>
+  <h1 class="page-h1">Třídění katalogu</h1>
+  {% if login %}
+  <p class="sub">Přihlas se tokenem. Stránka není v sitemapě a vyhledávače ji nemají indexovat.</p>
+  <form class="card triage-login" method="post" action="/admin/trideni/prihlaseni">
+    <label>Token <input type="password" name="heslo" autocomplete="current-password" required></label>
+    <button class="btn btn-primary" type="submit">Přihlásit</button>
+  </form>
+  {% else %}
+  <p class="sub">Nic rizikového se nezapíše samo. Schválení si pamatuje mapování kategorie obchodu pro další import. V tabulce je {{ seeded }} výchozích pravidel.</p>
+  <nav class="adm-seg" aria-label="Admin"><a href="/admin">Statistiky</a><a href="/admin/trideni" aria-current="page">Třídění</a></nav>
+  {% if ok %}<p class="card" role="status" style="padding:12px 16px">{{ ok }}</p>{% endif %}
+  {% for g in groups %}
+  <section class="card triage-card">
+    <h2 class="h3">{{ g.title }} <span class="muted">({{ g.count }})</span></h2>
+    {% if g.count == 0 %}<p class="muted">Nic nečeká. Až se objeví položka, u každé jsou tlačítka Schválit, Změnit kategorii a Zamítnout.</p>{% endif %}
+    {% for b in g.buckets %}
+      {% if b.bulk %}
+      <form class="triage-actions" method="post" action="/admin/trideni/mapovat">
+        <input type="hidden" name="shop" value="{{ b.shop }}">
+        <input type="hidden" name="shop_category" value="{{ b.shop_category }}">
+        <label>Vždy mapovat tuto kategorii obchodu na
+          <select name="kategorie">{% for slug, name in targets %}<option value="{{ slug }}">{{ name }}</option>{% endfor %}</select>
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit">Uložit a schválit frontu</button>
+      </form>
+      {% endif %}
+      {% for it in b["items"] %}
+      <article style="border-top:1px solid var(--line);padding:12px 0">
+        <p><b>{{ it.d.summary }}</b></p>
+        <p class="muted">{{ it.d.reason }}</p>
+        <ul>
+          {% if it.product %}<li>Produkt #{{ it.product.id }}: <a href="/produkt/{{ it.product.id }}-{{ it.product.slug }}">{{ it.product.name }}</a> · {{ it.product.category_slug or "bez kategorie" }}</li>{% endif %}
+          {% if it.other %}<li>Druhý produkt #{{ it.other.id }}: {{ it.other.name }}</li>{% endif %}
+          {% if it.offer %}<li>Nabídka #{{ it.offer.id }} · {{ it.offer.shop }} · {{ it.offer.url }}</li>{% endif %}
+          {% if it.d.shop_category %}<li>Kategorie obchodu: {{ it.d.shop_category }}{% if it.d.shop %} ({{ it.d.shop }}){% endif %}</li>{% endif %}
+          {% if it.proposed %}<li>Návrh: {{ it.proposed }}</li>{% endif %}
+        </ul>
+        <div class="triage-actions">
+          <form method="post" action="/admin/trideni/{{ it.d.id }}/schvalit"><button class="btn btn-primary btn-sm" type="submit">Schválit</button></form>
+          <form method="post" action="/admin/trideni/{{ it.d.id }}/zamitnout"><button class="btn btn-ghost btn-sm" type="submit">Zamítnout</button></form>
+          <form method="post" action="/admin/trideni/{{ it.d.id }}/kategorie">
+            <label class="sr-only" for="kat-{{ it.d.id }}">Změnit kategorii</label>
+            <select id="kat-{{ it.d.id }}" name="kategorie">{% for slug, name in targets %}<option value="{{ slug }}"{% if slug == it.d.proposed_category %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+            <button class="btn btn-ghost btn-sm" type="submit">Změnit kategorii</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+  {% endif %}
+</div></section>
+{% endblock %}

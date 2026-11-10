@@ -64,7 +64,8 @@ def matches(db, category_slug: str, keyword: str | None, max_price: float, only_
     now = now or datetime.now(timezone.utc)
     kw = _fold(keyword or "").strip()
     words = kw.split()
-    products = db.scalars(select(Product).where(Product.category_slug == category_slug, Product.retired_at.is_(None))
+    products = db.scalars(select(Product).where(
+        Product.category_slug == category_slug, Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
                           .options(selectinload(Product.offers))).all()
     out = []
     for p in products:

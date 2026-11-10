@@ -69,7 +69,7 @@ services:
         sync: false
       - key: GEMINI_DAILY_CAP
         value: "900"
-      # Admin /admin (statistiky). Bez tokenu je admin vypnutý (404).
+      # Admin /admin a /admin/trideni. Bez ADMIN_TOKEN (nebo kratšího než 16 znaků) obě stránky vrací 404.
       - key: ADMIN_TOKEN
         sync: false
       - key: IMG_CACHE_MAX_MB
