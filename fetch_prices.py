@@ -4,6 +4,10 @@
   python fetch_prices.py                 # všechny obchody
   python fetch_prices.py --shop planeo   # jen jeden obchod
   python fetch_prices.py --feed alza=sample_feeds/heureka_sample.xml   # ruční import feedu
+
+Mironet čteme sériově (concurrency 1), nejvýš MIRONET_MAX_PER_RUN nejstarších nabídek,
+s delší pauzou v PoliteClient. Po MIRONET_BACKOFF_AFTER blokacích za sebou zbytek běhu
+přeskočíme. Captcha se neobchází.
 """
 import argparse
 import logging
@@ -21,6 +25,29 @@ from lovceny.service import update_offer, apply_feed, check_watches, cleanup_wat
 from lovceny.notify import get_sender
 
 log = logging.getLogger("fetch")
+
+# 24 × ~14 s ≈ 6 min. Zbytek katalogu počká na další běh (3× denně), ať workflow
+# (limit 30 min včetně testů) doběhne a Mironet nedostane desítky captcha za sebou.
+MIRONET_MAX_PER_RUN = 24
+MIRONET_BACKOFF_AFTER = 3
+
+
+def scrape_slugs(only: str | None) -> list[str]:
+    slugs = [s.slug for s in SHOPS.values() if s.source == "scrape" and not s.retired]
+    if only:
+        return [s for s in slugs if s == only]
+    return slugs
+
+
+def load_scrape_offers(db, slugs: list[str], limit: int) -> list[Offer]:
+    """Nejstarší (NULL last_checked první) nabídky, bez vyřazených. limit omezí běh."""
+    if not slugs or limit <= 0:
+        return []
+    q = (select(Offer)
+         .where(Offer.shop.in_(slugs), Offer.status != "unavailable")
+         .order_by(Offer.last_checked.asc().nullsfirst())
+         .limit(limit))
+    return list(db.scalars(q).all())
 
 
 def main(argv=None):
@@ -65,27 +92,48 @@ def main(argv=None):
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
             log.info("%s: feed URL není nastaven (%s) – nabídky zůstávají 'cena bude doplněna'", s.name, s.feed_url_env)
 
-    # 2) přímé čtení stránek (jen obchody, které to dovolují)
+    # 2) přímé čtení stránek (jen obchody, které to dovolují). Sériově.
+    # Mironet jde první a jen nejstarší nabídky: čerstvé nenecháme sežrat limit,
+    # a po sérii blokací přestaneme (captcha se neobchází).
     cutoff = datetime.now(timezone.utc) - timedelta(hours=a.min_age_hours)
-    q = select(Offer).where(Offer.shop.in_([s.slug for s in SHOPS.values()
-                                              if s.source == "scrape" and not s.retired]))
-    if a.shop:
-        q = q.where(Offer.shop == a.shop)
-    for o in db.scalars(q.order_by(Offer.last_checked.asc().nullsfirst()).limit(a.limit)).all():
-        if o.status == "unavailable":
-            # Vyřazené produkty nezkoušíme znovu (šetří kvótu a nekazí zdraví obchodu).
-            report[f"{o.shop}:skipped_unavailable"] += 1
-            stats.add(o.shop, "skipped")
-            continue
-        lc = o.last_checked
-        if lc and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) > cutoff:
-            report[f"{o.shop}:skipped_recent"] += 1
-            stats.add(o.shop, "skipped")
-            continue
-        st = update_offer(db, o, stats=stats)
-        db.commit()
-        report[f"{o.shop}:{st}"] += 1
-        log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
+    slugs = scrape_slugs(a.shop)
+    batches: list[list[Offer]] = []
+    if "mironet" in slugs:
+        batches.append(load_scrape_offers(db, ["mironet"], min(a.limit, MIRONET_MAX_PER_RUN)))
+    others = [s for s in slugs if s != "mironet"]
+    if others:
+        batches.append(load_scrape_offers(db, others, a.limit))
+    mironet_streak = 0
+    mironet_paused = False
+    for batch in batches:
+        for o in batch:
+            if o.status == "unavailable":
+                # Vyřazené produkty nezkoušíme znovu (šetří kvótu a nekazí zdraví obchodu).
+                report[f"{o.shop}:skipped_unavailable"] += 1
+                stats.add(o.shop, "skipped")
+                continue
+            if o.shop == "mironet" and mironet_paused:
+                report[f"{o.shop}:skipped_backoff"] += 1
+                stats.add(o.shop, "skipped")
+                continue
+            lc = o.last_checked
+            if lc and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) > cutoff:
+                report[f"{o.shop}:skipped_recent"] += 1
+                stats.add(o.shop, "skipped")
+                continue
+            st = update_offer(db, o, stats=stats)
+            db.commit()
+            report[f"{o.shop}:{st}"] += 1
+            log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
+            if o.shop == "mironet":
+                if st == "blocked":
+                    mironet_streak += 1
+                    if mironet_streak >= MIRONET_BACKOFF_AFTER:
+                        mironet_paused = True
+                        log.warning("Mironet: %s blokací za sebou, zbytek běhu přeskakuji (captcha neobcházíme)",
+                                    mironet_streak)
+                elif st == "ok":
+                    mironet_streak = 0
 
     # 2b) monitoring blokací: statistiky běhu do DB + vyhodnocení (→ GitHub issue ve workflow)
     try:

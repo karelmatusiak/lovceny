@@ -15,14 +15,16 @@
       <div class="st-head">
         <h2 class="h3"><span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}</h2>
         {% if not h %}<span class="st st-wait">bez sledovaných nabídek</span>
+        {% elif h.level == 'blocked' %}<span class="st st-bad"><span aria-hidden="true">!</span> blokováno{% if l and l.attempts %} ({{ l.failures }} z {{ l.attempts }}){% endif %}</span>
+        {% elif h.level == 'partial' %}<span class="st st-mid"><span aria-hidden="true">!</span> částečně blokováno{% if l and l.attempts %} ({{ l.blocked + l.captcha + l.robots }} z {{ l.attempts }}){% endif %}</span>
         {% elif not r.last_ok and (not l or not l.ok) %}<span class="st st-wait">zatím bez dat</span>
-        {% elif h.ok %}<span class="st st-ok"><span aria-hidden="true">✓</span> v pořádku</span>
-        {% else %}<span class="st st-bad"><span aria-hidden="true">!</span> {% for x in h.reasons %}{{ {'failing': 'blokuje / selhává', 'stale': 'staré ceny'}[x.code] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+        {% elif h.reasons %}<span class="st st-bad"><span aria-hidden="true">!</span> {% for x in h.reasons %}{{ {'failing': 'blokováno', 'partial': 'částečně blokováno', 'stale': 'staré ceny'}[x.code] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        {% else %}<span class="st st-ok"><span aria-hidden="true">✓</span> v pořádku</span>{% endif %}
       </div>
       {% if h and h.reasons %}<ul class="st-reasons">{% for x in h.reasons %}<li>{{ x.text }}</li>{% endfor %}</ul>{% endif %}
       <dl class="st-facts">
-        <div><dt>Poslední běh</dt><dd>{% if l %}{{ l.ok }} z {{ l.attempts }} OK{% if l.skipped %} <small>({{ l.skipped }} přeskočeno)</small>{% endif %}{% else %}–{% endif %}</dd></div>
-        <div><dt>Blokace / captcha</dt><dd>{% if l %}{{ l.blocked }} / {{ l.captcha }}{% else %}–{% endif %}</dd></div>
+        <div><dt>Poslední běh</dt><dd>{% if l %}{{ l.ok }} OK z {{ l.attempts }}{% if l.skipped %} <small>({{ l.skipped }} přeskočeno)</small>{% endif %}{% else %}–{% endif %}</dd></div>
+        <div><dt>Blokace / captcha</dt><dd>{% if l %}{{ l.blocked + l.captcha }} <small>({{ l.blocked }} HTTP, {{ l.captcha }} captcha{% if l.robots %}, {{ l.robots }} robots{% endif %})</small>{% else %}–{% endif %}</dd></div>
         <div><dt>Poslední čerstvá cena</dt><dd>{% if r.last_ok %}<time datetime="{{ r.last_ok.isoformat() }}">{{ r.last_ok|prague }}</time>{% else %}nikdy{% endif %}</dd></div>
         <div><dt>Nabídek</dt><dd>{{ h.offers if h else 0 }}</dd></div>
       </dl>
@@ -38,7 +40,9 @@
   <div class="card st-legend">
     <h2 class="h3">Jak to vyhodnocujeme</h2>
     <ul>
-      <li><b>Blokuje / selhává</b> – v posledním běhu selhala víc než polovina požadavků (nejméně {{ min_attempts }}): HTTP 403/429/503, ochrana proti botům, captcha nebo zákaz v robots.txt.</li>
+      <li><b>Blokováno</b> – v posledním běhu selhala víc než polovina požadavků (nejméně {{ min_attempts }}): HTTP 403/429/503, ochrana proti botům, captcha, zákaz v robots.txt nebo jiná chyba. Odznak ukazuje počet selhání z pokusů.</li>
+      <li><b>Částečně blokováno</b> – blokace, captcha nebo robots.txt zasáhly aspoň {{ partial_pct }} % pokusů (a aspoň {{ partial_min }}), ale ne většinu. Odznak je počet těchto zásahů z pokusů. Přeskočené požadavky se do podílu nepočítají. Captcha neobcházíme.</li>
+      <li><b>V pořádku</b> – poslední běh je pod tímto prahem a poslední úspěšná cena není starší než {{ stale_days }} dny.</li>
       <li><b>Staré ceny</b> – poslední úspěšně stažená cena je starší než {{ stale_days }} dny.</li>
       <li>Časy jsou v českém čase. Sloupce ukazují podíl úspěšných požadavků za den (zelená ≥ 80 %, oranžová ≥ 50 %, červená méně, šedá = bez běhu).</li>
     </ul>
