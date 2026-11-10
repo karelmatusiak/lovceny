@@ -1,6 +1,6 @@
 """Deterministické třídění: mapování kategorií obchodu, fronta rozhodnutí, zápis po schválení.
 
-Kategorie bere mapování (obchod + cesta). classify() z názvu je jen záloha a jde do fronty.
+Kategorii určuje jen tabulka mapování. Co v ní není, čeká ve frontě bez odhadu z názvu.
 Stejné platné GTIN se připojí samo. Sloučení, odpojení, vyřazení a změna kategorie existujícího
 produktu čekají na /admin/trideni.
 """
@@ -20,8 +20,8 @@ from .categories import (
     _path_segments,
     _stem_at_word,
     category_url_conflict,
-    classify,
     is_accessory_text,
+    jbl_catalog_category,
 )
 from .gtin import gtins_conflict, normalize_gtin
 from .models import ShopCategoryMapping, TriageDecision, TriageLog, now
@@ -205,10 +205,18 @@ class Resolved:
 def resolve_category(db: Session, shop: str, name: str, shop_category: str | None,
                      price: float | None, url: str | None = None,
                      rows: list[ShopCategoryMapping] | None = None) -> Resolved:
-    """Mapování má přednost. classify() je nízká jistota. Příslušenství se jako hlavní produkt nezaloží."""
+    """Jediné automatické rozhodnutí o kategorii: tabulka mapování.
+
+    JBL feed nemá cestu kategorie. Známé řady sluchátek dostanou cestu „Sluchátka“
+    a dál rozhodne stejná tabulka. Obecný odhad z názvu se nepoužívá.
+    """
     if is_accessory_text(name, shop_category):
         return Resolved("accessory")
-    mapped = lookup_mapping(db, shop, shop_category, rows=rows)
+    raw = shop_category
+    if shop == "jbl" and not (raw or "").strip():
+        if jbl_catalog_category(name) == "sluchatka":
+            raw = "Sluchátka"
+    mapped = lookup_mapping(db, shop, raw, rows=rows)
     if mapped == "accessory":
         return Resolved("accessory")
     if mapped == "ignore":
@@ -219,11 +227,7 @@ def resolve_category(db: Session, shop: str, name: str, shop_category: str | Non
         if price is None or price <= 0 or price < MIN_PRICE_CZK.get(mapped, 0):
             return Resolved("skip")
         return Resolved("high", mapped)
-    guessed = classify(name or "", shop_category, url=url)
-    if guessed and guessed in BY_SLUG and not category_url_conflict(guessed, name, url):
-        if price is not None and price >= MIN_PRICE_CZK.get(guessed, 0):
-            return Resolved("low", guessed)
-    if (shop_category or "").strip() and price is not None and price >= 500:
+    if (raw or "").strip() and price is not None and price >= 500:
         return Resolved("unmapped")
     return Resolved("skip")
 

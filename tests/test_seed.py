@@ -23,7 +23,7 @@ def test_seed_catalog_idempotent(client_db, monkeypatch):
     client, db, make = client_db
     added = []
 
-    def fake_add(db_, url, fetch_now=True):
+    def fake_add(db_, url, fetch_now=True, **_kwargs):
         added.append(url)
         p = Product(name="Seed " + url[-12:], slug="seed")
         db_.add(Offer(product=p, shop=shop_for_url(url).slug, url=url, status="ok", price=1000))

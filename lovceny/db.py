@@ -23,9 +23,80 @@ class Base(DeclarativeBase):
 
 
 def init_db():
+    """Dožene schéma na hlavu Alembicu. Na aktuální databázi je to jeden SELECT.
+
+    drop_all v testech smaže tabulky modelů a alembic_version nechá. Proto
+    se schéma doplní i když je verze už na hlavě a tabulky chybí.
+    """
     from . import models  # noqa: F401
-    Base.metadata.create_all(engine)
-    _migrate()
+    if _revision() != _head():
+        _upgrade()
+    if not _core_tables_present():
+        ensure_current_schema(engine)
+
+
+def _alembic_config():
+    from pathlib import Path
+    from alembic.config import Config
+    root = Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+    return cfg
+
+
+def _head() -> str | None:
+    from alembic.script import ScriptDirectory
+    return ScriptDirectory.from_config(_alembic_config()).get_current_head()
+
+
+def _core_tables_present() -> bool:
+    from sqlalchemy import inspect
+    names = set(inspect(engine).get_table_names())
+    return "products" in names and "offers" in names and "price_points" in names
+
+
+def _revision() -> str | None:
+    from alembic.runtime.migration import MigrationContext
+    with engine.connect() as conn:
+        heads = MigrationContext.configure(conn).get_current_heads()
+    if not heads:
+        return None
+    return heads[0]
+
+
+def _upgrade() -> None:
+    from alembic import command
+    command.upgrade(_alembic_config(), "head")
+
+
+def ensure_current_schema(bind=None) -> None:
+    """Vytvoří chybějící tabulky, sloupce a indexy. Existující data nemění.
+
+    Volá ji migrace 0001 a init_db, když tabulky chybí. create_all na hotové
+    tabulce sloupce nepřidá, proto jsou tu stejné doplňky jako dřív při startu.
+    """
+    from sqlalchemy import inspect, text
+    from . import models  # noqa: F401
+    target = engine if bind is None else bind
+    if target.__class__.__name__ == "Engine":
+        with target.begin() as conn:
+            _apply_schema(conn)
+        return
+    _apply_schema(target)
+
+
+def _apply_schema(target) -> None:
+    from sqlalchemy import inspect, text
+    Base.metadata.create_all(target)
+    insp = inspect(target)
+    names = set(insp.get_table_names())
+    for table, col, ddl in _ADD_COLUMNS:
+        if table in names and col not in {c["name"] for c in insp.get_columns(table)}:
+            target.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+    names = set(inspect(target).get_table_names())
+    for table, sql in _ADD_INDEXES:
+        if table in names:
+            target.execute(text(sql))
 
 
 # Jednoduché doplnění sloupců do existujících tabulek (create_all je nepřidá). Idempotentní.
@@ -51,15 +122,3 @@ _ADD_INDEXES = [
 ]
 
 
-def _migrate():
-    from sqlalchemy import inspect, text
-    insp = inspect(engine)
-    for table, col, ddl in _ADD_COLUMNS:
-        if table in insp.get_table_names() and col not in {c["name"] for c in insp.get_columns(table)}:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
-    names = set(insp.get_table_names())
-    with engine.begin() as conn:
-        for table, sql in _ADD_INDEXES:
-            if table in names:
-                conn.execute(text(sql))

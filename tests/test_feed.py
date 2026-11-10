@@ -25,9 +25,13 @@ def test_paste_alza_url_is_pending_then_feed_fills_price():
     db = SessionLocal()
     url = "https://www.alza.cz/iphone-15-128gb-cerna-demo.htm"
     prod, msg = add_by_url(db, url, fetch_now=False)
-    assert "cena bude doplněna" in msg
-    o = prod.offers[0]
-    assert o.shop == "alza" and o.status == "pending" and o.price is None
+    assert prod is None and "adresy" in msg
+    from lovceny.service import _name_from_url
+    from lovceny.util import slugify
+    known = Product(name=_name_from_url(url), slug=slugify(_name_from_url(url)))
+    o = Offer(product=known, shop="alza", url=url, status="pending")
+    db.add(known)
+    db.commit()
 
     stats = apply_feed(db, "alza", feed.load(str(SAMPLE)))
     assert stats["matched"] == 1 and stats["created"] == 0 and stats["attached"] == 0 and stats["skipped"] == 1

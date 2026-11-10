@@ -557,11 +557,10 @@ def accept_feed_item(
     price: float | None,
     url: str | None = None,
 ) -> str | None:
-    """Vrátí category_slug pokud feed položka smí vytvořit/připojit nabídku, jinak None.
+    """Vrátí category_slug, když cesta kategorie obchodu je ve whitelistu.
 
-    Pravidla: ne příslušenství, CATEGORYTEXT whitelist → slug, cena ≥ MIN_PRICE,
-    classify souhlasí, URL/název neodporuje kategorii (čistič oken ≠ vysavač,
-    počítačový displej ≠ sluchátka ani když list feedu říká „Sluchátka“).
+    O kategorii nerozhoduje název. Příslušenství, cena pod minimem a známý
+    spor adresy (čistič oken ≠ vysavač, displej ≠ sluchátka) položku odmítnou.
     """
     if is_accessory_text(name, shop_category):
         return None
@@ -577,11 +576,6 @@ def accept_feed_item(
     if feed_slug == "vysavace" and re.search(r"prumysl", blob):
         return None
     if category_url_conflict(feed_slug, name, url):
-        return None
-    guessed = classify(name, shop_category, url=url)
-    if guessed != feed_slug:
-        return None
-    if category_url_conflict(guessed, name, url):
         return None
     min_p = MIN_PRICE_CZK.get(feed_slug, 0)
     if price < min_p:

@@ -172,15 +172,17 @@ def _update_offer(db: Session, offer: Offer):
     _assign_image(p, res.image)
     p.ean = p.ean or res.ean
     p.category = p.category or res.category
-    if not p.category_slug:
-        from .categories import classify
-        p.category_slug = classify(p.name, p.category)
     record_price(db, offer, res.price, res.original_price, res.in_stock, "scrape")
     return "ok", "ok", 200, None
 
 
-def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product | None, str]:
-    """Vložený odkaz → sledovaný produkt. Vrací (produkt, zpráva)."""
+def add_by_url(db: Session, url: str, fetch_now: bool = True, *,
+               name: str | None = None, category_slug: str | None = None) -> tuple[Product | None, str]:
+    """Známá URL vrátí její produkt. Nový produkt vznikne jen se zadaným názvem (katalog).
+
+    Samotná adresa stránky produkt nezaloží. Bez názvu se odkaz zapíše do fronty
+    /admin/trideni a nic se nestahuje.
+    """
     url = normalize_url(url)
     shop = shop_for_url(url)
     if shop is None:
@@ -189,8 +191,18 @@ def add_by_url(db: Session, url: str, fetch_now: bool = True) -> tuple[Product |
     existing = db.scalar(select(Offer).where(Offer.url == url))
     if existing:
         return existing.product, ""
-    name = _name_from_url(url)
-    prod = Product(name=name, slug=slugify(name))
+    given = (name or "").strip()
+    if not given:
+        from .triage import enqueue
+        enqueue(
+            db, kind="track_url", fingerprint=f"track:{url}",
+            summary=f"Odkaz bez produktu ({shop.name})",
+            reason="Produkt se nezakládá z adresy stránky. Vznikne, až ho feed spáruje podle EAN nebo kódu výrobce.",
+            shop=shop.slug, payload={"url": url},
+        )
+        db.commit()
+        return None, "Ten odkaz v katalogu není. Produkt nezakládáme z adresy stránky."
+    prod = Product(name=given, slug=slugify(given), category_slug=category_slug)
     offer = Offer(product=prod, shop=shop.slug, url=url, status="pending")
     db.add(prod)
     db.flush()
@@ -213,8 +225,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                max_create: int | None = None) -> dict:
     """Spáruje položky feedu s nabídkami a zapíše ceny.
 
-    Párování: URL → ITEM_ID → platné GTIN (vysoká jistota). Shoda jen podle názvu
-    jde do fronty /admin/trideni. Kategorie z mapování obchodu; odhad z názvu je nízká jistota.
+    Párování: URL → ITEM_ID → GTIN → značka a kód výrobce. Shoda jen podle názvu
+    jde do fronty a produkt nezaloží. Kategorie jen z mapování obchodu.
     """
     from sqlalchemy import select as sa_select
 
@@ -303,6 +315,32 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if len(without) == 1:
             return without[0]
         return None  # nejednoznačné → konzervativně přeskočit
+
+    def find_by_brand_mpn(feed_name: str, feed_gtin: str | None) -> Product | None:
+        """Jedna shoda značky a kódu výrobce. Jiný GTIN nebo víc kandidátů se nepřipojí."""
+        from .matching import brand_and_mpn, primary_brand
+        key = brand_and_mpn(feed_name)
+        if key is None:
+            return None
+        brand, mpns = key
+        hits: dict[int, Product] = {}
+        for cand in products:
+            if cand.retired_at is not None:
+                continue
+            if primary_brand(cand.name or "") != brand:
+                continue
+            other = brand_and_mpn(cand.name or "")
+            if other is None or other[1] != mpns:
+                continue
+            known = normalize_gtin(cand.ean)
+            if feed_gtin and known and feed_gtin != known:
+                continue
+            kept = follow_redirect(cand)
+            if kept is not None and kept.retired_at is None:
+                hits[kept.id] = kept
+        if len(hits) == 1:
+            return next(iter(hits.values()))
+        return None
 
     def find_by_identity(feed_name: str, cat_slug: str | None) -> Product | None:
         """Stejná značka a model (Herní sluchátka … vs Sluchátka …) – nepřidávat druhý produkt."""
@@ -413,6 +451,13 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 refuse_attach(prod, it, clean)
                 prod = None
                 blocked = True
+            if prod is None and not blocked and res.action != "skip":
+                mpn_hit = find_by_brand_mpn(it.name, gtin)
+                if mpn_hit is not None and conflicts_with(mpn_hit, it, clean):
+                    refuse_attach(mpn_hit, it, clean)
+                    blocked = True
+                elif mpn_hit is not None:
+                    prod = mpn_hit
             if prod is None and not gtin and not blocked:
                 named = find_by_name(it.name)
                 if named is None and res.slug:
@@ -428,7 +473,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             elif blocked or res.action == "skip":
                 stats["skipped"] += 1
                 continue
-            elif create_missing and res.action in ("high", "low", "unmapped") and (
+            elif create_missing and res.action in ("high", "unmapped") and (
                 max_create is None or created + held < max_create
             ):
                 hidden = res.action != "high"
@@ -454,9 +499,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                     by_canon[key] = None if key in by_canon else prod
                 fresh = True
                 if hidden:
-                    kind = "fallback_category" if res.action == "low" else "unmapped_category"
-                    reason = ("Kategorie je jen odhad z názvu." if res.action == "low"
-                              else "Kategorie obchodu není v mapování.")
+                    kind = "unmapped_category"
+                    reason = "Kategorie obchodu není v mapování."
                     if queue_category(
                         db, kind=kind, product_id=prod.id, shop=shop_slug, shop_category=it.category,
                         proposed=res.slug, summary=f"Zařadit „{it.name[:80]}“ ({reason})", reason=reason,
@@ -486,10 +530,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         assign_ean(o.product, it.ean)
         stamp(o, it)
         _assign_image(o.product, it.image)
-        if not fresh and res.slug and o.product.category_slug != res.slug and res.action in ("high", "low"):
-            kind = "recategorize" if res.action == "high" else "fallback_category"
-            reason = ("Mapování kategorie obchodu. U existujícího produktu se samo nezapíše."
-                      if res.action == "high" else "Odhad kategorie z názvu, nízká jistota.")
+        if not fresh and res.slug and o.product.category_slug != res.slug and res.action == "high":
+            kind = "recategorize"
+            reason = "Mapování kategorie obchodu. U existujícího produktu se samo nezapíše."
             if queue_category(
                 db, kind=kind, product_id=o.product.id, shop=shop_slug, shop_category=it.category,
                 proposed=res.slug,

@@ -207,6 +207,6 @@ def test_migration_adds_notified_price(tmp_path, monkeypatch):
     with eng.begin() as c:
         c.execute(text("CREATE TABLE watches (id INTEGER PRIMARY KEY, email VARCHAR)"))
     monkeypatch.setattr(dbmod, "engine", eng)
-    dbmod._migrate()
-    dbmod._migrate()  # idempotentní
+    dbmod.ensure_current_schema(eng)
+    dbmod.ensure_current_schema(eng)  # idempotentní
     assert "notified_price" in {c["name"] for c in inspect(eng).get_columns("watches")}

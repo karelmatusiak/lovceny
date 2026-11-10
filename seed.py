@@ -10,8 +10,6 @@ nestahuje a demo historie se nepřidá podruhé. Ceny se stahují živě (robots
   python seed.py --category pracky --limit 5
   python seed.py --dry-run        # jen vypíše, co by přidal (nic nestahuje, nic nezapisuje)
   python seed.py --purge-demo     # smaže všechna demo data
-  python seed.py --repair-categories --dry-run   # monitory ve Sluchátkách: jen počty
-  python seed.py --repair-categories             # sundá je z kategorie, historie zůstane
 """
 import json
 from pathlib import Path
@@ -96,7 +94,7 @@ def seed_catalog(db, items, dry_run=False, fetch=True) -> dict:
             print(f"+  [{it['cat']}] {it['name']}  {url}")
             stats["new"] += 1
             continue
-        prod, msg = add_by_url(db, url, fetch_now=fetch)
+        prod, msg = add_by_url(db, url, fetch_now=fetch, name=it["name"], category_slug=it["cat"])
         if prod is None:
             print(f"!! {it['name']}: {msg}")
             stats["failed"] += 1
@@ -691,15 +689,10 @@ def main(argv=None):
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
                     help="smazat příslušenství/špatné nabídky z feed seedu (eHUB + Dognet obchody)")
-    ap.add_argument("--repair-categories", action="store_true",
-                    help="sundat monitory z kategorie Sluchátka (bez mazání nabídek a historie cen)")
     ap.add_argument("--repair-catalog", action="store_true",
                     help="náhled úklidu katalogu (počty a seznam). Zapíše se jen s --apply.")
     ap.add_argument("--apply", action="store_true",
-                    help="zapsat změny u --repair-catalog nebo --one-off-fixes (jinak jen náhled)")
-    ap.add_argument("--one-off-fixes", action="store_true",
-                    help="jednorázové už provedené opravy (Motorola Edge, Gigabyte A16, Surface). "
-                         "Bez --apply jen náhled.")
+                    help="zapsat změny u --repair-catalog (jinak jen náhled)")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -708,20 +701,8 @@ def main(argv=None):
         db.commit()
         print(f"Smazáno {n} demo bodů.")
         return
-    if a.repair_catalog or a.one_off_fixes:
+    if a.repair_catalog:
         write = bool(a.apply) and not a.dry_run
-        if a.one_off_fixes:
-            from lovceny.one_off_fixes import apply_legacy_product_fixes
-            st = apply_legacy_product_fixes(db, apply=write)
-            mode = "APPLY" if write else "DRY-RUN"
-            print(
-                f"Jednorázové opravy ({mode}): kategorie={st['recategorized']} "
-                f"vraceno={st['reattached']}"
-            )
-            for line in st["samples"]:
-                print(f"  {line}")
-            if not a.repair_catalog:
-                return
         from lovceny.catalog_repair import repair_catalog_locked
         st = repair_catalog_locked(db, dry_run=not write)
         if st.get("skipped"):
@@ -737,20 +718,6 @@ def main(argv=None):
         )
         for line in st["samples"]:
             print(f"  {line}")
-        return
-    if a.repair_categories:
-        st = repair_display_headphones(db, dry_run=a.dry_run)
-        mode = "DRY-RUN" if a.dry_run else "APPLY"
-        print(
-            f"Oprava kategorií ({mode}): sluchatka={st['sluchatka_active']} "
-            f"sluchatka_nechat={st['headphones_kept']} monitory={st['candidates']} "
-            f"upraveno={st['updated']} nabidky={st['offers_kept']} "
-            f"historie={st['price_points_kept']}"
-        )
-        for name in st["samples"]:
-            print(f"  monitor: {name[:120]}")
-        if st["candidates"] > len(st["samples"]):
-            print(f"  … a dalších {st['candidates'] - len(st['samples'])}")
         return
     if a.retire_bad_feeds:
         st = retire_bad_feed_items(db, dry_run=a.dry_run)
@@ -782,23 +749,7 @@ def main(argv=None):
         print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:
         return
-    products = []
-    for url, shape in PRODUCTS:
-        prod, msg = add_by_url(db, url)
-        print(f"{'OK ' if not msg else '!! '} {prod.name if prod else url} {msg}")
-        if prod is None:
-            continue
-        products.append(prod)
-        o = prod.offers[0]
-        if not a.no_demo and o.price and not db.scalar(select(PricePoint).where(PricePoint.offer_id == o.id, PricePoint.is_demo.is_(True))):
-            demo_history(db, o, shape)
-            db.commit()
-    for url, idx in FEED_OFFERS:
-        from lovceny.shops import shop_for_url
-        if idx < len(products) and not db.scalar(select(Offer).where(Offer.url == url)):
-            db.add(Offer(product=products[idx], shop=shop_for_url(url).slug, url=url, status="pending"))
-    db.commit()
-    print("Seed hotov.")
+    print("Seed z holých adres je vypnutý. Produkty vznikají z katalogu nebo z feedu.")
 
 
 if __name__ == "__main__":
