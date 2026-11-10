@@ -13,6 +13,14 @@ import pytest
 
 from lovceny.db import DATABASE_URL, Base, engine
 
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "browser: spouští skutečný Chrome; nepatří do brány stahování cen",
+    )
+
+
 if engine.dialect.name != "sqlite" or engine.url.database != _TEST_DB_PATH:
     raise RuntimeError("pytest refused to start: tests may only use the temporary sqlite file")
 if "neon.tech" in DATABASE_URL or DATABASE_URL.startswith("postgres"):

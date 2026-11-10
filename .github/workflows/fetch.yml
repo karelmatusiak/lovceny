@@ -17,7 +17,22 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt
-      - run: python -m pytest -q
+      - name: Kontrola importu cen
+        # Prohlížečové testy běží ve workflow „Testy“ (push a pull request).
+        # Rozbitý import feedu nebo aktualizace nabídky nesmí sáhnout na produkční ceny.
+        # test_retire_bad_feed_items_removes_filter_offer stahuje živé feedy a patří do Testů.
+        # Padající test výzvy na plochu stahování nezastaví.
+        run: |
+          python -m pytest -q \
+            --deselect tests/test_ehub.py::test_retire_bad_feed_items_removes_filter_offer \
+            tests/test_feed.py \
+            tests/test_dognet.py \
+            tests/test_ehub.py \
+            tests/test_monitor.py \
+            tests/test_availability.py \
+            tests/test_category_display_identity.py \
+            tests/test_shops_search.py \
+            tests/test_shops_v4.py
       - name: Stáhnout ceny
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

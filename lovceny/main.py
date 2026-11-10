@@ -13,7 +13,7 @@ from sqlalchemy import select, func, or_
 
 from .db import SessionLocal, init_db
 from .models import Product, Offer, PricePoint, Watch, PushSubscription
-from .categories import CATEGORIES, BY_SLUG
+from .categories import CATEGORIES, BY_SLUG, classify, is_accessory_text
 from . import push as pushmod
 from . import seo
 from .web import static_url, canonical, public_url, CacheHeadersMiddleware, add_compression, AnalyticsMiddleware
@@ -141,9 +141,16 @@ def _startup():
     init_db()
     # Obnov soft-tombstony za hard-delete před soft-retire (301 /produkt → kategorie).
     from .retire_tombstones import restore_tombstones
+    from .catalog_repair import repair_catalog
+    log = logging.getLogger("lovceny")
     db = SessionLocal()
     try:
         restore_tombstones(db)
+        st = repair_catalog(db, dry_run=False)
+        log.info("Úklid katalogu při startu: %s", {k: st[k] for k in st if k != "samples"})
+    except Exception:
+        log.exception("Úklid katalogu při startu selhal")
+        db.rollback()
     finally:
         db.close()
 
@@ -161,6 +168,21 @@ def priced_offers(offers):
     ať Alza/Datart bez feedu a mrtvé scrape obchody nerozbíjejí produktové stránky.
     Až feed/scrape cenu doplní, nabídka se objeví sama."""
     return [o for o in offers if o.price is not None]
+
+
+def _merged_target(db, p: Product):
+    """Přeživší produkt po sloučení, nebo None (301 zůstane na kategorii)."""
+    seen = set()
+    cur = p
+    while cur is not None and cur.redirect_product_id and cur.id not in seen:
+        seen.add(cur.id)
+        nxt = db.get(Product, cur.redirect_product_id)
+        if nxt is None:
+            return None
+        if nxt.retired_at is None:
+            return nxt
+        cur = nxt
+    return None
 
 
 def product_summary(p: Product):
@@ -188,6 +210,21 @@ def price_history_thin(db) -> bool:
     return n_pts < n_priced * MIN_DAYS
 
 
+def _slevy_promo(rows):
+    """Fallback na /slevy: týden historie, slušný název, skladem. Čerstvý Allegro výplň ne."""
+    out = []
+    for p, best, v in rows:
+        if best is None or best.in_stock is False:
+            continue
+        if getattr(v, "code", None) == "none":
+            continue
+        from .matching import decent_title
+        if not decent_title(p.name or ""):
+            continue
+        out.append((p, best, v))
+    return out
+
+
 def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     """Karty produktů s aspoň jednou cenou – bez ceny do výpisů nepatří."""
     from sqlalchemy.orm import selectinload
@@ -203,10 +240,10 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
             by_id = {p.id: p for p in products}
             products = [by_id[i] for i in watched_ids if i in by_id]
         else:
-            products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
+            # Bez hlídání neukazujeme „nejnovější“ pod nadpisem Nejsledovanější.
+            return []
     else:
         products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
-    from .categories import is_accessory_text
     from .availability import offer_is_buyable
     scored = []
     for p in products:
@@ -310,8 +347,8 @@ def deals_page(request: Request, db=Depends(get_db)):
         "push_key": pushmod.public_key() if pushmod.enabled() else "",
         "email_on": False,
         "thin_history": price_history_thin(db),
-        "newest": newest,
-        "watched": watched,
+        "newest": _slevy_promo(newest),
+        "watched": _slevy_promo(watched),
         "near": near,
     })
 
@@ -469,6 +506,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         raise HTTPException(404)
     # Soft-retired: 301 na kategorii (nebo /), ať staré URL nepřijdou o SEO/uživatele.
     if p.retired_at is not None:
+        target_prod = _merged_target(db, p)
+        if target_prod is not None:
+            return RedirectResponse(f"/produkt/{target_prod.id}-{target_prod.slug}", status_code=301)
         cat = BY_SLUG.get(p.category_slug or "")
         target = f"/kategorie/{cat.slug}" if cat else "/"
         return RedirectResponse(target, status_code=301)
@@ -481,7 +521,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     last_known = last_known_offer(p.offers)
     offers = sort_offers_for_display(p.offers)
     pts = [pt for o in p.offers for pt in o.points]
-    ranges = build_chart(pts, verdict=v)
+    display_price = best or last_known
+    live = float(display_price.price) if display_price is not None and display_price.price is not None else None
+    ranges = build_chart(pts, verdict=v, live_price=live)
     cat = BY_SLUG.get(p.category_slug or "")
     # unikátní short name napříč katalogem (mapa s TTL – ne SELECT * Product na každý request)
     names = assign_all_display_names(db)
@@ -774,6 +816,11 @@ def _cat_rows(db, c):
             p = by_id.get(pid)
             if not p or p.retired_at is not None:
                 continue
+            if is_accessory_text(p.name or "", p.category):
+                continue
+            guessed = classify(p.name or "")
+            if guessed and guessed != c.slug:
+                continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
             if best is None:
                 best = last_known_offer(p.offers)
@@ -789,6 +836,11 @@ def _cat_rows(db, c):
     rows = []
     payload = []
     for p in products:
+        if is_accessory_text(p.name or "", p.category):
+            continue
+        guessed = classify(p.name or "")
+        if guessed and guessed != c.slug:
+            continue
         buyable, v = product_summary(p)
         # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.
         display = buyable or last_known_offer(p.offers)

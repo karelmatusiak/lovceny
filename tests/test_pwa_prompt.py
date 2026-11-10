@@ -136,6 +136,23 @@ def test_chrome_environment_drops_toolcache_libs():
     assert env["PATH"] == "/usr/bin"
 
 
+def test_document_ready_rejects_the_page_navigation_is_leaving():
+    """Starý dokument má readyState complete i lovcenyPwa. To nestačí."""
+    browser = _browser()
+    url = "http://127.0.0.1:8776/"
+    stale = {"ready": "complete", "pwa": True, "nav": 2, "href": url}
+    assert browser.document_is_ready(stale, 2, url) is False
+    loading = {"ready": "interactive", "pwa": True, "nav": None, "href": url}
+    assert browser.document_is_ready(loading, 2, url) is False
+    assert browser.document_is_ready({"ready": "complete", "pwa": False, "nav": None, "href": url}, 2, url) is False
+    assert browser.document_is_ready({"ready": "complete", "pwa": True, "nav": None, "href": url + "o-nas"}, 2, url) is False
+    assert browser.document_is_ready(None, 2, url) is False
+    fresh = {"ready": "complete", "pwa": True, "nav": None, "href": url}
+    assert browser.document_is_ready(fresh, 2, url) is True
+    assert browser.document_is_ready({**fresh, "href": url.rstrip("/") + "#hledat"}, 2, url) is True
+
+
+@pytest.mark.browser
 def test_prompt_behavior_in_browser():
     chrome = shutil.which("google-chrome") or shutil.which("google-chrome-stable")
     if not chrome:

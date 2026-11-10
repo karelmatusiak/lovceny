@@ -693,6 +693,9 @@ def main(argv=None):
                     help="smazat příslušenství/špatné nabídky z feed seedu (eHUB + Dognet obchody)")
     ap.add_argument("--repair-categories", action="store_true",
                     help="sundat monitory z kategorie Sluchátka (bez mazání nabídek a historie cen)")
+    ap.add_argument("--repair-catalog", action="store_true",
+                    help="idempotentně: cizí nabídky pryč, sloučit stejný model (301 na přeživší), "
+                         "příslušenství a špatné kategorie. S --dry-run jen počty.")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -700,6 +703,19 @@ def main(argv=None):
         n = db.execute(delete(PricePoint).where(PricePoint.is_demo.is_(True))).rowcount
         db.commit()
         print(f"Smazáno {n} demo bodů.")
+        return
+    if a.repair_catalog:
+        from lovceny.catalog_repair import repair_catalog
+        st = repair_catalog(db, dry_run=a.dry_run)
+        mode = "DRY-RUN" if a.dry_run else "APPLY"
+        print(
+            f"Úklid katalogu ({mode}): prislusenstvi={st['accessories_cleared']} "
+            f"kategorie={st['recategorized']} nabidky_pryc={st['offers_detached']} "
+            f"rozdeleno={st['offers_split']} prepojeno={st['offers_reattached']} "
+            f"slouceno={st['products_merged']} prazdne={st['empty_retired']}"
+        )
+        for line in st["samples"]:
+            print(f"  {line}")
         return
     if a.repair_categories:
         st = repair_display_headphones(db, dry_run=a.dry_run)

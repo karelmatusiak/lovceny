@@ -201,9 +201,13 @@ def _mpn_tokens(canon: str) -> set[str]:
     toks = canon.split()
     out = set(_MPN_RE.findall(canon.replace(" ", "")))  # celý řetězec bez mezer
     out |= set(_MPN_RE.findall(canon))
+    # Jednotky + číslo („20 bar 1,4 l“ → bar1) nejsou modelový kód.
+    units = {"bar", "kg", "cm", "mm", "hz", "rpm", "wh", "mah", "ot", "w", "l", "litr", "litru"}
     # dvojice: písmenný prefix + číselný kód vedle sebe (svc + 7811wh), ne pro/air/…
     for i, t in enumerate(toks[:-1]):
-        if t.isalpha() and len(t) <= 5 and t not in _VARIANT_TOKENS and any(c.isdigit() for c in toks[i + 1]):
+        if t in units or t in _VARIANT_TOKENS:
+            continue
+        if t.isalpha() and len(t) <= 5 and any(c.isdigit() for c in toks[i + 1]):
             out.add(t + toks[i + 1])
     return {x for x in out if len(x) >= 4}
 
@@ -253,17 +257,26 @@ def _product_line(canon: str) -> str | None:
 
 
 def offer_conflicts_product(product_name: str, offer_url: str, offer_title: str | None = None) -> bool:
-    """True = nabídka zjevně patří k jinému produktu (špatný desturl / přepsané URL)."""
+    """True = nabídka zjevně patří k jinému produktu (špatný desturl / přepsané URL).
+
+    Nestačí neshoda názvu. Konflikt je jiná řada, jiná značka, jiný příkon/objem/
+    úložiště, jiná barva nebo jiná generace. Stejné EAN pak nabídku nepřipojí.
+    """
     other = offer_title or ""
     if not other:
-        # hrubý název z URL path (istyle /products/foo-bar)
+        # hrubý název z URL path (istyle /products/foo-bar, allegro /nabidka/slug)
         from urllib.parse import urlparse, unquote
         path = unquote(urlparse(offer_url or "").path)
         slug = path.rstrip("/").split("/")[-1]
-        other = slug.replace("-", " ")
+        other = slug
+    from ..matching import prepare_offer_label, titles_conflict
+    other = prepare_offer_label(other)
     if not other.strip():
         return False
-    return not names_match(product_name, other) and _hard_conflict(product_name, other)
+    # Značka / příkon / objem / barva / generace přebíjí i shodu „bar1“ z „20 bar 1,4 l“.
+    if _hard_conflict(product_name, other) or titles_conflict(product_name, other):
+        return True
+    return False
 
 
 def _hard_conflict(a: str, b: str) -> bool:

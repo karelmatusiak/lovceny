@@ -17,6 +17,11 @@ from .models import Product, Offer, PricePoint
 from .verdict import compute, Verdict
 from .availability import best_buyable_offer
 from .categories import is_accessory_text
+from .matching import decent_title
+
+# Skutečná sleva: aspoň 3 % pod obvyklou cenou (medián 90 dní). Samotné „jsme na minimu“
+# u ploché historie sleva není.
+MIN_DEAL_DROP_PCT = 3.0
 
 
 def include_demo() -> bool:
@@ -132,11 +137,11 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 50
     pending = []
     offer_ids = []
     for p in products:
-        if is_accessory_text(p.name or "", p.category):
+        if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
         offs = offers_by.get(p.id, [])
         best = best_buyable_offer(offs)
-        if not best:
+        if not best or best.in_stock is False:
             continue
         pending.append((p, offs, best))
         offer_ids.extend(o.id for o in offs)
@@ -153,6 +158,8 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 50
         cur = float(v.current or best.price)
         save = max(0.0, md - cur) if md else 0.0
         pct = (save / md * 100) if md else 0.0
+        if v.code == "buy" and pct < MIN_DEAL_DROP_PCT:
+            continue
         rows.append(DealRow(p, best, v, save, pct, has_demo=saw_demo and allow))
     return rows
 
@@ -275,11 +282,11 @@ def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]
     pending = []
     offer_ids = []
     for p in products:
-        if is_accessory_text(p.name or "", p.category):
+        if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
         offs = offers_by.get(p.id, [])
         best = best_buyable_offer(offs)
-        if not best:
+        if not best or best.in_stock is False:
             continue
         pending.append((p, offs, best))
         offer_ids.extend(o.id for o in offs)

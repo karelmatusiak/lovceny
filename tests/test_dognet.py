@@ -448,7 +448,15 @@ def test_allegro_categories_skip_accessories():
     for name, cat in samples:
         assert is_accessory_text(name, cat), name
         assert accept_feed_item(name, cat, 2500) is None, name
-    assert not is_accessory_text("Sony DualSense ovladač černý", "Elektronika > Konzole a herní automaty > PlayStation 5 > Konzole")
+    # Ovladač není hlavní produkt kategorie, ani když list cesty říká „Konzole“.
+    assert is_accessory_text("Sony DualSense ovladač černý", "Elektronika > Konzole a herní automaty > PlayStation 5 > Konzole")
+    assert accept_feed_item(
+        "Sony DualSense ovladač černý",
+        "Elektronika > Konzole a herní automaty > PlayStation 5 > Konzole",
+        1990,
+    ) is None
+    assert not is_accessory_text("PlayStation 5 Slim 825GB Digital Edition")
+    assert not is_accessory_text("PlayStation 5 Slim, SSD 1TB, Blu-Ray 2X DualSense + hra Astro's Playroom")
     # rodič „příslušenství“ neshodí telefon ani hodinky
     assert not is_accessory_text("Apple iPhone 15 128GB", PHONE)
     assert not is_accessory_text("Chytré hodinky Garmin Venu 3", WATCH)
