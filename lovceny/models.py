@@ -50,6 +50,11 @@ class Offer(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
     last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Poslední úspěšně zapsaná cena (ne blokace). NULL u starých řádků = last_checked, pokud status je ok.
+    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Poslední dva běhy, ve kterých tahle nabídka byla na řadě (ne celý obchod).
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_prev: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     product: Mapped[Product] = relationship(back_populates="offers")
     points: Mapped[list["PricePoint"]] = relationship(back_populates="offer", cascade="all, delete-orphan",
                                                       order_by="PricePoint.captured_at")

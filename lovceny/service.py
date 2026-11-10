@@ -46,6 +46,7 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
                  source: str, when: datetime | None = None):
     """Uloží aktuální cenu. price<=0 / None nepatří do historie (graf by jinak šel na 0 Kč)."""
     offer.last_checked = when or datetime.now(timezone.utc)
+    offer.last_ok_at = offer.last_checked
     offer.status, offer.last_error = "ok", None
     offer.in_stock = in_stock
     if original is not None:
@@ -129,13 +130,18 @@ def update_offer(db: Session, offer: Offer, stats=None) -> str:
 
 def _update_offer(db: Session, offer: Offer):
     """→ (stav, druh výsledku pro monitoring, HTTP status, chyba)."""
+    from .offer_trust import note_offer_due
     shop = get_shop(offer.shop)
     if shop is None or not shop.can_scrape:
         if shop and shop.source == "feed":
             return "feed", None, None, None  # řeší import feedu
         offer.status = "blocked"
         offer.last_error = shop.note if shop else "neznámý obchod"
+        note_offer_due(offer)
         return "blocked", "blocked", None, offer.last_error
+    # Tahle nabídka byla v dávce a opravdu se o ni sáhlo. Přeskočené (čerstvé,
+    # mimo limit Mironetu, backoff) se sem nedostanou a za minutí se nepočítají.
+    note_offer_due(offer)
     try:
         html = client().get(offer.url)
         res = (shop.page_parser or parse_product)(html)
@@ -503,6 +509,12 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
         remember_gtin(o.gtin, o.product, o)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
+    # Celý feed je jeden pohled na obchod: každá jeho nabídka byla na řadě,
+    # i ta, která v souboru chyběla. Rotující scrape (Mironet) sem nepatří.
+    from .offer_trust import note_offer_due
+    looked_at = datetime.now(timezone.utc)
+    for existing in db.scalars(select(Offer).where(Offer.shop == shop_slug)).all():
+        note_offer_due(existing, looked_at)
     db.commit()
     return stats
 

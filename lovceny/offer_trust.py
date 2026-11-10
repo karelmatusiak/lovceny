@@ -1,24 +1,30 @@
 """Která nabídka smí být „nejlevnější“ a mít tlačítko Koupit.
 
-Neověřená cena (obchod ji v posledních dvou úspěšných bězích neviděl, nebo
-poslední stažení skončilo blokací) se ve výpisech nepropaguje. Historie cen
-u nabídky zůstává.
+Neověřená cena se ve výpisech nepropaguje. Historie cen u nabídky zůstává.
+
+Zastaralá je nabídka, jejíž poslední úspěšné pozorování je starší než oba
+poslední běhy, ve kterých byla na řadě, nebo starší než STALE_MAX_AGE.
+Běh obchodu, který nabídku vůbec nevybral (Mironet bere jen 24 nejstarších),
+se jako minutí nepočítá. Poslední pokus zablokovaný captchou není koupitelný
+bez ohledu na stáří.
 """
 from __future__ import annotations
 
 import contextvars
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .availability import offer_is_buyable
 
-# Běh se do DB zapíše až na konci. Nabídka ověřená během něj má last_checked
-# o pár minut dřív než run_at, a proto se za „neviděnou“ nepočítá.
+# Úspěch a razítko „byla na řadě“ vzniknou v tomtéž běhu pár vteřin od sebe.
 STALE_GRACE = timedelta(minutes=45)
+# Pojistka: i nabídka, na kterou rotace dlouho nedojde, po téhle době ztratí Koupit.
+STALE_MAX_AGE = timedelta(days=4)
+# Dva pokusy v jednom běhu (feed zapíše cenu a na konci označí všechny) jsou jeden běh.
+_SAME_RUN = timedelta(minutes=45)
 
-_CUTOFFS: contextvars.ContextVar[dict[str, datetime] | None] = contextvars.ContextVar(
+_CUTOFFS: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
     "lovceny_stale_cutoffs", default=None,
 )
 
@@ -33,40 +39,40 @@ def reset_cutoffs() -> None:
     _CUTOFFS.set(None)
 
 
-def current_cutoffs() -> dict[str, datetime] | None:
+def current_cutoffs():
     return _CUTOFFS.get()
 
 
-def load_stale_cutoffs(db: Session) -> dict[str, datetime]:
-    """Obchod → čas staršího ze dvou posledních úspěšných běhů.
-
-    Úspěšný běh je ten, který aspoň jednu cenu opravdu zapsal (`ok` > 0).
-    Méně než dva takové běhy znamenají, že nabídky obchodu ještě nejsou zastaralé.
-    """
-    from .models import ShopRunStat
-    rows = db.execute(
-        select(ShopRunStat.shop, ShopRunStat.run_at)
-        .where(ShopRunStat.ok > 0)
-        .order_by(ShopRunStat.run_at.desc())
-    ).all()
-    seen: dict[str, list[datetime]] = {}
-    for shop, run_at in rows:
-        bucket = seen.setdefault(shop, [])
-        if len(bucket) < 2 and run_at is not None:
-            bucket.append(run_at)
-    out: dict[str, datetime] = {}
-    for shop, times in seen.items():
-        if len(times) >= 2:
-            aware = _aware(times[1])
-            if aware is not None:
-                out[shop] = aware
-    return out
+def load_stale_cutoffs(db: Session) -> dict:
+    """Stáří se počítá z razítek na nabídce, ne z běhu celého obchodu."""
+    return {}
 
 
-def use_cutoffs(db: Session) -> dict[str, datetime]:
+def use_cutoffs(db: Session) -> dict:
     data = load_stale_cutoffs(db)
     _CUTOFFS.set(data)
     return data
+
+
+def note_offer_due(offer, when: datetime | None = None) -> None:
+    """Nabídka byla v tomhle běhu na řadě. Přeskočená (mimo dávku) se nevolá."""
+    stamp = _aware(when or datetime.now(timezone.utc))
+    current = _aware(getattr(offer, "due_at", None))
+    if current is not None and abs(stamp - current) < _SAME_RUN:
+        offer.due_at = stamp
+        return
+    offer.due_prev = current
+    offer.due_at = stamp
+
+
+def last_success_at(offer) -> datetime | None:
+    """Kdy jsme naposledy opravdu zapsali cenu, ne kdy naposledy spadla captcha."""
+    explicit = _aware(getattr(offer, "last_ok_at", None))
+    if explicit is not None:
+        return explicit
+    if getattr(offer, "status", None) == "ok":
+        return _aware(getattr(offer, "last_checked", None))
+    return None
 
 
 def offer_is_blocked(offer) -> bool:
@@ -74,19 +80,23 @@ def offer_is_blocked(offer) -> bool:
     return getattr(offer, "status", None) == "blocked"
 
 
-def offer_is_stale(offer, cutoffs: dict[str, datetime] | None = None) -> bool:
-    """Poslední dva úspěšné běhy obchodu nabídku neviděly."""
-    if cutoffs is None:
-        cutoffs = current_cutoffs()
-    if not cutoffs:
-        return False
-    cutoff = cutoffs.get(getattr(offer, "shop", None) or "")
-    if cutoff is None:
-        return False
-    checked = _aware(getattr(offer, "last_checked", None))
-    if checked is None:
+def offer_is_stale(offer, cutoffs=None, now: datetime | None = None) -> bool:
+    """Dva běhy, ve kterých byla na řadě, ji neviděly, nebo je úspěch starší než 4 dny.
+
+    `cutoffs` se nepoužívá. Celý běh obchodu (Mironet 24 z 65) není minutí
+    nabídky, která v dávce nebyla.
+    """
+    moment = _aware(now or datetime.now(timezone.utc))
+    success = last_success_at(offer)
+    if success is not None and moment is not None and success < moment - STALE_MAX_AGE:
         return True
-    return checked < cutoff - STALE_GRACE
+    older = _aware(getattr(offer, "due_prev", None))
+    newer = _aware(getattr(offer, "due_at", None))
+    if older is None or newer is None:
+        return False
+    if success is None:
+        return True
+    return success < older - STALE_GRACE
 
 
 def offer_mismatches_product(offer, product=None) -> bool:

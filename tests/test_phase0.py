@@ -110,34 +110,74 @@ def test_known_bad_offers_detach_once_and_keep_history():
     db.close()
 
 
-def test_stale_and_blocked_are_not_cheapest_and_have_no_buy(client_db):
+def test_unscheduled_mironet_run_does_not_grey_the_offer(client_db):
+    """Dva úspěšné běhy Mironetu samy o sobě nabídku nezastarají, když v nich nebyla."""
     client, db, make = client_db
     now = datetime.now(timezone.utc)
-    p = make([20000], name="Pixel ověřený", category="telefony", shop="alza")
-    fresh = p.offers[0]
-    fresh.last_checked = now
-    stale = Offer(product=p, shop="mironet", url="https://www.mironet.cz/pixel-stale",
-                  price=1000, in_stock=True, status="ok", last_checked=now - timedelta(days=5))
-    blocked = Offer(product=p, shop="softcom", url="https://www.softcom.cz/pixel-block",
-                    price=500, in_stock=True, status="blocked", last_checked=now,
-                    last_error="captcha")
+    p = make([20000], name="Pixel dražší", category="telefony", shop="alza")
+    p.offers[0].last_checked = now
+    p.offers[0].last_ok_at = now
+    waiting = Offer(
+        product=p, shop="mironet", url="https://www.mironet.cz/pixel-waiting",
+        price=1000, in_stock=True, status="ok",
+        last_checked=now - timedelta(days=1), last_ok_at=now - timedelta(days=1),
+    )
     db.add_all([
-        stale, blocked,
-        ShopRunStat(run_id="r1", shop="mironet", run_at=now - timedelta(hours=18), ok=4, attempts=4),
-        ShopRunStat(run_id="r2", shop="mironet", run_at=now - timedelta(hours=8), ok=4, attempts=4),
+        waiting,
+        ShopRunStat(run_id="r1", shop="mironet", run_at=now - timedelta(hours=18), ok=24, attempts=24),
+        ShopRunStat(run_id="r2", shop="mironet", run_at=now - timedelta(hours=6), ok=24, attempts=24),
     ])
     db.commit()
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
-    assert "Koupit za" in html and "20" in html
+    assert "Koupit za 1\u00a0000" in html
     assert "nejlevnější" in html
-    assert html.index("Koupit za") < html.index("Cena neověřena")
+    assert "Cena neověřena" not in html
+
+
+def test_two_due_runs_without_a_success_make_the_offer_stale(client_db):
+    client, db, make = client_db
+    now = datetime.now(timezone.utc)
+    p = make([20000], name="Pixel ověřený", category="telefony", shop="alza")
+    p.offers[0].last_checked = now
+    p.offers[0].last_ok_at = now
+    missed = Offer(
+        product=p, shop="mironet", url="https://www.mironet.cz/pixel-missed",
+        price=1000, in_stock=True, status="ok",
+        last_checked=now - timedelta(days=2), last_ok_at=now - timedelta(days=2),
+        due_prev=now - timedelta(hours=18), due_at=now - timedelta(hours=6),
+    )
+    blocked = Offer(
+        product=p, shop="softcom", url="https://www.softcom.cz/pixel-block",
+        price=500, in_stock=True, status="blocked", last_checked=now,
+        last_ok_at=now - timedelta(hours=1), last_error="captcha",
+    )
+    db.add_all([missed, blocked])
+    db.commit()
+    html = client.get(f"/produkt/{p.id}-{p.slug}").text
+    assert "Koupit za 20\u00a0000" in html
+    assert "Cena neověřena" in html
     assert "Cenu se nepodařilo ověřit" in html
-    assert "offer-unverified" in html
     assert html.count("btn-shop") == 1
-    home = client.get("/").text
-    deals = client.get("/slevy").text
-    assert "1 000" not in home and "1 000" not in deals
-    assert "500" not in html.split("Koupit za", 1)[0]
+    assert "1\u00a0000" not in client.get("/").text
+    assert "1\u00a0000" not in client.get("/slevy").text
+
+
+def test_four_day_safety_net_stales_even_without_a_due_run(client_db):
+    client, db, make = client_db
+    now = datetime.now(timezone.utc)
+    p = make([20000], name="Pixel čerstvý", category="telefony", shop="alza")
+    p.offers[0].last_ok_at = now
+    old = Offer(
+        product=p, shop="mironet", url="https://www.mironet.cz/pixel-old",
+        price=1000, in_stock=True, status="ok",
+        last_checked=now - timedelta(days=5), last_ok_at=now - timedelta(days=5),
+    )
+    db.add(old)
+    db.commit()
+    html = client.get(f"/produkt/{p.id}-{p.slug}").text
+    assert "Cena neověřena" in html
+    assert "Koupit za 20\u00a0000" in html
+    assert "Koupit za 1\u00a0000" not in html
 
 
 def test_unreviewed_products_stay_on_their_page_but_not_in_listings(client_db):
