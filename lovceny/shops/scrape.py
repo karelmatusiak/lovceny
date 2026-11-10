@@ -218,6 +218,26 @@ def parse_microdata(html: str) -> ScrapeResult | None:
                         ean=gtin, category=None)
 
 
+def og_image(html: str) -> str | None:
+    """og:image produktu. Přeskočí data-URI, svg a URL, která vypadá jako logo obchodu."""
+    if not html:
+        return None
+    import html as _html
+    tag = re.search(r'<meta\b[^>]*\bproperty=["\']og:image["\'][^>]*>', html, re.I)
+    if tag is None:
+        tag = re.search(r'<meta\b[^>]*\bcontent=["\'][^"\']+["\'][^>]*\bproperty=["\']og:image["\'][^>]*>', html, re.I)
+    if tag is None:
+        return None
+    c = re.search(r'\bcontent=["\']([^"\']+)["\']', tag.group(0), re.I)
+    if not c:
+        return None
+    url = _html.unescape(c.group(1)).strip()
+    low = url.lower()
+    if not url or low.startswith("data:") or "logo" in low or low.endswith(".svg"):
+        return None
+    return url
+
+
 def parse_generic(html: str) -> ScrapeResult | None:
     """Obecný parser libovolného obchodu: JSON-LD → microdata → meta tagy."""
     for d in _iter_jsonld(html):

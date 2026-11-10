@@ -14,8 +14,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from threading import Lock
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -34,6 +36,15 @@ MIN_CLAIMED_PCT = 3.0     # sleva podle obchodu aspoň 3 %
 MIN_REAL_PCT = 3.0        # nebo náš verdikt Kupuj a aspoň 3 % pod obvyklou cenou (medián 90 dní)
 LOWEST_MIN_DAYS = 30      # „nejnižší, co jsme naměřili“ jen při aspoň 30 dnech historie
 TOP_DIGEST = 5
+# Stejné okno jako /slevy. Razítko katalogu cache shodí hned po zápisu nové ceny.
+_CACHE_TTL_S = 7 * 60
+_cache_lock = Lock()
+_rows_cache: dict[tuple, tuple[float, tuple, list]] = {}
+
+
+def clear_cache() -> None:
+    with _cache_lock:
+        _rows_cache.clear()
 MONTHS = ["ledna", "února", "března", "dubna", "května", "června", "července", "srpna", "září", "října", "listopadu", "prosince"]
 
 
@@ -143,25 +154,61 @@ def _fresh(o: Offer, now: datetime) -> bool:
     return bool(lc) and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) >= now - timedelta(days=FRESH_DAYS)
 
 
-def rows(db, now: datetime | None = None, category: str = "", shop: str = "", allow_demo: bool | None = None,
-         require_fresh: bool = True) -> list[BfRow]:
-    from .deals import include_demo, _points_for
+def _row_payload(r: BfRow) -> dict:
+    return {
+        "product_id": r.product.id, "offer_id": r.best.id, "verdict": r.verdict,
+        "claimed_pct": r.claimed_pct, "real_pct": r.real_pct, "min30": r.min30, "min30_date": r.min30_date,
+        "lowest": r.lowest, "days": r.days, "is_lowest": r.is_lowest, "has_demo": r.has_demo,
+    }
+
+
+def _rehydrate(db, payload: list[dict]) -> list[BfRow]:
+    if not payload:
+        return []
+    ids = [p["product_id"] for p in payload]
+    products = db.scalars(
+        select(Product).where(Product.id.in_(ids)).options(selectinload(Product.offers))
+    ).all()
+    by = {p.id: p for p in products}
+    out = []
+    for pl in payload:
+        p = by.get(pl["product_id"])
+        if not p or p.retired_at is not None:
+            continue
+        best = next((o for o in p.offers if o.id == pl["offer_id"]), None)
+        if best is None:
+            continue
+        out.append(BfRow(
+            p, best, pl["verdict"], pl["claimed_pct"], pl["real_pct"], pl["min30"], pl["min30_date"],
+            pl["lowest"], pl["days"], pl["is_lowest"], pl["has_demo"],
+        ))
+    return out
+
+
+def _compute_rows(db, now: datetime, category: str, shop: str, allow: bool, require_fresh: bool) -> list[BfRow]:
+    from .deals import load_offers_for, load_points_for_offers, points_from_map
     from .verdict import compute, daily_best
-    now = now or datetime.now(timezone.utc)
-    allow = include_demo() if allow_demo is None else allow_demo
-    q = (select(Product).where(Product.retired_at.is_(None))
-         .options(selectinload(Product.offers).selectinload(Offer.points)))
+    q = select(Product).where(Product.retired_at.is_(None))
     if category:
         q = q.where(Product.category_slug == category)
-    out = []
-    for p in db.scalars(q).all():
+    products = db.scalars(q).all()
+    offers_by = load_offers_for(db, products)
+    pending = []
+    offer_ids = []
+    for p in products:
         if is_accessory_text(p.name or "", p.category):
             continue
-        cands = [o for o in p.offers if offer_is_buyable(o) and o.status == "ok" and (not require_fresh or _fresh(o, now))]
+        offs = offers_by.get(p.id, [])
+        cands = [o for o in offs if offer_is_buyable(o) and o.status == "ok" and (not require_fresh or _fresh(o, now))]
         best = min(cands, key=lambda o: float(o.price), default=None)
         if not best or (shop and best.shop != shop):
             continue
-        pts, saw_demo = _points_for(p, allow)
+        pending.append((p, offs, best))
+        offer_ids.extend(o.id for o in offs)
+    by_pts = load_points_for_offers(db, offer_ids)
+    out = []
+    for p, offs, best in pending:
+        pts, saw_demo = points_from_map(offs, by_pts, allow)
         cur = float(best.price)
         orig = float(best.original_price) if best.original_price else None
         v = compute(pts, cur, orig, now=now)
@@ -183,6 +230,32 @@ def rows(db, now: datetime | None = None, category: str = "", shop: str = "", al
     order = {"buy": 0, "wait": 1, "fake": 2, "none": 3}
     out.sort(key=lambda r: (not r.is_lowest, order.get(r.kind, 4), -r.real_pct, -(r.claimed_pct or 0)))
     return out
+
+
+def rows(db, now: datetime | None = None, category: str = "", shop: str = "", allow_demo: bool | None = None,
+         require_fresh: bool = True) -> list[BfRow]:
+    from .deals import include_demo, catalog_stamp
+    # Výchozí volání ze stránky. Explicitní now (digest, testy s pevným časem) cache nepoužije.
+    cacheable = now is None and not category and not shop and allow_demo is None and require_fresh
+    allow = include_demo() if allow_demo is None else allow_demo
+    if cacheable:
+        stamp = catalog_stamp(db)
+        key = (allow, True)
+        t = time.monotonic()
+        with _cache_lock:
+            hit = _rows_cache.get(key)
+            if hit and hit[1] == stamp and t - hit[0] < _CACHE_TTL_S:
+                payload = hit[2]
+            else:
+                payload = None
+        if payload is not None:
+            return _rehydrate(db, payload)
+        computed = _compute_rows(db, datetime.now(timezone.utc), "", "", allow, True)
+        with _cache_lock:
+            _rows_cache[key] = (t, stamp, [_row_payload(r) for r in computed])
+        return computed
+    when = now or datetime.now(timezone.utc)
+    return _compute_rows(db, when, category, shop, allow, require_fresh)
 
 
 def summary(rs: list[BfRow]) -> dict:

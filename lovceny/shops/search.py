@@ -202,6 +202,31 @@ def search_svetpocitacu(query: str, get=None) -> list[SearchHit]:
     return parse_svetpocitacu(page, final)
 
 
+def abcom_detail_image(page: str) -> str | None:
+    """Hlavní fotka detailu. src je 1×1 placeholder, skutečná URL je data-original (ne výpis „list/“)."""
+    m = re.search(
+        r'class="box-detail__image__main\b[^"]*"[\s\S]{0,4000}?data-original="(https://[^"]+)"',
+        page, re.I)
+    if m:
+        return _html.unescape(m.group(1))
+    m = re.search(
+        r'class="box-detail__image__main\b[^"]*"[\s\S]{0,4000}?'
+        r'<noscript>\s*<img\b[^>]*\bsrc="(https://[^"]+/content/images/product/(?:default|original)/[^"]+)"',
+        page, re.I)
+    return _html.unescape(m.group(1)) if m else None
+
+
+def parse_abcom_detail(page: str):
+    """Detail AB-COM: cena z meta itemprop=price (jako parse_product), fotka z galerie / og:image."""
+    from .scrape import parse_product, og_image
+    res = parse_product(page)
+    if res is None:
+        return None
+    if not res.image or res.image.startswith("data:"):
+        res.image = abcom_detail_image(page) or og_image(page)
+    return res
+
+
 def parse_abcom(page: str, base: str = "https://www.ab-com.cz/") -> list[SearchHit]:
     hits = []
     for b in _blocks(page, r'<div class="list-products__item js-list-products-item">'):
@@ -460,6 +485,20 @@ def parse_ellexgk(page: str, base: str = "https://www.ellexgk.cz/") -> list[Sear
         hits.append(SearchHit("ellexgk", _text(m.group(2)), price, urljoin(base, m.group(1)), imgs[0] if imgs else None,
                               o if o and o > price else None))
     return hits
+
+
+def parse_ellexgk_detail(page: str):
+    """Detail Ellex (Upgates): cena z microdata meta, fotka z og:image (ne logo obchodu v itemprop)."""
+    from .scrape import parse_product, og_image
+    res = parse_product(page)
+    if res is None:
+        return None
+    img = (res.image or "")
+    if not img or img.startswith("data:") or "logo" in img.lower():
+        og = og_image(page)
+        if og:
+            res.image = og
+    return res
 
 
 def search_ellexgk(query: str, get=None) -> list[SearchHit]:

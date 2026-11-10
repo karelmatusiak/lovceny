@@ -297,17 +297,21 @@ def kontakt_get():
 def deals_page(request: Request, db=Depends(get_db)):
     data = real_deals(db)
     assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
-    near = []
+    # Karty a „blízko minima“ jsou jen prázdný stav. Když Kupuj existuje, šablona je nečte
+    # a jejich selectinload historie by zbytečně držel TTFB.
+    near, newest, watched = [], [], []
     if not data.get("buys"):
         from . import deals as dealsmod
         near = dealsmod.near_minima(db, limit=12)
+        newest = priced_product_cards(db, limit=6, order="new")
+        watched = priced_product_cards(db, limit=6, order="watched")
     return tpl.TemplateResponse(request, "deals.html", {
         **data,
         "push_key": pushmod.public_key() if pushmod.enabled() else "",
         "email_on": False,
         "thin_history": price_history_thin(db),
-        "newest": priced_product_cards(db, limit=6, order="new"),
-        "watched": priced_product_cards(db, limit=6, order="watched"),
+        "newest": newest,
+        "watched": watched,
         "near": near,
     })
 

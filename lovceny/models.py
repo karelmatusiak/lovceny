@@ -43,6 +43,7 @@ class Offer(Base):
     product: Mapped[Product] = relationship(back_populates="offers")
     points: Mapped[list["PricePoint"]] = relationship(back_populates="offer", cascade="all, delete-orphan",
                                                       order_by="PricePoint.captured_at")
+    __table_args__ = (Index("ix_offers_last_checked", "last_checked"),)
 
 
 class PricePoint(Base):

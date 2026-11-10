@@ -45,9 +45,9 @@ MAX_REDIRECTS = 3
 QUALITY = 78
 FAIL_TTL_S = 600  # neúspěšné URL chvíli nezkoušíme znovu (šetrnost k obchodům)
 # CDN obchodů, které nejsou poddoménou jejich hlavní domény (Planeo/4Home → fast.eu)
-EXTRA_IMAGE_HOSTS = ("fast.eu", "sony-center.s3.cdn-upgates.com", "cdn.shopify.com",
-                      "res.cloudinary.com", "cdn.myshoptet.com", "allegroimg.com",
-                      "edsi.sk")  # fotky z Google feedu JBL.cz (DSI)
+EXTRA_IMAGE_HOSTS = ("fast.eu", "cdn-upgates.com", "sony-center.s3.cdn-upgates.com",
+                      "cdn.shopify.com", "res.cloudinary.com", "cdn.myshoptet.com",
+                      "allegroimg.com", "edsi.sk")  # fotky z Google feedu JBL.cz (DSI); Upgates = Ellex/Sony
 USER_AGENT = "LovcenyBot/0.1 (+https://lovceny.cz/pro-obchody) image-resizer"
 
 _fail: dict[str, float] = {}
