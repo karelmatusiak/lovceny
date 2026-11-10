@@ -24,6 +24,8 @@ class Product(Base):
     redirect_product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     # Nový produkt z nemapované / málo jisté kategorie zůstane skrytý, dokud ho někdo neschválí.
     catalog_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
+    # Bez kategorie nebo s názvem z adresy: ve výpisech není, dokud to /admin/trideni neschválí.
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")

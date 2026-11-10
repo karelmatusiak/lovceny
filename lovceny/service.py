@@ -217,7 +217,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     from .models import ShopCategoryMapping
     from .shops.feed import canonicalize_name, names_match, offer_conflicts_product, strip_tracking
     from .triage import (
-        ensure_mappings, queue_category, queue_detach, queue_title_match, resolve_category,
+        ensure_mappings, queue_category, queue_detach, queue_model_mismatch, queue_title_match,
+        resolve_category,
     )
 
     shop = get_shop(shop_slug)
@@ -329,6 +330,19 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             by_gtin.pop(g, None)
             by_gtin_offer.pop(g, None)
 
+    def conflicts_with(prod: Product | None, it: FeedItem, clean: str) -> bool:
+        if prod is None:
+            return False
+        from .matching import clear_model_conflict, label_from_url
+        if it.name and offer_conflicts_product(prod.name or "", clean, it.name):
+            return True
+        return clear_model_conflict(prod.name or "", it.name or label_from_url(clean))
+
+    def refuse_attach(prod: Product, it: FeedItem, clean: str) -> None:
+        if queue_model_mismatch(db, shop=shop_slug, product_id=prod.id, item=it, clean_url=clean):
+            stats["queued"] += 1
+        stats["skipped_mismatch"] += 1
+
     def propose_detach(offer: Offer, it: FeedItem, clean: str) -> None:
         by_url.pop(clean_url(offer.url), None)
         by_url.pop(clean, None)
@@ -376,21 +390,21 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         gtin = normalize_gtin(it.ean)
         o = by_url.get(clean) or by_id.get(it.item_id)
         fresh = False
-        if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
+        if o is not None and conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)
             continue
         blocked = False
         if o is None and gtin and not blocked:
             shop_offer = by_gtin_offer.get(gtin)
-            if shop_offer is not None and it.name and offer_conflicts_product(shop_offer.product.name, clean, it.name):
-                stats["skipped_mismatch"] += 1
+            if shop_offer is not None and conflicts_with(shop_offer.product, it, clean):
+                refuse_attach(shop_offer.product, it, clean)
                 blocked = True
             elif shop_offer is not None:
                 o = shop_offer
         if o is None and not blocked:
             prod = follow_redirect(by_gtin.get(gtin)) if gtin else None
-            if prod is not None and it.name and offer_conflicts_product(prod.name, clean, it.name):
-                stats["skipped_mismatch"] += 1
+            if prod is not None and conflicts_with(prod, it, clean):
+                refuse_attach(prod, it, clean)
                 prod = None
                 blocked = True
             if prod is None and not gtin and not blocked:
@@ -453,7 +467,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             stats["matched"] += 1
         if o is None:
             continue
-        if it.name and offer_conflicts_product(o.product.name, clean, it.name):
+        if conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)
             stats["skipped_mismatch"] += 1
             continue

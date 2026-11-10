@@ -1,12 +1,17 @@
 name: Stažení cen
 on:
   schedule:
-    - cron: "17 5,11,17 * * *"   # 3× denně (UTC)
+    - cron: "17 5,11,17 * * *"   # záloha, 3× denně (UTC). Primární budík je repository_dispatch.
   workflow_dispatch: {}
-concurrency: { group: fetch-prices, cancel-in-progress: false }
-# Vestavěný GITHUB_TOKEN smí jen číst kód a zakládat/zavírat issues (monitoring blokací obchodů).
+  repository_dispatch:
+    types: [fetch-prices]
+concurrency:
+  group: fetch-prices
+  cancel-in-progress: false
+# Vestavěný GITHUB_TOKEN smí jen číst kód, číst běhy (ať se cron nezdvojí) a zakládat issues.
 permissions:
   contents: read
+  actions: read
   issues: write
 jobs:
   fetch:
@@ -17,23 +22,63 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt
-      - name: Kontrola importu cen
-        # Prohlížečové testy běží ve workflow „Testy“ (push a pull request).
-        # Rozbitý import feedu nebo aktualizace nabídky nesmí sáhnout na produkční ceny.
-        # test_retire_bad_feed_items_removes_filter_offer stahuje živé feedy a patří do Testů.
-        # Padající test výzvy na plochu stahování nezastaví.
+      - name: Přeskočit, pokud už nedávno doběhlo
+        id: gate
+        # Ruční Run workflow vždy stáhne. Cron a externí budík ne, když úspěch není starší než 3 h.
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pytest -q \
+          python - << 'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timedelta, timezone
+          out = os.environ["GITHUB_OUTPUT"]
+          def emit(skip):
+              with open(out, "a", encoding="utf-8") as fh:
+                  fh.write(f"skip={'true' if skip else 'false'}\n")
+          repo = os.environ["GITHUB_REPOSITORY"]
+          url = f"https://api.github.com/repos/{repo}/actions/workflows/fetch.yml/runs?status=success&per_page=5"
+          req = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "lovceny-fetch",
+          })
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  data = json.load(resp)
+          except Exception as exc:
+              print("Kontrola nedávného běhu selhala, stahování poběží:", exc)
+              emit(False)
+              raise SystemExit(0)
+          now = datetime.now(timezone.utc)
+          me = os.environ.get("GITHUB_RUN_ID", "")
+          for run in data.get("workflow_runs") or []:
+              if str(run.get("id")) == me or run.get("conclusion") != "success":
+                  continue
+              stamp = run.get("updated_at") or ""
+              if not stamp:
+                  continue
+              done = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+              if now - done < timedelta(hours=3):
+                  print(f"Úspěšný běh {run.get('id')} skončil {stamp}, tento běh přeskakuji.")
+                  emit(True)
+                  raise SystemExit(0)
+          emit(False)
+          PY
+      - name: Kontrola importu cen
+        # Celé testy jsou ve workflow „Testy“ (push a pull request).
+        # Tady jen rychlá brána importu: rozbitý parser feedu nesmí sáhnout na produkční ceny.
+        # test_retire_bad_feed_items_removes_filter_offer stahuje živé feedy a patří do Testů.
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          python -m pytest -q --tb=no \
             --deselect tests/test_ehub.py::test_retire_bad_feed_items_removes_filter_offer \
             tests/test_feed.py \
             tests/test_dognet.py \
-            tests/test_ehub.py \
-            tests/test_monitor.py \
-            tests/test_availability.py \
-            tests/test_category_display_identity.py \
-            tests/test_shops_search.py \
-            tests/test_shops_v4.py
+            tests/test_ehub.py
       - name: Stáhnout ceny
+        if: steps.gate.outputs.skip != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
@@ -66,4 +111,8 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python shop_health_issues.py health.json
+        run: |
+          if [ "${{ steps.gate.outputs.skip }}" = "true" ]; then
+            exit 0
+          fi
+          python shop_health_issues.py health.json

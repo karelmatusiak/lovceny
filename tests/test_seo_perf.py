@@ -68,11 +68,13 @@ def test_jsonld_escapes_script(client_db):
 
 def test_sitemap_and_robots(client_db):
     client, db, make = client_db
-    p = make([100], name="Sitemap test výrobek")
+    p = make([100], name="Sitemap test výrobek", category="telefony")
+    bare = make([100], name="Sitemap bez kategorie")
     sm = client.get("/sitemap.xml")
     assert sm.headers["content-type"].startswith("application/xml")
     assert f"https://lovceny.cz/produkt/{p.id}-{p.slug}" in sm.text
-    assert "https://lovceny.cz/kategorie/pracky/ve-sleve" in sm.text
+    assert f"https://lovceny.cz/produkt/{bare.id}-{bare.slug}" not in sm.text
+    assert "https://lovceny.cz/kategorie/pracky/ve-sleve" not in sm.text
     rb = client.get("/robots.txt").text
     assert "Sitemap: https://lovceny.cz/sitemap.xml" in rb and "Disallow: /hledat" in rb and "Disallow: /api/" in rb
 

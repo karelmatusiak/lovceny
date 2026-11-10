@@ -208,6 +208,7 @@ def _light_rows(db) -> list[_Light]:
         .join(buyable, buyable.c.pid == Product.id)
         .outerjoin(pts, pts.c.pid == Product.id)
         .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
+               Product.needs_review.is_(False),
                Product.image_url.isnot(None), Product.image_url != "")
     ).all()
     out: list[_Light] = []
@@ -333,6 +334,8 @@ def _candidates(db) -> list[HeroPick]:
 
 def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
     """Až `limit` karet pro hero. Cache 90 s (id + badge), objekty vždy z aktuální session."""
+    from .offer_trust import use_cutoffs
+    use_cutoffs(db)
     limit = max(0, int(limit))
     if limit == 0:
         return []

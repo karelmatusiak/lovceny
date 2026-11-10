@@ -333,6 +333,8 @@ def test_recat_does_not_guess_tv_or_console():
     # špatná kategorie se vrátí; správná se dalším během nemění
     repair_catalog(db, dry_run=False)
     approve_pending(db)
+    from lovceny.one_off_fixes import apply_legacy_product_fixes
+    apply_legacy_product_fixes(db, apply=True)
     db.expire_all()
     for p, cat in made:
         fresh = db.get(Product, p.id)
@@ -380,6 +382,8 @@ def test_surface_offer_comes_back_and_dualsense_redirects():
     phone_slug = phone.slug
     st = repair_catalog(db, dry_run=False)
     approve_pending(db)
+    from lovceny.one_off_fixes import apply_legacy_product_fixes
+    apply_legacy_product_fixes(db, apply=True)
     db.expire_all()
     host = db.get(Product, surface.id)
     assert host.retired_at is None
@@ -438,22 +442,13 @@ def test_repair_lock_skips_second_run():
     db.close()
 
 
-def test_startup_schedules_repair_thread(monkeypatch):
+def test_startup_does_not_run_catalog_repair():
+    import inspect
+    import fetch_prices
     import lovceny.main as m
-    started = []
-
-    class FakeThread:
-        def __init__(self, target, name, daemon):
-            started.append((target, name, daemon))
-
-        def start(self):
-            started.append("start")
-
-    monkeypatch.setattr(m.threading, "Thread", FakeThread)
-    m.start_catalog_repair_background()
-    assert started[0][0] == m._repair_in_background
-    assert started[0][2] is True
-    assert started[1] == "start"
+    assert "repair_catalog" not in inspect.getsource(m._startup)
+    assert "start_catalog_repair" not in inspect.getsource(m._startup)
+    assert "repair_catalog" not in inspect.getsource(fetch_prices.main)
 
 
 def test_offer_label_conflict_alias():

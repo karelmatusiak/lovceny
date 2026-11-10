@@ -26,8 +26,6 @@ from sqlalchemy.orm import selectinload
 from .categories import is_accessory_text
 from .models import Product, Offer, PushTopicSubscription, TopicSend
 from .util import czk
-from .availability import offer_is_buyable
-
 log = logging.getLogger("lovceny.blackfriday")
 PRAGUE = ZoneInfo("Europe/Prague")
 TOPIC = "black-friday"
@@ -193,7 +191,10 @@ def _drop_payload(r: RealDrop) -> dict:
 def _prepare(db, now: datetime, *, category: str = "", require_fresh: bool = True):
     """Jedno načtení produktů, nabídek a historie pro verdikty i přehled skutečných slev."""
     from .deals import load_offers_for, load_points_for_offers
-    q = select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
+    from .offer_trust import offer_is_promoted, use_cutoffs
+    cutoffs = use_cutoffs(db)
+    q = select(Product).where(
+        Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
     if category:
         q = q.where(Product.category_slug == category)
     products = db.scalars(q).all()
@@ -213,12 +214,14 @@ def _prepare(db, now: datetime, *, category: str = "", require_fresh: bool = Tru
         if is_accessory_text(p.name or "", p.category):
             continue
         offs = offers_by.get(p.id, [])
-        cands = [o for o in offs if offer_is_buyable(o) and o.status == "ok" and (not require_fresh or _fresh(o, now))]
+        cands = [o for o in offs if offer_is_promoted(o, cutoffs, p) and o.status == "ok"
+                 and (not require_fresh or _fresh(o, now))]
         best = min(cands, key=lambda o: float(o.price), default=None)
         if best is not None:
             row_pending.append((p, offs, best))
             take(offs)
-        stock = [o for o in offs if o.in_stock is True and o.status == "ok" and o.price is not None
+        stock = [o for o in offs if offer_is_promoted(o, cutoffs, p) and o.in_stock is True
+                 and o.status == "ok" and o.price is not None
                  and (not require_fresh or _fresh(o, now))]
         best_stock = min(stock, key=lambda o: float(o.price), default=None)
         if best_stock is not None:

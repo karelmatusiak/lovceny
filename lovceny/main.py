@@ -1,7 +1,7 @@
 import json
 import logging
+import os
 import re
-import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -137,30 +137,27 @@ app.add_middleware(CacheHeadersMiddleware)
 add_compression(app)
 
 
-def _repair_in_background() -> None:
-    """Úklid až po navázání portu. Start na něj nečeká."""
-    from .catalog_repair import repair_catalog_locked
+def _apply_phase0_data() -> None:
+    """Odpojí známé cizí nabídky a zařadí nezařazené do fronty. Úklid katalogu to není."""
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("LOVCENY_SKIP_DATA_FIXES") == "1":
+        return
+    from .phase0_data import apply_phase0_data
     log = logging.getLogger("lovceny")
     db = SessionLocal()
     try:
-        st = repair_catalog_locked(db, dry_run=False)
-        log.info("Úklid katalogu na pozadí: %s", {k: st[k] for k in st if k not in ("samples", "audit")})
+        log.info("Fáze 0, data: %s", apply_phase0_data(db))
     except Exception:
-        log.exception("Úklid katalogu na pozadí selhal")
+        log.exception("Fáze 0, oprava dat selhala")
         db.rollback()
     finally:
         db.close()
-
-
-def start_catalog_repair_background() -> None:
-    threading.Thread(target=_repair_in_background, name="catalog-repair", daemon=True).start()
 
 
 @app.on_event("startup")
 def _startup():
     init_db()
     # Obnov soft-tombstony za hard-delete před soft-retire (301 /produkt → kategorie).
-    # Úklid katalogu se nespouští tady: trval minuty a Render nestihl otevřít port.
+    # Úklid katalogu se nespouští: přepisoval by data při každém probuzení Renderu.
     from .retire_tombstones import restore_tombstones
     log = logging.getLogger("lovceny")
     db = SessionLocal()
@@ -171,7 +168,7 @@ def _startup():
         db.rollback()
     finally:
         db.close()
-    start_catalog_repair_background()
+    _apply_phase0_data()
 
 
 def get_db():
@@ -247,7 +244,8 @@ def _slevy_promo(rows):
 def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     """Karty produktů s aspoň jednou cenou – bez ceny do výpisů nepatří."""
     from sqlalchemy.orm import selectinload
-    q = (select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
+    q = (select(Product).where(
+        Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
          .options(selectinload(Product.offers).selectinload(Offer.points)))
     if order == "watched":
         watched_ids = [r[0] for r in db.execute(
@@ -319,6 +317,8 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
+    from .offer_trust import use_cutoffs
+    use_cutoffs(db)
     cards = priced_product_cards(db, limit=6, order="new")
     deals = real_deals(db, top=3)["buys"]
     from . import blackfriday as bfmod
@@ -326,7 +326,8 @@ def home(request: Request, db=Depends(get_db)):
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     cat_counts = dict(db.execute(
         select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
+        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
+               Product.needs_review.is_(False))
         .group_by(Product.category_slug)).all())
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
@@ -536,9 +537,16 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         q = request.url.query
         dest = f"/produkt/{p.id}-{p.slug}" + (f"?{q}" if q else "")
         return RedirectResponse(dest, status_code=301)
+    from .offer_trust import unverified_note, use_cutoffs
+    cutoffs = use_cutoffs(db)
     best, v = product_summary(p)
     last_known = last_known_offer(p.offers)
-    offers = sort_offers_for_display(p.offers)
+    offers = sort_offers_for_display(p.offers, cutoffs)
+    notes = {o.id: note for o in offers if (note := unverified_note(o, cutoffs, p))}
+    unverified_head = next(
+        (o for o in offers if o.id in notes and o.in_stock is not False and o.price is not None),
+        None,
+    ) if best is None else None
     pts = [pt for o in p.offers for pt in o.points]
     display_price = best or last_known
     live = float(display_price.price) if display_price is not None and display_price.price is not None else None
@@ -550,21 +558,32 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     dn = dname(p)
     crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(dn, f"/produkt/{p.id}-{p.slug}")]
     has_demo = any(pt.is_demo for pt in pts)
-    all_oos = best is None and last_known is not None
-    display_price = best or last_known
+    all_oos = best is None and unverified_head is None and last_known is not None
+    display_price = best or unverified_head or last_known
     request.state.an = {"product_id": p.id, "path": f"/produkt/{p.id}"}
-    share_price = f" – teď od {czk(best.price)}" if best else (
-        f" – naposledy {czk(last_known.price)} (není skladem)" if last_known else "")
+    if best:
+        share_price = f" – teď od {czk(best.price)}"
+    elif unverified_head:
+        share_price = f" – {notes[unverified_head.id].lower()}"
+    elif last_known:
+        share_price = f" – naposledy {czk(last_known.price)} (není skladem)"
+    else:
+        share_price = ""
+    review = bool(p.needs_review)
+    # JSON-LD nebere neověřenou cenu. Není-skladem v agregaci zůstane (highPrice).
+    schema_offers = [o for o in offers if o.id not in notes]
     return tpl.TemplateResponse(request, "product.html", {
         "p": p, "best": best, "last_known": last_known, "all_oos": all_oos,
-        "display_price": display_price, "v": v, "offers": offers,
+        "unverified_head": unverified_head, "offer_notes": notes,
+        "display_price": display_price, "v": v, "offers": offers, "noindex": review,
         "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "cat": cat, "crumbs": crumbs,
         "canonical_path": f"/produkt/{p.id}-{p.slug}",
-        "ld": [seo.product_ld(p, offers, v), seo.breadcrumb_ld(crumbs)],
+        "ld": [seo.product_ld(p, schema_offers, v), seo.breadcrumb_ld(crumbs)],
         "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
         "share_url": canonical(f"/produkt/{p.id}-{p.slug}"),
-        "share_text": f"{dn}" + share_price + f" ({v.headline}) na Lovceny"})
+        "share_text": f"{dn}" + share_price + f" ({v.headline}) na Lovceny"},
+        headers={"X-Robots-Tag": "noindex, follow"} if review else None)
 
 
 @app.post("/produkt/{pid}/hlidat")
@@ -822,6 +841,8 @@ def _cat_rows(db, c):
     from . import catcache
     from .verdict import Verdict
 
+    from .offer_trust import offer_is_promoted, use_cutoffs
+    cutoffs = use_cutoffs(db)
     cached = catcache.get(c.slug)
     if cached is not None:
         ids = [pid for pid, _, _ in cached]
@@ -835,13 +856,15 @@ def _cat_rows(db, c):
             p = by_id.get(pid)
             if not p or p.retired_at is not None:
                 continue
-            if p.catalog_hidden:
+            if p.catalog_hidden or p.needs_review:
                 continue
             if is_accessory_text(p.name or "", p.category):
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
+            if best is not None and not offer_is_promoted(best, cutoffs, p):
+                best = None
             if best is None:
-                best = last_known_offer(p.offers)
+                best = best_buyable_offer(p.offers, cutoffs) or last_known_offer(p.offers)
             if best is None:
                 continue
             out.append((p, best, v))
@@ -850,7 +873,7 @@ def _cat_rows(db, c):
 
     products = db.scalars(select(Product).where(
         Product.category_slug == c.slug, Product.retired_at.is_(None),
-        Product.catalog_hidden.is_(False))
+        Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     rows = []
     payload = []
@@ -861,7 +884,12 @@ def _cat_rows(db, c):
             continue
         buyable, v = product_summary(p)
         # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.
+        # Neověřená cena výpis nevede.
         display = buyable or last_known_offer(p.offers)
+        if buyable is None and display is not None:
+            from .offer_trust import unverified_note
+            if unverified_note(display, cutoffs, p):
+                continue
         if display is None:
             continue
         rows.append((p, display, v))
@@ -952,7 +980,8 @@ CAT_VIEWS = {
 def categories_index(request: Request, db=Depends(get_db)):
     counts = dict(db.execute(
         select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
+        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
+               Product.needs_review.is_(False))
         .group_by(Product.category_slug)).all())
     crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
     return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
@@ -1165,8 +1194,38 @@ def admin(request: Request, dni: int = 30, _=Depends(require_admin), db=Depends(
     dni = dni if dni in (7, 30, 90) else 30
     rep = analytics.report(db, days=dni)
     msgs = db.scalars(select(ContactMessage).order_by(ContactMessage.created_at.desc()).limit(50)).all()
-    return tpl.TemplateResponse(request, "admin.html", {"r": rep, "msgs": msgs, "dni": dni, "noindex": True},
+    return tpl.TemplateResponse(request, "admin.html", {"r": rep, "msgs": msgs, "dni": dni, "noindex": True,
+                                                        "repair": None},
                                 headers=_ADMIN_HEADERS)
+
+
+@app.post("/admin/katalog-uklid", response_class=HTMLResponse)
+def admin_catalog_repair(request: Request, mode: str = Form("preview"), _=Depends(require_admin),
+                         db=Depends(get_db)):
+    """Ruční úklid. Bez mode=apply jen náhled počtů a seznamu."""
+    from .analytics import report as analytics_report
+    from .catalog_repair import repair_catalog_locked
+    from .models import ContactMessage
+    apply = mode == "apply"
+    st = repair_catalog_locked(db, dry_run=not apply)
+    counts = []
+    if not st.get("skipped"):
+        for key in ("accessories_cleared", "recategorized", "offers_detached", "offers_reattached",
+                    "offers_split", "products_merged", "empty_retired", "restored", "redirect_fixed",
+                    "queued", "gtin_blocked"):
+            if key in st:
+                counts.append((key, st[key]))
+    repair = {
+        "mode": "Zapsáno" if apply and not st.get("skipped") else "Náhled",
+        "skipped": st.get("skipped"),
+        "counts": counts,
+        "samples": list(st.get("samples") or []),
+    }
+    rep = analytics_report(db, days=30)
+    msgs = db.scalars(select(ContactMessage).order_by(ContactMessage.created_at.desc()).limit(50)).all()
+    return tpl.TemplateResponse(request, "admin.html", {
+        "r": rep, "msgs": msgs, "dni": 30, "noindex": True, "repair": repair,
+    }, headers=_ADMIN_HEADERS)
 
 
 def _triage_groups(db):
@@ -1192,6 +1251,8 @@ def _triage_groups(db):
     specs = (
         ("Kategorie", CATEGORY_KINDS),
         ("Shoda podle názvu", frozenset({"title_match"})),
+        ("Jiný model", frozenset({"model_mismatch"})),
+        ("Do výpisu", frozenset({"confirm_listing"})),
         ("Sloučení", frozenset({"merge"})),
         ("Odpojení a přesun", frozenset({"detach", "reattach"})),
         ("Vyřazení", frozenset({"retire"})),

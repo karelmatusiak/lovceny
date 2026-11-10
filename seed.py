@@ -694,8 +694,12 @@ def main(argv=None):
     ap.add_argument("--repair-categories", action="store_true",
                     help="sundat monitory z kategorie Sluchátka (bez mazání nabídek a historie cen)")
     ap.add_argument("--repair-catalog", action="store_true",
-                    help="idempotentně: cizí nabídky pryč, sloučit stejný model (301 na přeživší), "
-                         "příslušenství a špatné kategorie. S --dry-run jen počty.")
+                    help="náhled úklidu katalogu (počty a seznam). Zapíše se jen s --apply.")
+    ap.add_argument("--apply", action="store_true",
+                    help="zapsat změny u --repair-catalog nebo --one-off-fixes (jinak jen náhled)")
+    ap.add_argument("--one-off-fixes", action="store_true",
+                    help="jednorázové už provedené opravy (Motorola Edge, Gigabyte A16, Surface). "
+                         "Bez --apply jen náhled.")
     a = ap.parse_args(argv)
     init_db()
     db = SessionLocal()
@@ -704,13 +708,26 @@ def main(argv=None):
         db.commit()
         print(f"Smazáno {n} demo bodů.")
         return
-    if a.repair_catalog:
+    if a.repair_catalog or a.one_off_fixes:
+        write = bool(a.apply) and not a.dry_run
+        if a.one_off_fixes:
+            from lovceny.one_off_fixes import apply_legacy_product_fixes
+            st = apply_legacy_product_fixes(db, apply=write)
+            mode = "APPLY" if write else "DRY-RUN"
+            print(
+                f"Jednorázové opravy ({mode}): kategorie={st['recategorized']} "
+                f"vraceno={st['reattached']}"
+            )
+            for line in st["samples"]:
+                print(f"  {line}")
+            if not a.repair_catalog:
+                return
         from lovceny.catalog_repair import repair_catalog_locked
-        st = repair_catalog_locked(db, dry_run=a.dry_run)
+        st = repair_catalog_locked(db, dry_run=not write)
         if st.get("skipped"):
             print(f"Úklid katalogu přeskočen ({st['skipped']})")
             return
-        mode = "DRY-RUN" if a.dry_run else "APPLY"
+        mode = "APPLY" if write else "DRY-RUN"
         print(
             f"Úklid katalogu ({mode}): prislusenstvi={st['accessories_cleared']} "
             f"kategorie={st['recategorized']} nabidky_pryc={st['offers_detached']} "

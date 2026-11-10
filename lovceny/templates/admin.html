@@ -29,6 +29,18 @@
       {% if r.zero_searches %}<table class="tbl"><tr><th>Dotaz</th><th class="num">Počet</th></tr>{% for q, n in r.zero_searches %}<tr><td>{{ q }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Žádná.</p>{% endif %}</div>
     <div class="card adm-card"><h2 class="h3">Odkud lidé přišli</h2>
       {% if r.top_refs %}<table class="tbl"><tr><th>Doména</th><th class="num">Zobrazení</th></tr>{% for d, n in r.top_refs %}<tr><td>{{ d }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic (přímé návštěvy se nepočítají).</p>{% endif %}</div>
+    <div class="card adm-card"><h2 class="h3">Úklid katalogu</h2>
+      <p class="muted small">Sám se nespouští. Náhled nic nezapíše. Zápis jen tlačítkem „Zapsat změny“.</p>
+      <form method="post" action="/admin/katalog-uklid" class="adm-repair">
+        <button class="btn btn-ghost btn-sm" type="submit" name="mode" value="preview">Náhled změn</button>
+        <button class="btn btn-primary btn-sm" type="submit" name="mode" value="apply">Zapsat změny</button>
+      </form>
+      {% if repair %}
+      <p><b>{{ repair.mode }}</b>{% if repair.skipped %} — přeskočeno ({{ repair.skipped }}){% endif %}</p>
+      {% if repair.counts %}<ul class="adm-msgs">{% for k, n in repair.counts %}<li>{{ k }}: {{ n }}</li>{% endfor %}</ul>{% endif %}
+      {% if repair.samples %}<ul class="adm-msgs">{% for line in repair.samples %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+      {% endif %}
+    </div>
     <div class="card adm-card"><h2 class="h3">Zprávy z kontaktního formuláře</h2>
       {% if msgs %}<ul class="adm-msgs">{% for m in msgs %}<li><div class="muted small">{{ m.created_at|prague('%-d. %-m. %Y %H:%M') }} · {{ m.topic }}{% if m.name %} · {{ m.name }}{% endif %}{% if m.reply_to %} · <a href="mailto:{{ m.reply_to }}">{{ m.reply_to }}</a>{% endif %}</div><p>{{ m.message }}</p></li>{% endfor %}</ul>{% else %}<p class="muted">Žádné zprávy.</p>{% endif %}</div>
   </div>

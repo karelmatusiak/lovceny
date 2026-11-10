@@ -34,6 +34,7 @@ _ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
                 ("products", "retired_at", "TIMESTAMP WITH TIME ZONE"),
                 ("products", "redirect_product_id", "INTEGER"),
                 ("products", "catalog_hidden", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                ("products", "needs_review", "BOOLEAN NOT NULL DEFAULT FALSE"),
                 ("offers", "shop_category", "TEXT"),
                 ("offers", "gtin", "VARCHAR(14)")]
 

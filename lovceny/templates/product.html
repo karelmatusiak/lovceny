@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, img_missing, badge, cmp_button, share, rank_link, affiliate_note %}
-{% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
+{% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif unverified_head %} {{ unverified_head.price|czk }} (cena neověřena){% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
 {% block og_image_tags %}{% if p.image_url %}<meta property="og:image" content="{{ img_canon(p.image_url) }}">{% else %}{{ super() }}{% endif %}{% endblock %}
@@ -15,12 +15,15 @@
       </div>
       <div class="price-row">
         {% if best %}<span class="price">{{ best.price|czk }}</span>
+        {% elif unverified_head %}<span class="price price-unverified">{{ unverified_head.price|czk }}</span><span class="oos-label">{{ offer_notes[unverified_head.id] }}</span>
         {% elif last_known %}<span class="price">{{ last_known.price|czk }}</span><span class="oos-label">Momentálně není skladem</span>
         {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
       {% if best %}{% set bs = get_shop(best.shop) %}
       <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      {% elif unverified_head %}
+      <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>
       {% elif all_oos %}
       <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
       {% endif %}
@@ -58,7 +61,8 @@
         {% for o in offers %}{% set s = get_shop(o.shop) %}
         {% set is_oos = o.in_stock is false %}
         {% set is_best = best and o.id == best.id %}
-        <div class="offer{% if is_best %} offer-best{% endif %}{% if is_oos %} offer-oos{% endif %}">
+        {% set note = offer_notes.get(o.id) if offer_notes is defined else none %}
+        <div class="offer{% if is_best %} offer-best{% endif %}{% if note %} offer-unverified{% elif is_oos %} offer-oos{% endif %}">
           <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if is_best %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
             <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span class="stock-oos">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span class="offer-quiet">Připravujeme cenu{% if s.source=='feed' %} z feedu{% endif %}</span>
@@ -66,7 +70,9 @@
             {% elif o.status=='unavailable' %}<span style="color:#8A5200">Už není v nabídce obchodu</span>
             {% else %}<span style="color:#B3261E">Chyba načtení</span>{% endif %}{% if o.last_checked %} · ověřeno {{ o.last_checked|prague }}{% endif %}</div></div>
           <b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b>
-          {% if is_oos %}
+          {% if note %}
+          <span class="offer-unverified-note">{{ note }}</span>
+          {% elif is_oos %}
           <a class="offer-oos-link" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
           {% else %}
           <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
