@@ -140,8 +140,10 @@ def main(argv=None):
         db.rollback()
         log.error("Úklid cenových glitchů selhal: %s", e)
     try:
-        from lovceny.catalog_repair import repair_catalog
-        log.info("Úklid katalogu: %s", {k: v for k, v in repair_catalog(db).items() if k != "samples"})
+        from lovceny.catalog_repair import repair_catalog_locked
+        log.info("Úklid katalogu: %s", {
+            k: v for k, v in repair_catalog_locked(db).items() if k not in ("samples", "audit")
+        })
     except Exception as e:  # noqa: BLE001
         db.rollback()
         log.error("Úklid katalogu selhal: %s", e)

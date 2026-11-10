@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -136,23 +137,41 @@ app.add_middleware(CacheHeadersMiddleware)
 add_compression(app)
 
 
+def _repair_in_background() -> None:
+    """Úklid až po navázání portu. Start na něj nečeká."""
+    from .catalog_repair import repair_catalog_locked
+    log = logging.getLogger("lovceny")
+    db = SessionLocal()
+    try:
+        st = repair_catalog_locked(db, dry_run=False)
+        log.info("Úklid katalogu na pozadí: %s", {k: st[k] for k in st if k not in ("samples", "audit")})
+    except Exception:
+        log.exception("Úklid katalogu na pozadí selhal")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def start_catalog_repair_background() -> None:
+    threading.Thread(target=_repair_in_background, name="catalog-repair", daemon=True).start()
+
+
 @app.on_event("startup")
 def _startup():
     init_db()
     # Obnov soft-tombstony za hard-delete před soft-retire (301 /produkt → kategorie).
+    # Úklid katalogu se nespouští tady: trval minuty a Render nestihl otevřít port.
     from .retire_tombstones import restore_tombstones
-    from .catalog_repair import repair_catalog
     log = logging.getLogger("lovceny")
     db = SessionLocal()
     try:
         restore_tombstones(db)
-        st = repair_catalog(db, dry_run=False)
-        log.info("Úklid katalogu při startu: %s", {k: st[k] for k in st if k != "samples"})
     except Exception:
-        log.exception("Úklid katalogu při startu selhal")
+        log.exception("Obnova tombstonů selhala")
         db.rollback()
     finally:
         db.close()
+    start_catalog_repair_background()
 
 
 def get_db():

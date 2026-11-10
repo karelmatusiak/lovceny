@@ -2,31 +2,64 @@
 
 Nemaze historii cen. Sloučený produkt dostane 301 na přeživšího (redirect_product_id).
 Příslušenství zmizí z výpisu kategorie (category_slug = NULL), řádek zůstane.
-Spuštění: start aplikace, fetch_prices.py a `python seed.py --repair-catalog`.
+Spuštění: vlákno po startu webu (port se váže hned), fetch_prices.py a
+`python seed.py --repair-catalog`. Zámek brání dvěma běhům najednou.
 """
 from __future__ import annotations
 
 import logging
+import re
+import threading
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .categories import BY_SLUG, category_keywords_hit, classify, is_accessory_text
-from .matching import label_from_url, primary_brand, same_model
+from .categories import BY_SLUG, _fold, classify, is_accessory_text
+from .matching import (
+    label_from_url, listing_overlap, primary_brand, same_model, strong_listing_mismatch,
+)
 from .models import BudgetHit, Offer, Product, PushSubscription, Watch, now
-from .shops.feed import names_match, offer_conflicts_product
+from .shops.feed import names_match
 from .util import slugify
 
 log = logging.getLogger("lovceny.catalog")
+_LOCK = threading.Lock()
+_PG_LOCK = 867530901
 
 
 def _desired_category(name: str, current: str | None) -> str | None:
+    """Jen jistá pravidla. classify() (6.67\" → televize, Xbox v názvu sluchátek) sem nepatří."""
+    n = _fold(name or "")
     if is_accessory_text(name or ""):
         return None
-    guessed = classify(name or "")
-    if current and guessed and guessed != current and not category_keywords_hit(name or "", current):
-        return guessed
+    if re.search(r"\bsurface (pro|laptop|go)\b", n):
+        return "notebooky"
+    # Vrátit řádky, které starý odhad kategorie přesunul špatně.
+    if current == "televize" and re.search(r"\bmotorola\b", n) and re.search(r"\bedge\b", n):
+        return "telefony"
+    if current == "televize" and re.search(r"\bgigabyte\b", n) and re.search(r"\ba16\b", n):
+        return "notebooky"
+    if current == "televize" and re.search(r"\b(notebook|laptop)\b", n):
+        return "notebooky"
+    if current == "konzole" and re.search(r"\b(quantum|sluchat|headphone|headset)\b", n):
+        return "sluchatka"
     return current
+
+
+def _redirect_category(name: str) -> str | None:
+    """Kam 301, když je řádek vyřazený a kategorii jsme mezitím smazali."""
+    n = _fold(name or "")
+    if re.search(r"\b(dualsense|dualshock|joy-?con)\b", n):
+        return "konzole"
+    return None
+
+
+def _explicit_restore(url: str) -> str | None:
+    """Slug obchodu, který nejmenuje výrobek (Svět počítačů u Surface Pro)."""
+    u = (url or "").lower()
+    if "microsoft-xbox-series-s-1tb" in u:
+        return "surface pro"
+    return None
 
 
 def _survivor_key(p: Product) -> tuple:
@@ -57,11 +90,13 @@ def _relocate_offer(db: Session, offer: Offer, label: str, products: list[Produc
     for p in products:
         if p.retired_at is not None or p.id == offer.product_id:
             continue
-        if names_match(p.name or "", label) and not offer_conflicts_product(p.name or "", offer.url, label):
+        if strong_listing_mismatch(p.name or "", label):
+            continue
+        if names_match(p.name or "", label) or listing_overlap(p.name or "", label):
             target = p
             break
         cat = p.category_slug
-        if cat and same_model(p.name or "", cat, label, cat) and not offer_conflicts_product(p.name or "", offer.url, label):
+        if cat and same_model(p.name or "", cat, label, cat):
             target = p
             break
     if target is not None:
@@ -81,6 +116,38 @@ def _relocate_offer(db: Session, offer: Offer, label: str, products: list[Produc
     return "split"
 
 
+def _is_split_shell(p: Product) -> bool:
+    if p.retired_at is not None or len(p.offers) != 1:
+        return False
+    offer = p.offers[0]
+    return (p.name or "") == label_from_url(offer.url)[:300]
+
+
+def _host_for_shell(shell: Product, products: list[Product]) -> Product | None:
+    offer = shell.offers[0]
+    label = label_from_url(offer.url)
+    hint = _explicit_restore(offer.url)
+    best = None
+    best_score = -1
+    for p in products:
+        if p.id == shell.id or p.redirect_product_id or _is_split_shell(p):
+            continue
+        name = p.name or ""
+        if hint:
+            if hint not in _fold(name):
+                continue
+            score = 100
+        elif strong_listing_mismatch(name, label) or not listing_overlap(name, label):
+            continue
+        else:
+            score = 10
+        if p.retired_at is not None and not p.offers:
+            score += 5
+        if score > best_score:
+            best, best_score = p, score
+    return best
+
+
 def repair_catalog(db: Session, dry_run: bool = False) -> dict:
     """Vrátí počty. dry_run nic nezapíše (rollback). Opakovaný běh je no-op."""
     stats = {
@@ -92,9 +159,40 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
         "offers_split": 0,
         "products_merged": 0,
         "empty_retired": 0,
+        "restored": 0,
+        "redirect_fixed": 0,
         "samples": [],
+        "audit": [],
     }
     products = list(db.scalars(select(Product)).all())
+
+    # Vrátit nabídky, které minulý běh odtrhl jen kvůli slugu (8/128 → 8128gb, barva, „pro“).
+    for shell in list(products):
+        if not _is_split_shell(shell):
+            continue
+        host = _host_for_shell(shell, products)
+        if host is None:
+            continue
+        offer = shell.offers[0]
+        stats["restored"] += 1
+        stats["audit"].append({
+            "id": host.id, "title": host.name, "category": host.category_slug,
+            "reason": f"reattach-slug offer {offer.id}",
+        })
+        if len(stats["samples"]) < 40:
+            stats["samples"].append(f"restore #{offer.id} -> #{host.id} {(host.name or '')[:60]}")
+        if dry_run:
+            continue
+        offer.product_id = host.id
+        if host.retired_at is not None and not host.redirect_product_id:
+            host.retired_at = None
+        db.flush()
+        shell.redirect_product_id = host.id
+        shell.retired_at = now()
+
+    if not dry_run:
+        db.flush()
+        products = list(db.scalars(select(Product)).all())
     active = [p for p in products if p.retired_at is None]
 
     for p in active:
@@ -122,9 +220,13 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             continue
         for offer in list(p.offers):
             label = label_from_url(offer.url)
-            if len(label) < 8 or not offer_conflicts_product(p.name or "", offer.url, label):
+            if len(label) < 8 or not strong_listing_mismatch(p.name or "", label):
                 continue
             stats["offers_detached"] += 1
+            stats["audit"].append({
+                "id": p.id, "title": p.name, "category": p.category_slug,
+                "reason": f"detach-strong {label[:80]}",
+            })
             detached_hosts.add(p.id)
             if len(stats["samples"]) < 30:
                 stats["samples"].append(f"detach #{offer.id} from #{p.id} {label[:80]}")
@@ -145,6 +247,21 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
             stats["empty_retired"] += 1
             if len(stats["samples"]) < 30:
                 stats["samples"].append(f"retire-empty #{pid} {(host.name or '')[:80]}")
+
+    # Vyřazený ovladač bez kategorie by 301 na /. Patří na stránku své kategorie.
+    for p in products:
+        if p.retired_at is None or p.category_slug or p.redirect_product_id:
+            continue
+        cat = _redirect_category(p.name or "")
+        if not cat:
+            continue
+        stats["redirect_fixed"] += 1
+        stats["audit"].append({
+            "id": p.id, "title": p.name, "category": cat, "reason": "retired-accessory-redirect",
+        })
+        if not dry_run:
+            p.category_slug = cat
+            p.category = BY_SLUG[cat].name if cat in BY_SLUG else p.category
 
     # Sloučení duplicit mezi tím, co zůstalo aktivní. Jen stejná kategorie a značka.
     fresh = [p for p in products if p.retired_at is None]
@@ -201,11 +318,36 @@ def repair_catalog(db: Session, dry_run: bool = False) -> dict:
     else:
         db.commit()
     log.info(
-        "Úklid katalogu: accessory=%s recat=%s detach=%s split=%s reattach=%s merge=%s empty=%s",
+        "Úklid katalogu: accessory=%s recat=%s detach=%s split=%s reattach=%s "
+        "restore=%s redirect=%s merge=%s empty=%s",
         stats["accessories_cleared"], stats["recategorized"], stats["offers_detached"],
-        stats["offers_split"], stats["offers_reattached"], stats["products_merged"],
-        stats["empty_retired"],
+        stats["offers_split"], stats["offers_reattached"], stats["restored"],
+        stats["redirect_fixed"], stats["products_merged"], stats["empty_retired"],
     )
     for line in stats["samples"]:
         log.info("  %s", line)
     return stats
+
+
+def repair_catalog_locked(db: Session, dry_run: bool = False) -> dict:
+    """Jeden běh najednou. Druhý (vlákno webu a fetch_prices) se přeskočí."""
+    if not _LOCK.acquire(blocking=False):
+        log.info("Úklid katalogu už běží, přeskakuji")
+        return {"skipped": "locked", "dry_run": bool(dry_run)}
+    locked_pg = False
+    try:
+        bind = db.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            locked_pg = bool(db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _PG_LOCK}).scalar())
+            if not locked_pg:
+                log.info("Úklid katalogu drží jiný proces, přeskakuji")
+                return {"skipped": "locked", "dry_run": bool(dry_run)}
+        return repair_catalog(db, dry_run=dry_run)
+    finally:
+        if locked_pg:
+            try:
+                db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _PG_LOCK})
+                db.commit()
+            except Exception:
+                log.exception("Nepodařilo se odemknout úklid katalogu")
+        _LOCK.release()
