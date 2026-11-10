@@ -81,6 +81,10 @@ def test_side_features_are_off_and_unsubscribe_still_works(client_db, monkeypatc
     assert client.get("/prehled", follow_redirects=False).status_code == 301
     assert client.get("/prehled", follow_redirects=False).headers["location"] == "/slevy"
     assert client.get("/prehled/2026-45", follow_redirects=False).status_code == 301
+    week = client.get("/prehled/2026-w45", follow_redirects=False)
+    assert week.status_code == 301 and week.headers["location"] == "/slevy"
+    other = client.get("/prehled/cokoliv", follow_redirects=False)
+    assert other.status_code == 301 and other.headers["location"] == "/slevy"
     assert client.get("/rozsireni", follow_redirects=False).status_code == 301
     assert client.get("/rozsireni/lovceny-chrome.zip").status_code == 410
     assert client.get("/api/v1/overit", params={"url": "https://www.mironet.cz/x"}).status_code == 410

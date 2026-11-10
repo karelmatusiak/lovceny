@@ -1256,8 +1256,15 @@ def _triage_groups(db):
         p = products.get(d.product_id)
         other = products.get(d.other_product_id)
         offer = offers.get(d.offer_id)
+        names = ""
+        if d.payload:
+            try:
+                data = json.loads(d.payload)
+                names = data.get("names") or "" if isinstance(data, dict) else ""
+            except json.JSONDecodeError:
+                names = ""
         views.append({
-            "d": d, "product": p, "other": other, "offer": offer,
+            "d": d, "product": p, "other": other, "offer": offer, "names": names,
             "proposed": category_label(d.proposed_category) if d.proposed_category else "",
             "path_key": path_key(d.shop_category or ""),
         })
@@ -1266,6 +1273,7 @@ def _triage_groups(db):
         ("Shoda podle názvu", frozenset({"title_match"})),
         ("Jiný model", frozenset({"model_mismatch"})),
         ("Do výpisu", frozenset({"confirm_listing"})),
+        ("Varianta modelu", frozenset({"variant_merge"})),
         ("Sloučení", frozenset({"merge"})),
         ("Odpojení a přesun", frozenset({"detach", "reattach"})),
         ("Vyřazení", frozenset({"retire"})),
@@ -1818,6 +1826,14 @@ def digest_email_unsub(request: Request, token: str, db=Depends(get_db)):
         db.commit()
     return tpl.TemplateResponse(request, "message.html", {"title": "Odhlášeno", "noindex": True,
                                 "text": "Týdenní přehled ti už posílat nebudeme a tvůj e-mail jsme smazali."})
+
+
+@app.get("/prehled/{rest:path}", response_class=HTMLResponse)
+def digest_any(rest: str):
+    """Týden ve tvaru 2026-w45 i jakákoli jiná cesta pod /prehled. Odhlášení má vlastní adresu výš."""
+    if not _features.digest_on():
+        return RedirectResponse("/slevy", status_code=301)
+    raise HTTPException(404)
 
 
 # ---------- v7: Hlídání podle rozpočtu ----------

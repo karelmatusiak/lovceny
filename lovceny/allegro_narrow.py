@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from .matching import KNOWN_BRANDS, _fold, brands, primary_brand
+from .migrate_log import log_counts
 from .models import Product, now
 
 
@@ -87,7 +88,7 @@ def apply_allegro_narrow(db: Session, *, dry_run: bool = True) -> dict:
             product.redirect_product_id = None
             product.retired_at = now()
         db.flush()
-    return {
+    stats = {
         "dry_run": dry_run,
         "allegro_only": len(groups["keep"]) + len(groups["retire"]),
         "keep": len(groups["keep"]),
@@ -96,6 +97,8 @@ def apply_allegro_narrow(db: Session, *, dry_run: bool = True) -> dict:
         "keep_rows": [_row(p) for p in groups["keep"]],
         "retire_rows": [_row(p) for p in groups["retire"]],
     }
+    log_counts("allegro_narrow", dry_run=int(dry_run), keep=stats["keep"], retire=stats["retire"])
+    return stats
 
 
 def main(argv=None) -> int:

@@ -68,6 +68,7 @@ _KIND_ORDER = {
     "model_mismatch": 45,
     "confirm_listing": 48,
     "title_match": 50,
+    "variant_merge": 55,
     "merge": 60,
     "retire": 70,
 }

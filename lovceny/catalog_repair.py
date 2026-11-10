@@ -341,6 +341,9 @@ def execute_decision(db: Session, decision) -> tuple[bool, str]:
         return _apply_category(db, decision)
     if kind == "title_match":
         return _apply_title(db, decision)
+    if kind == "variant_merge":
+        from .variant_merge import apply_variant_proposal
+        return apply_variant_proposal(db, decision)
     if kind == "merge":
         return _apply_merge(db, decision)
     if kind == "detach":
