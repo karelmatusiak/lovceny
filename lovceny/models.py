@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, Index
+from sqlalchemy import String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, Index, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -22,6 +22,8 @@ class Product(Base):
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None, index=True)
     # Po sloučení duplicit: 301 na tenhle produkt (přeživší). NULL = 301 na kategorii.
     redirect_product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    # Nový produkt z nemapované / málo jisté kategorie zůstane skrytý, dokud ho někdo neschválí.
+    catalog_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")
@@ -35,6 +37,10 @@ class Offer(Base):
     shop: Mapped[str] = mapped_column(String(40), index=True)  # slug z registry
     url: Mapped[str] = mapped_column(Text, unique=True)
     external_id: Mapped[str | None] = mapped_column(String(100))  # ITEM_ID z feedu
+    # Surová cesta kategorie z feedu (Heureka CATEGORYTEXT, Google product_type, Dognet/eHUB).
+    shop_category: Mapped[str | None] = mapped_column(Text)
+    # Normalizované GTIN (8/12/13/14, platný kontrolní součet). Neplatné kódy sem nepatří.
+    gtin: Mapped[str | None] = mapped_column(String(14), index=True)
     price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     original_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     in_stock: Mapped[bool | None] = mapped_column(Boolean)
@@ -244,6 +250,56 @@ class BudgetHit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     budget: Mapped[BudgetWatch] = relationship(back_populates="hits")
     __table_args__ = (Index("ux_budget_hit", "budget_id", "product_id", unique=True),)
+
+
+class ShopCategoryMapping(Base):
+    """Obchod + cesta kategorie → kategorie Lovceny, nebo accessory / ignore.
+
+    match_mode: exact (celá cesta), segment (úsek cesty), suffix (konec cesty), stem (příslušenství).
+    """
+    __tablename__ = "shop_category_mappings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shop: Mapped[str] = mapped_column(String(40), index=True)
+    match_mode: Mapped[str] = mapped_column(String(16))
+    path_key: Mapped[str] = mapped_column(String(300))
+    path_label: Mapped[str] = mapped_column(String(300))
+    target: Mapped[str] = mapped_column(String(40))  # slug | accessory | ignore
+    leaf_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
+    source: Mapped[str] = mapped_column(String(16), default="seed")  # seed | admin
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    __table_args__ = (
+        UniqueConstraint("shop", "match_mode", "path_key", name="ux_shop_category_map"),
+    )
+
+
+class TriageDecision(Base):
+    """Čekající rozhodnutí. Nic rizikového se nezapíše, dokud ho někdo neschválí."""
+    __tablename__ = "triage_decisions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(200), unique=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | approved | rejected
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    shop: Mapped[str | None] = mapped_column(String(40))
+    shop_category: Mapped[str | None] = mapped_column(Text)
+    product_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    offer_id: Mapped[int | None] = mapped_column(Integer)
+    other_product_id: Mapped[int | None] = mapped_column(Integer)
+    proposed_category: Mapped[str | None] = mapped_column(String(40))
+    summary: Mapped[str] = mapped_column(String(300))
+    reason: Mapped[str] = mapped_column(Text)
+    payload: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class TriageLog(Base):
+    """Kdo, kdy a co rozhodl na /admin/trideni."""
+    __tablename__ = "triage_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    decision_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    actor: Mapped[str] = mapped_column(String(80))
+    action: Mapped[str] = mapped_column(String(32))
+    detail: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class TopicSend(Base):

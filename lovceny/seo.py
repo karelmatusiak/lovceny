@@ -186,7 +186,7 @@ def sitemap_xml(db) -> str:
     has_price = exists().where(Offer.product_id == Product.id, Offer.price.isnot(None))
     for pid, slug, created in db.execute(
         select(Product.id, Product.slug, Product.created_at)
-        .where(has_price, Product.retired_at.is_(None)).order_by(Product.id)
+        .where(has_price, Product.retired_at.is_(None), Product.catalog_hidden.is_(False)).order_by(Product.id)
     ).all():
         urls.append((f"{base}/produkt/{pid}-{slug}", created))
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']

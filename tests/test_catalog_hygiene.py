@@ -11,6 +11,7 @@ from lovceny.matching import decent_title, same_model
 from lovceny.models import Offer, PricePoint, Product, Watch
 from lovceny.shops.feed import FeedItem, offer_conflicts_product
 from lovceny.service import apply_feed
+from lovceny.triage import approve_pending
 from lovceny.util import czk
 
 COFFEE = "Elektronika > Audio, video a domácí spotřebiče > Malé domácí spotřebiče > Do kuchyně > Kávovary > Kávovary na espresso"
@@ -87,6 +88,9 @@ def test_repair_detaches_wrong_offer_and_keeps_history():
     st = repair_catalog(db, dry_run=False)
     assert st["offers_detached"] >= 1
     db.expire_all()
+    assert db.get(Offer, bad_id).product_id == pid
+    approve_pending(db)
+    db.expire_all()
     host = db.get(Product, pid)
     assert host.retired_at is None
     assert all(o.id != bad_id for o in host.offers)
@@ -104,11 +108,11 @@ def test_merge_duplicates_keeps_survivor_url_and_history():
     now = datetime.now(timezone.utc)
     a = Product(
         name="Herní sluchátka s mikrofonem Modecom Volcano Prometheus USB LED RGB",
-        slug="modecom-a", category_slug="sluchatka", category="Sluchátka", ean="1111111111116",
+        slug="modecom-a", category_slug="sluchatka", category="Sluchátka",
     )
     b = Product(
         name="Sluchátka s mikrofonem Modecom Volcano Prometheus USB LED RGB",
-        slug="modecom-b", category_slug="sluchatka", category="Sluchátka", ean="2222222222222",
+        slug="modecom-b", category_slug="sluchatka", category="Sluchátka",
     )
     db.add_all([a, b])
     db.flush()
@@ -126,6 +130,9 @@ def test_merge_duplicates_keeps_survivor_url_and_history():
     survivor_slug = a.slug
     st = repair_catalog(db, dry_run=False)
     assert st["products_merged"] == 1
+    db.expire_all()
+    assert db.get(Product, b.id).retired_at is None
+    approve_pending(db)
     db.expire_all()
     live = db.get(Product, a.id)
     gone = db.get(Product, b.id)
@@ -178,11 +185,13 @@ def test_category_hygiene_controllers_and_surface():
     assert not is_accessory_text(ps5.name)
     assert classify(surface.name) == "notebooky"
     assert same_model(ps5.name, "konzole", ps5b.name, "konzole")
-    # výpis skryje ovladač a Surface i když slug ještě říká konzole
+    # Ovladač je příslušenství, do výpisu nepatří. Surface má slug konzole, stránka produktu
+    # ho tak ukáže, takže ve výpisu konzolí je – dokud úklid slug neopraví.
     html = TestClient(app).get("/kategorie/konzole").text
-    assert "DualSense" not in html and "Surface" not in html and "PlayStation 5" in html
+    assert "DualSense" not in html and "PlayStation 5" in html and "Surface" in html
     st = repair_catalog(db, dry_run=False)
     assert st["accessories_cleared"] >= 2 and st["recategorized"] >= 1 and st["products_merged"] == 1
+    approve_pending(db)
     db.expire_all()
     assert db.get(Product, pad.id).category_slug is None
     assert db.get(Product, surface.id).category_slug == "notebooky"
@@ -252,6 +261,54 @@ def test_slevy_skips_thin_history_spam_and_oos():
     db.close()
 
 
+def test_listing_keeps_products_classify_mislabels():
+    """Produkt, jehož stránka ukazuje kategorii, musí být v jejím výpisu.
+
+    classify() z 6,67\" / 16'' udělá televizi a z „for Xbox“ konzoli. Stránka produktu
+    přitom správně říká telefony, notebooky a sluchátka a nabídka je skladem.
+    """
+    init_db()
+    db = SessionLocal()
+    rows = [
+        ("Motorola EDGE 70 12+512 GB Pantone Gadget Grey / 6.67\" / 512GB / Android 16",
+         "telefony", "Mobilní telefony", "edge-70"),
+        ("Gigabyte GAMING/A16 PRO DYHG5CZCC4SH/7-240H/16''/2560x1600/32GB/1TB",
+         "notebooky", "Notebooky", "a16-pro"),
+        ("JBL Quantum 910X Wireless for Xbox barva Black",
+         "sluchatka", "Sluchátka", "quantum-910x"),
+    ]
+    client = TestClient(app)
+    for name, slug, label, url_slug in rows:
+        assert classify(name) != slug
+        p = Product(name=name, slug=url_slug, category_slug=slug, category=label)
+        db.add(p)
+        db.flush()
+        db.add(Offer(
+            product=p, shop="mironet", url=f"https://www.mironet.cz/{url_slug}",
+            price=9990, in_stock=True, status="ok",
+        ))
+    accessory = Product(name="Sony DualSense Edge Wireless Controller", slug="dualsense-vypis",
+                        category_slug="telefony", category="Mobilní telefony")
+    retired = Product(name="Apple iPhone 15 128GB vyřazený", slug="iphone-vyrazeny",
+                      category_slug="telefony", category="Mobilní telefony",
+                      retired_at=datetime.now(timezone.utc))
+    db.add_all([accessory, retired])
+    db.flush()
+    db.add(Offer(product=accessory, shop="mironet", url="https://www.mironet.cz/dualsense-vypis",
+                 price=1800, in_stock=True, status="ok"))
+    db.add(Offer(product=retired, shop="mironet", url="https://www.mironet.cz/iphone-vyrazeny",
+                 price=15000, in_stock=True, status="ok"))
+    db.commit()
+    phones = client.get("/kategorie/telefony").text
+    assert "EDGE 70" in phones and "DualSense" not in phones and "vyřazený" not in phones
+    assert "A16 PRO" in client.get("/kategorie/notebooky").text
+    assert "Quantum 910X" in client.get("/kategorie/sluchatka").text
+    page = client.get("/produkt/" + str(db.query(Product).filter(Product.slug == "edge-70").one().id)).text
+    assert "Mobilní telefony" in page and "Koupit za" in page
+    assert "EDGE 70" in client.get("/hledat", params={"q": "Motorola EDGE 70"}).text
+    db.close()
+
+
 def test_recat_does_not_guess_tv_or_console():
     """6.67\" a 16'' nejsou úhlopříčka televize. Xbox v názvu sluchátek není konzole."""
     init_db()
@@ -275,6 +332,7 @@ def test_recat_does_not_guess_tv_or_console():
     db.commit()
     # špatná kategorie se vrátí; správná se dalším během nemění
     repair_catalog(db, dry_run=False)
+    approve_pending(db)
     db.expire_all()
     for p, cat in made:
         fresh = db.get(Product, p.id)
@@ -321,6 +379,7 @@ def test_surface_offer_comes_back_and_dualsense_redirects():
     db.commit()
     phone_slug = phone.slug
     st = repair_catalog(db, dry_run=False)
+    approve_pending(db)
     db.expire_all()
     host = db.get(Product, surface.id)
     assert host.retired_at is None
@@ -359,6 +418,7 @@ def test_ps5_slim_digital_bundle_merges():
     assert same_model(a.name, "konzole", b.name, "konzole")
     st = repair_catalog(db, dry_run=False)
     assert st["products_merged"] == 1
+    approve_pending(db)
     db.expire_all()
     live = [p for p in (db.get(Product, a.id), db.get(Product, b.id)) if p.retired_at is None]
     assert len(live) == 1 and live[0].slug in ("ps5-72", "ps5-139")

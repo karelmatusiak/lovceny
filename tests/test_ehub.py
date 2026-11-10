@@ -168,7 +168,7 @@ def test_obchody_shows_ehub_partners(client_db):
 
 
 def test_apply_feed_attach_by_name_color():
-    """Feed s EAN připojí nabídku k existujícímu produktu bez EAN podle názvu (černý↔Black)."""
+    """Bez platného GTIN se shoda názvu (černý↔Black) jen navrhne. Zapíše se až po schválení."""
     from lovceny.db import Base, engine
     init_db()
     Base.metadata.drop_all(bind=engine)
@@ -184,12 +184,15 @@ def test_apply_feed_attach_by_name_color():
         name="Apple iPhone 15 128GB - černý",
         url="https://istyle.cz/products/iphone-15-color-match-x",
         price=16490,
-        ean="9990001112223",  # v katalogu není
+        ean="9990001112223",  # neplatný kontrolní součet, v katalogu není
         category="Heureka.cz | Elektronika | Mobilní telefony",
         in_stock=True,
     )
     st = apply_feed(db, "istyle", [item])
-    assert st["attached"] == 1, st
+    assert st["attached"] == 0 and st["queued"] >= 1, st
+    assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 0
+    from lovceny.triage import approve_pending
+    approve_pending(db)
     assert db.query(Offer).filter(Offer.shop == "istyle", Offer.product_id == pid).count() == 1
     # create_missing True nesmí vytvořit duplicitu – URL/název už sedí
     st2 = apply_feed(db, "istyle", [item], create_missing=True, max_create=5)
@@ -255,6 +258,8 @@ def test_apply_feed_detaches_mismatched_ehub_url(client_db):
     )]
     st = apply_feed(db, "istyle", items, create_missing=False)
     assert st["detached"] + st["reattached"] >= 1, st
+    from lovceny.triage import approve_pending
+    approve_pending(db)
     db.refresh(air)
     # AirPods už nemá istyle URL na iPhone
     urls = [x.url for x in air.offers]
@@ -504,6 +509,8 @@ def test_apply_feed_skips_ean_mismatch_tv_monitor(client_db):
         in_stock=True,
     )]
     st = apply_feed(db, "xm", items, create_missing=False)
+    from lovceny.triage import approve_pending
+    approve_pending(db)
     db.refresh(tv)
     urls = [o.url for o in tv.offers if o.shop == "xm"]
     assert not urls, (urls, st)

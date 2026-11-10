@@ -193,7 +193,7 @@ def _drop_payload(r: RealDrop) -> dict:
 def _prepare(db, now: datetime, *, category: str = "", require_fresh: bool = True):
     """Jedno načtení produktů, nabídek a historie pro verdikty i přehled skutečných slev."""
     from .deals import load_offers_for, load_points_for_offers
-    q = select(Product).where(Product.retired_at.is_(None))
+    q = select(Product).where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False))
     if category:
         q = q.where(Product.category_slug == category)
     products = db.scalars(q).all()

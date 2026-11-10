@@ -306,6 +306,10 @@ main:focus{outline:none}
 .adm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:0 14px}
 .adm-chart{display:flex;gap:3px;align-items:end;height:140px}.adm-bar{flex:1;height:var(--h);min-height:2px;background:var(--brand);border-radius:3px 3px 0 0}
 .tbl .num{text-align:right;white-space:nowrap}.adm-msgs{list-style:none;padding:0;margin:0;display:grid;gap:10px}.adm-msgs p{margin:2px 0 0;white-space:pre-wrap}
+.triage-card{padding:16px 18px;border-radius:18px;margin-top:12px}
+.triage-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.triage-actions select,.triage-login input{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;min-height:44px}
+.triage-login{max-width:420px;display:grid;gap:10px}
 /* ---------- v3: O nás ---------- */
 .about-hero{padding:28px 0 8px}.about-hero .sub{max-width:720px}
 .about{padding:16px 0}.about-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}

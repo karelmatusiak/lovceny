@@ -207,7 +207,8 @@ def _light_rows(db) -> list[_Light]:
         )
         .join(buyable, buyable.c.pid == Product.id)
         .outerjoin(pts, pts.c.pid == Product.id)
-        .where(Product.retired_at.is_(None), Product.image_url.isnot(None), Product.image_url != "")
+        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
+               Product.image_url.isnot(None), Product.image_url != "")
     ).all()
     out: list[_Light] = []
     for pid, name, shop_cat, slug, image, n_shops, cur, n_pts, avg in rows:

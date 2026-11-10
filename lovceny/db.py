@@ -32,13 +32,18 @@ def init_db():
 _ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
                 ("products", "category_slug", "VARCHAR(40)"),
                 ("products", "retired_at", "TIMESTAMP WITH TIME ZONE"),
-                ("products", "redirect_product_id", "INTEGER")]
+                ("products", "redirect_product_id", "INTEGER"),
+                ("products", "catalog_hidden", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                ("offers", "shop_category", "TEXT"),
+                ("offers", "gtin", "VARCHAR(14)")]
 
 
 # Indexy, které create_all na existující tabulku nepřidá. Idempotentní (SQLite i Postgres).
 _ADD_INDEXES = [
     ("price_points", "CREATE INDEX IF NOT EXISTS ix_pp_offer_time ON price_points (offer_id, captured_at)"),
     ("offers", "CREATE INDEX IF NOT EXISTS ix_offers_last_checked ON offers (last_checked)"),
+    ("offers", "CREATE INDEX IF NOT EXISTS ix_offers_gtin ON offers (gtin)"),
+    ("triage_decisions", "CREATE INDEX IF NOT EXISTS ix_triage_decisions_status ON triage_decisions (status)"),
 ]
 
 
