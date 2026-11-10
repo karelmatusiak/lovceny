@@ -89,7 +89,7 @@ def _y_bounds(lo: float, hi: float) -> tuple[float, float, float]:
 
 
 def build_range(points, days: int | None, key: str, label: str, now: datetime | None = None,
-                verdict=None) -> ChartRange:
+                verdict=None, live_price: float | None = None) -> ChartRange:
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(days=days) if days else datetime(1970, 1, 1, tzinfo=timezone.utc)
     series = daily_best(points, since)
@@ -106,6 +106,16 @@ def build_range(points, days: int | None, key: str, label: str, now: datetime | 
     r.min_date = next(d for d, v in items if v == r.min)
     r.avg = sum(vals) / len(vals)
     r.current = vals[-1]
+    # Hero a tabulka nabídek ukazují aktuální cenu nabídky. Denní minimum
+    # (ranní 1 979, odpoledne 2 438) by v „Aktuálně“ lhala.
+    if live_price is not None:
+        try:
+            live = float(live_price)
+        except (TypeError, ValueError):
+            live = 0.0
+        if live > 0:
+            r.current = live
+            items[-1] = (items[-1][0], live)
     r.has_demo = any(d in demo_days for d, _ in items)
     r.points = items
     r.summary = (f"Za {label.lower() if days else 'celou dobu sledování'}: nejnižší cena {czk(r.min)} "
@@ -195,8 +205,8 @@ def _svg(r: ChartRange, verdict, W: int = W, H: int = H, sfx: str = "") -> str:
     return "".join(o)
 
 
-def build_chart(points, now: datetime | None = None, verdict=None) -> list[ChartRange]:
-    return [build_range(points, days, key, label, now, verdict) for key, label, days in RANGES]
+def build_chart(points, now: datetime | None = None, verdict=None, live_price: float | None = None) -> list[ChartRange]:
+    return [build_range(points, days, key, label, now, verdict, live_price=live_price) for key, label, days in RANGES]
 
 
 def verdict_note(v, ranges: list[ChartRange]) -> str:
