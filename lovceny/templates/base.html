@@ -25,6 +25,12 @@
 <header class="site-head"><div class="wrap">
   <nav aria-label="Hlavní navigace" class="site-nav">
     <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="159" height="72"></a>
+    {% if request.url.path != '/' %}
+    <form class="nav-search" action="/hledat" method="get" role="search">
+      <input id="nav-q" name="q" type="search" required maxlength="200" placeholder="Hledat" enterkeyhint="search" autocomplete="off" aria-label="Hledat produkt">
+      <button type="submit" class="nav-search-btn" aria-label="Hledat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    </form>
+    {% endif %}
     <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-panel">
       <span class="nav-toggle-bars" aria-hidden="true"></span>
       <span class="sr-only">Menu</span>

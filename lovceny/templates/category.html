@@ -7,12 +7,21 @@
   <div class="eyebrow"><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }}</div>
   <h1 class="page-h1">{{ page_title }}</h1>
   <p class="lead cat-lead">{% if view == 'nejlevnejsi' %}Nejlevnější {{ c.gen }}, které sledujeme – seřazeno jen podle aktuální nejnižší ceny napříč obchody.{% elif view == 've-sleve' %}Jen produkty, jejichž cena je teď u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, sem nezařazujeme.{% else %}{{ c.lead }}{% endif %}</p>
-  {{ season_hint(c.slug) }}
+  {% if season_tip(c.slug) %}
+  <div class="tip-full">{{ season_hint(c.slug) }}</div>
+  <details class="tip-box">
+    <summary>Tip, kdy nakupovat</summary>
+    {{ season_hint(c.slug) }}
+  </details>
+  {% endif %}
   <nav class="cat-tabs" aria-label="Pohled na kategorii">
     <a href="/kategorie/{{ c.slug }}{{ filter_qs }}"{% if not view %} aria-current="page"{% endif %}>Vše</a>
     <a href="/kategorie/{{ c.slug }}/nejlevnejsi{{ filter_qs }}"{% if view == 'nejlevnejsi' %} aria-current="page"{% endif %}>Nejlevnější</a>
     <a href="/kategorie/{{ c.slug }}/ve-sleve{{ filter_qs }}"{% if view == 've-sleve' %} aria-current="page"{% endif %}>Ve slevě</a>
   </nav>
+  <div class="cat-filters-wrap">
+  <input class="filters-check" type="checkbox" id="filtry"{% if filters_active %} checked{% endif %}>
+  <label class="filters-summary" for="filtry">Filtry{% if filters_active %} <span class="filters-badge">aktivní</span>{% endif %}</label>
   <form class="filters cat-filters" method="get" action="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}" aria-label="Filtrovat produkty">
     {% if brands %}
     <label class="filt-label">Značka
@@ -36,6 +45,7 @@
     <a class="btn-link" href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">Zrušit filtry</a>
     {% endif %}
   </form>
+  </div>
 </div></section>
 {% if thin_history %}
 <aside class="expect-note expect-note-quiet" role="status"><div class="wrap">

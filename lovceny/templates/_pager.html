@@ -1,11 +1,11 @@
 {% if pages > 1 %}
 <nav class="pager" aria-label="Stránkování">
   <ul class="pager-list">
-    <li>{% if page_prev %}<a class="pager-link" href="{{ page_prev }}" rel="prev">Předchozí</a>{% else %}<span class="pager-link is-disabled" aria-disabled="true">Předchozí</span>{% endif %}</li>
+    <li>{% if page_prev %}<a class="pager-link pager-step" href="{{ page_prev }}" rel="prev" aria-label="Předchozí stránka"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{% else %}<span class="pager-link pager-step is-disabled" aria-disabled="true" aria-label="Předchozí stránka"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{% endif %}</li>
     {% for n, href in page_links %}
     <li>{% if n is none %}<span class="pager-gap" aria-hidden="true">…</span>{% else %}<a class="pager-link" href="{{ href }}" aria-label="{% if n == page %}Strana {{ n }}, aktuální{% else %}Strana {{ n }}{% endif %}"{% if n == page %} aria-current="page"{% endif %}>{{ n }}</a>{% endif %}</li>
     {% endfor %}
-    <li>{% if page_next %}<a class="pager-link" href="{{ page_next }}" rel="next">Další</a>{% else %}<span class="pager-link is-disabled" aria-disabled="true">Další</span>{% endif %}</li>
+    <li>{% if page_next %}<a class="pager-link pager-step" href="{{ page_next }}" rel="next" aria-label="Další stránka"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{% else %}<span class="pager-link pager-step is-disabled" aria-disabled="true" aria-label="Další stránka"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{% endif %}</li>
   </ul>
 </nav>
 {% endif %}

@@ -68,7 +68,9 @@ def test_update_offer_stores_image_without_changing_identity(client_db, monkeypa
     assert p.slug == "aeg-pracka-ltr6a41460" and p.name == "AEG pračka LTR6A41460"
     assert float(o.price) == 14490
     html_page = client.get(f"/produkt/{p.id}-{p.slug}").text
-    assert "wsrv.nl" in html_page and 'sizes="120px"' in html_page
+    assert "wsrv.nl" in html_page
+    assert 'sizes="(max-width: 560px) min(320px, calc(100vw - 62px)), 120px"' in html_page
+    assert 'width="320"' in html_page
     assert "img-missing" in html_page  # skrytý fallback, kdyby wsrv selhal
     assert 'aria-label="Fotka produktu chybí"' in html_page
 
@@ -78,8 +80,8 @@ def test_product_page_missing_image_uses_framed_placeholder(client_db):
     p = make([500], name="Bez fotky detail", category="pracky")
     p.image_url = None
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
-    assert 'class="p-img"' in html and 'aria-label="Fotka produktu chybí"' in html
-    slot = html.split('class="p-img"', 1)[1].split("</div>", 1)[0]
+    assert 'class="p-img p-hero"' in html and 'aria-label="Fotka produktu chybí"' in html
+    slot = html.split('class="p-img p-hero"', 1)[1].split("</div>", 1)[0]
     assert "<img " not in slot and "img-missing" in slot
     css = (Path(__file__).resolve().parents[1] / "lovceny/static/app.css").read_text(encoding="utf-8")
     assert ".product .p-head .p-img{width:120px;height:120px;" in css

@@ -929,23 +929,17 @@ def _cat_url(path: str, params: list[tuple[str, str]], page: int) -> str:
 
 
 def _pager_numbers(page: int, pages: int) -> list[int | None]:
-    """Čísla stránek; None je mezera. Do devíti stránek (sluchátka) ukážeme všechny."""
-    if pages <= 9:
+    """Kompaktní okno na jeden řádek i na 360 px.
+
+    None je výpustka. Nejvýš čtyři čísla: 1 2 3 … N, 1 … N-2 N-1 N, nebo 1 … P … N.
+    """
+    if pages <= 4:
         return list(range(1, pages + 1))
-    wanted = {1, pages, page - 1, page, page + 1}
     if page <= 3:
-        wanted.update({2, 3, 4})
+        return [1, 2, 3, None, pages]
     if page >= pages - 2:
-        wanted.update({pages - 1, pages - 2, pages - 3})
-    nums = sorted(n for n in wanted if 1 <= n <= pages)
-    out: list[int | None] = []
-    prev = 0
-    for n in nums:
-        if prev and n > prev + 1:
-            out.append(None)
-        out.append(n)
-        prev = n
-    return out
+        return [1, None, pages - 2, pages - 1, pages]
+    return [1, None, page, None, pages]
 
 
 CAT_VIEWS = {

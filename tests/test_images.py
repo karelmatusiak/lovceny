@@ -320,7 +320,9 @@ def test_templates_use_srcset(client_db):
     p.image_url = OK_URL
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
-    assert "wsrv.nl/?url=" in html and 'sizes="120px"' in html and 'fetchpriority="high"' in html
+    assert "wsrv.nl/?url=" in html and 'fetchpriority="high"' in html
+    assert 'sizes="(max-width: 560px) min(320px, calc(100vw - 62px)), 120px"' in html
+    assert 'width="320"' in html and "640w" in html
     assert 'data-fallback="/img/160.webp?u=' in html or 'data-fallback="/img/80.webp?u=' in html or "data-fallback=" in html
     assert "onerror=" in html and 'loading="lazy"' not in html.split("fetchpriority")[0]  # priority → no lazy on hero
     p.image_url = "https://data.planeo.cz/pics/1/x.jpg"
