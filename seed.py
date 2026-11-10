@@ -705,13 +705,17 @@ def main(argv=None):
         print(f"Smazáno {n} demo bodů.")
         return
     if a.repair_catalog:
-        from lovceny.catalog_repair import repair_catalog
-        st = repair_catalog(db, dry_run=a.dry_run)
+        from lovceny.catalog_repair import repair_catalog_locked
+        st = repair_catalog_locked(db, dry_run=a.dry_run)
+        if st.get("skipped"):
+            print(f"Úklid katalogu přeskočen ({st['skipped']})")
+            return
         mode = "DRY-RUN" if a.dry_run else "APPLY"
         print(
             f"Úklid katalogu ({mode}): prislusenstvi={st['accessories_cleared']} "
             f"kategorie={st['recategorized']} nabidky_pryc={st['offers_detached']} "
             f"rozdeleno={st['offers_split']} prepojeno={st['offers_reattached']} "
+            f"vraceno={st.get('restored', 0)} redirect={st.get('redirect_fixed', 0)} "
             f"slouceno={st['products_merged']} prazdne={st['empty_retired']}"
         )
         for line in st["samples"]:

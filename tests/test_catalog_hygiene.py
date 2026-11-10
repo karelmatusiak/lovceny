@@ -252,6 +252,150 @@ def test_slevy_skips_thin_history_spam_and_oos():
     db.close()
 
 
+def test_recat_does_not_guess_tv_or_console():
+    """6.67\" a 16'' nejsou úhlopříčka televize. Xbox v názvu sluchátek není konzole."""
+    init_db()
+    db = SessionLocal()
+    rows = [
+        ("Motorola EDGE 70 12+512 GB Pantone Gadget Grey / 6.67\" / 512GB / Android 16",
+         "telefony", "edge"),
+        ("Gigabyte GAMING/A16 PRO DYHG5CZCC4SH/7-240H/16''/2560x1600/32GB/1TB",
+         "notebooky", "a16"),
+        ("JBL Quantum 910X Wireless for Xbox barva Black", "sluchatka", "quantum"),
+    ]
+    made = []
+    for name, cat, slug in rows:
+        p = Product(name=name, slug=slug, category_slug="televize" if cat != "sluchatka" else "konzole",
+                    category="špatně")
+        db.add(p)
+        db.flush()
+        db.add(Offer(product=p, shop="mironet", url=f"https://www.mironet.cz/{slug}-ok",
+                     price=10000, in_stock=True, status="ok"))
+        made.append((p, cat))
+    db.commit()
+    # špatná kategorie se vrátí; správná se dalším během nemění
+    repair_catalog(db, dry_run=False)
+    db.expire_all()
+    for p, cat in made:
+        fresh = db.get(Product, p.id)
+        assert fresh.category_slug == cat, (fresh.name, fresh.category_slug)
+        assert fresh.slug == p.slug
+    again = repair_catalog(db, dry_run=True)
+    assert again["recategorized"] == 0
+    db.close()
+
+
+def test_surface_offer_comes_back_and_dualsense_redirects():
+    init_db()
+    db = SessionLocal()
+    surface = Product(
+        name="Microsoft Surface Pro gen.10 1TB (i7/16GB) PLATINUM",
+        slug="surface-pro-gen-10", category_slug="notebooky", category="Notebooky",
+        retired_at=datetime.now(timezone.utc),
+    )
+    pad = Product(
+        name="Sony DualSense Edge Wireless Controller | Prémiový Ovladač pro PS5",
+        slug="dualsense-edge", category_slug=None, category=None,
+        retired_at=datetime.now(timezone.utc),
+    )
+    db.add_all([surface, pad])
+    db.flush()
+    shell = Product(name="microsoft xbox series s 1tb", slug="microsoft-xbox-series-s-1tb",
+                    category_slug="konzole", category="Herní konzole")
+    offer = Offer(product=shell, shop="svetpocitacu", price=76180, in_stock=False, status="ok",
+                  url="https://www.svetpocitacu.cz/microsoft-xbox-series-s-1tb")
+    db.add(shell)
+    db.flush()
+    db.add(PricePoint(offer=offer, price=76180, captured_at=datetime.now(timezone.utc), source="scrape"))
+    # slug obchodu se nesmí znovu odtrhnout od telefonu (8128gb = 8/128 GB)
+    phone = Product(
+        name="Samsung Galaxy A55 5G 8/128GB modrá",
+        slug="galaxy-a55", category_slug="telefony", category="Mobilní telefony",
+    )
+    db.add(phone)
+    db.flush()
+    db.add(Offer(
+        product=phone, shop="mironet", price=8000, in_stock=True, status="ok",
+        url="https://www.mironet.cz/samsung-galaxy-a55-5g-8128gb-modro-cerna-66-android-14-dp652173",
+    ))
+    db.commit()
+    phone_slug = phone.slug
+    st = repair_catalog(db, dry_run=False)
+    db.expire_all()
+    host = db.get(Product, surface.id)
+    assert host.retired_at is None
+    assert host.category_slug == "notebooky"
+    assert host.slug == "surface-pro-gen-10"
+    assert any(o.url.endswith("microsoft-xbox-series-s-1tb") for o in host.offers)
+    assert len(host.offers[0].points) == 1
+    gone = db.get(Product, shell.id)
+    assert gone.retired_at is not None and gone.redirect_product_id == host.id
+    pad_fresh = db.get(Product, pad.id)
+    assert pad_fresh.retired_at is not None and pad_fresh.category_slug == "konzole"
+    c = TestClient(app)
+    r = c.get(f"/produkt/{pad.id}-x", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/kategorie/konzole"
+    phone_fresh = db.get(Product, phone.id)
+    assert phone_fresh.retired_at is None and phone_fresh.slug == phone_slug
+    assert phone_fresh.offers and "8128gb" in phone_fresh.offers[0].url
+    assert st["offers_detached"] == 0
+    db.close()
+
+
+def test_ps5_slim_digital_bundle_merges():
+    init_db()
+    db = SessionLocal()
+    a = Product(name="PlayStation 5 Digital Edition (verze slim)", slug="ps5-72",
+                category_slug="konzole", category="Herní konzole")
+    b = Product(name="PlayStation 5 Slim 825GB Digital + Astro’s Playroom | Bez Mechaniky",
+                slug="ps5-139", category_slug="konzole", category="Herní konzole")
+    db.add_all([a, b])
+    db.flush()
+    db.add(Offer(product=a, shop="abcom", url="https://www.ab-com.cz/ps5-digital-slim",
+                 price=13834, in_stock=True, status="ok"))
+    db.add(Offer(product=b, shop="ellex", url="https://www.ellex.cz/ps5-slim-astro",
+                 price=14790, in_stock=True, status="ok"))
+    db.commit()
+    assert same_model(a.name, "konzole", b.name, "konzole")
+    st = repair_catalog(db, dry_run=False)
+    assert st["products_merged"] == 1
+    db.expire_all()
+    live = [p for p in (db.get(Product, a.id), db.get(Product, b.id)) if p.retired_at is None]
+    assert len(live) == 1 and live[0].slug in ("ps5-72", "ps5-139")
+    db.close()
+
+
+def test_repair_lock_skips_second_run():
+    from lovceny import catalog_repair as cr
+    init_db()
+    db = SessionLocal()
+    assert cr._LOCK.acquire(blocking=False)
+    try:
+        st = cr.repair_catalog_locked(db, dry_run=True)
+        assert st.get("skipped") == "locked"
+    finally:
+        cr._LOCK.release()
+    db.close()
+
+
+def test_startup_schedules_repair_thread(monkeypatch):
+    import lovceny.main as m
+    started = []
+
+    class FakeThread:
+        def __init__(self, target, name, daemon):
+            started.append((target, name, daemon))
+
+        def start(self):
+            started.append("start")
+
+    monkeypatch.setattr(m.threading, "Thread", FakeThread)
+    m.start_catalog_repair_background()
+    assert started[0][0] == m._repair_in_background
+    assert started[0][2] is True
+    assert started[1] == "start"
+
+
 def test_offer_label_conflict_alias():
     # sanity: URL slug bez mezer pořád vidí 1,7 l a značku
     assert offer_conflicts_product(

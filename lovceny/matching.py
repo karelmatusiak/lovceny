@@ -215,6 +215,13 @@ def _normalize_phrases(canon: str) -> str:
     s = re.sub(r"\bswitch\s+oled\b", "switcholed", s)
     s = re.sub(r"\bswitch\s+2\b", "switch2", s)
     s = re.sub(r"\bxbox\s+series\s+([xs])\b", r"xboxseries\1", s)
+    # Balíček „+ Astro's Playroom“ a „bez mechaniky“ je pořád Digital Slim.
+    s = re.sub(r"\bastro\w*\b", " ", s)
+    s = re.sub(r"\bplayroom\b", " ", s)
+    if re.search(r"\bbez\s+mechanik", s):
+        s = re.sub(r"\bbez\s+mechanik\w*\b", " ", s)
+        if not re.search(r"\bdigital\b", s):
+            s += " digital"
     s = re.sub(r"\b\d+\s*(gb|tb)\b", " ", s)
     s = re.sub(r"\b\d+\s*w\b", " ", s)
     s = re.sub(r"\b\d+\s+\d+\s+litr\w*\b", " ", s)
@@ -281,6 +288,51 @@ def model_identity_loose_color(name: str, category: str | None) -> tuple | None:
     if not _tokens_strong(tokens):
         return None
     return (category, brand, tokens, sig)
+
+
+def strong_listing_mismatch(product_name: str, label: str) -> bool:
+    """Jiný výrobek, ne jen jinak zapsaný slug obchodu.
+
+    Slug umí slepit 8/128 GB na „8128gb“, 6,6\" na „66“ a 1,8 l na „18 l“.
+    To samo o sobě nabídku od produktu neodtrhne. Odtrhne jiná značka,
+    jiný příkon, nebo objem, který není desetinný přepis.
+    """
+    from .shops.feed import _hard_conflict
+    if _hard_conflict(product_name or "", label or ""):
+        return True
+    ba, bb = brands(product_name), brands(label)
+    if ba and bb and ba.isdisjoint(bb):
+        return True
+    sa, sb = spec_map(product_name), spec_map(label)
+    if "power" in sa and "power" in sb and abs(sa["power"] - sb["power"]) >= 50:
+        return True
+    if "volume" in sa and "volume" in sb and abs(sa["volume"] - sb["volume"]) > 0.05:
+        hi, lo = max(sa["volume"], sb["volume"]), min(sa["volume"], sb["volume"])
+        if lo <= 0 or not (hi <= 30 and abs(hi / 10.0 - lo) <= 0.2):
+            return True
+    return False
+
+
+_OVERLAP_SKIP = frozenset({
+    "android", "wireless", "bluetooth", "black", "white", "smart", "gaming",
+    "digital", "edition", "slim", "version", "telefon", "smartphone",
+})
+
+
+def listing_overlap(product_name: str, label: str) -> bool:
+    """Společný modelový token (a55, dualsense, magnifica), ne jen značka."""
+    from .shops.feed import canonicalize_name
+    def sig(name: str) -> set[str]:
+        out = set()
+        for t in canonicalize_name(name).split():
+            if t in _OVERLAP_SKIP or t in _DROP:
+                continue
+            if re.fullmatch(r"\d+(?:gb|tb|w|mah)", t):
+                continue
+            if any(c.isdigit() for c in t) or len(t) >= 6:
+                out.add(t)
+        return out
+    return bool(sig(product_name) & sig(label))
 
 
 def same_model(a_name: str, a_cat: str | None, b_name: str, b_cat: str | None) -> bool:
