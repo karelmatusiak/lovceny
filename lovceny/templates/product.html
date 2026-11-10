@@ -20,7 +20,9 @@
         {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
         {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
       </div>
-      {% if best %}{% set bs = get_shop(best.shop) %}
+      {% if review %}
+      <p class="oos-banner">Ten produkt ve srovnání neukazujeme. Historie cen zůstává uložená a odkaz na koupi tu není.</p>
+      {% elif best %}{% set bs = get_shop(best.shop) %}
       <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% elif unverified_head %}
       <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>

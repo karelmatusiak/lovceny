@@ -88,15 +88,13 @@ def test_repair_detaches_wrong_offer_and_keeps_history():
     st = repair_catalog(db, dry_run=False)
     assert st["offers_detached"] >= 1
     db.expire_all()
-    assert db.get(Offer, bad_id).product_id == pid
-    approve_pending(db)
-    db.expire_all()
     host = db.get(Product, pid)
     assert host.retired_at is None
-    assert all(o.id != bad_id for o in host.offers)
     moved = db.get(Offer, bad_id)
-    assert moved is not None and moved.product_id != pid
+    assert moved is not None and moved.product_id == pid and moved.withheld is True
     assert len(moved.points) == 1 and float(moved.points[0].price) == 1979
+    page = TestClient(app).get(f"/produkt/{pid}")
+    assert "aigostar" not in page.text.lower()
     again = repair_catalog(db, dry_run=False)
     assert again["offers_detached"] == 0
     db.close()
@@ -130,9 +128,6 @@ def test_merge_duplicates_keeps_survivor_url_and_history():
     survivor_slug = a.slug
     st = repair_catalog(db, dry_run=False)
     assert st["products_merged"] == 1
-    db.expire_all()
-    assert db.get(Product, b.id).retired_at is None
-    approve_pending(db)
     db.expire_all()
     live = db.get(Product, a.id)
     gone = db.get(Product, b.id)

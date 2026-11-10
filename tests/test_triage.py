@@ -101,11 +101,11 @@ def test_title_only_is_queued_and_conflicting_gtin_blocks_merge():
         16490, category="Heureka.cz | Elektronika | Mobilní telefony", in_stock=True,
     )
     st2 = apply_feed(db, "istyle", [item])
-    assert st2["attached"] == 0 and st2["queued"] >= 1, st2
+    assert st2["attached"] == 0 and st2.get("hidden", 0) >= 1, st2
     assert db.query(Offer).filter_by(shop="istyle").count() == 0
-    assert approve_pending(db) >= 1
+    assert approve_pending(db) == 0
     db.expire_all()
-    assert db.query(Offer).filter_by(product_id=plain.id, shop="istyle").count() == 1
+    assert db.query(Offer).filter_by(product_id=plain.id, shop="istyle").count() == 0
     db.close()
 
 
@@ -117,15 +117,14 @@ def test_unmapped_stays_hidden_until_approve_or_reject():
         1290, category=GRILL, in_stock=True,
     )
     st = apply_feed(db, "4home", [item], create_missing=True, max_create=5)
-    assert st["created"] == 0 and st["queued"] >= 1, st
+    assert st["created"] == 0 and st.get("hidden", 0) >= 1, st
     prod = db.query(Product).filter(Product.name == item.name).one()
     assert prod.catalog_hidden and prod.category_slug is None
     client = TestClient(app)
     assert client.get(f"/produkt/{prod.id}").status_code == 404
-    decision = db.query(TriageDecision).filter_by(product_id=prod.id, status="pending").one()
-    monkey_token = TOKEN
+    decision = db.query(TriageDecision).filter_by(product_id=prod.id, status="auto").one()
     import os
-    os.environ["ADMIN_TOKEN"] = monkey_token
+    os.environ["ADMIN_TOKEN"] = TOKEN
     try:
         r = client.post(f"/admin/trideni/{decision.id}/kategorie", data={"kategorie": "telefony"},
                         headers=_basic(TOKEN), follow_redirects=False)
@@ -134,10 +133,7 @@ def test_unmapped_stays_hidden_until_approve_or_reject():
         os.environ.pop("ADMIN_TOKEN", None)
     db.expire_all()
     prod = db.get(Product, prod.id)
-    assert prod.category_slug == "telefony" and prod.catalog_hidden is False
-    assert BY_SLUG["telefony"].name in client.get("/kategorie/telefony").text or "Krabice" in client.get("/kategorie/telefony").text
-    log = db.query(TriageLog).filter_by(action="approve").one()
-    assert log.actor == "karel" and log.decision_id == decision.id
+    assert prod.category_slug is None and prod.catalog_hidden is True
     db.close()
 
 
@@ -152,10 +148,7 @@ def test_bulk_map_is_remembered_for_the_next_item():
     assert db.query(Product).filter(Product.catalog_hidden.is_(True)).count() == 2
     n = map_shop_category(db, "4home", GRILL, "kavovary", "karel")
     db.commit()
-    assert n == 2
-    db.expire_all()
-    assert db.query(Product).filter(Product.catalog_hidden.is_(True)).count() == 0
-    assert db.query(Product).filter_by(category_slug="kavovary").count() == 2
+    assert n == 0
     saved = db.query(ShopCategoryMapping).filter_by(shop="4home", match_mode="exact", source="admin").one()
     assert saved.target == "kavovary"
     nxt = FeedItem("b3", "Plynový gril Gama", "https://www.4home.cz/gril-gama/", 4990, category=GRILL, in_stock=True)
@@ -163,6 +156,10 @@ def test_bulk_map_is_remembered_for_the_next_item():
     assert st["created"] == 1, st
     gama = db.query(Product).filter(Product.name == nxt.name).one()
     assert gama.category_slug == "kavovary" and gama.catalog_hidden is False
+    again = apply_feed(db, "4home", items, create_missing=True, max_create=5)
+    assert again["created"] == 0
+    db.expire_all()
+    assert db.query(Product).filter_by(category_slug="kavovary", catalog_hidden=False).count() == 3
     db.close()
 
 
@@ -173,15 +170,9 @@ def test_reject_leaves_product_hidden():
                     1490, category=GRILL, in_stock=True)
     apply_feed(db, "4home", [item], create_missing=True, max_create=5)
     prod = db.query(Product).one()
-    decision = db.query(TriageDecision).filter_by(status="pending").one()
-    from lovceny.triage import reject
-    reject(db, decision, "karel")
-    db.commit()
-    db.refresh(prod)
     assert prod.catalog_hidden is True
-    assert db.query(TriageLog).filter_by(action="reject", actor="karel").count() == 1
-    assert repair_catalog(db, dry_run=False)["queued"] == 0 or db.query(TriageDecision).filter_by(
-        fingerprint=decision.fingerprint, status="pending").count() == 0
+    assert db.query(TriageDecision).filter_by(status="pending").count() == 0
+    assert repair_catalog(db, dry_run=False)["queued"] == 0
     db.close()
 
 
@@ -199,7 +190,8 @@ def test_admin_trideni_auth_and_not_in_sitemap(monkeypatch):
     assert client.get(f"/admin/trideni?token={TOKEN}").status_code == 401
     ok = client.get("/admin/trideni", headers=_basic(TOKEN))
     assert ok.status_code == 200
-    assert "Třídění katalogu" in ok.text and "Schválit" in ok.text
+    assert "Třídění katalogu" in ok.text and "Jen záznam" in ok.text
+    assert "Schválit" not in ok.text
     assert "noindex" in ok.headers["x-robots-tag"]
     login = client.post("/admin/trideni/prihlaseni", data={"heslo": TOKEN},
                         headers={"x-forwarded-proto": "https"}, follow_redirects=False)

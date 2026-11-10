@@ -52,7 +52,7 @@ def test_mismatched_offer_goes_to_triage_and_is_not_attached():
     db.refresh(host)
     assert stats["skipped_mismatch"] >= 1
     assert host.offers == []
-    row = db.query(TriageDecision).filter_by(kind="model_mismatch", status="pending").one()
+    row = db.query(TriageDecision).filter_by(kind="model_mismatch", status="auto").one()
     assert row.product_id == host.id
     assert "motorola-signature" in (row.payload or "")
     db.close()
@@ -188,26 +188,20 @@ def test_unreviewed_products_stay_on_their_page_but_not_in_listings(client_db):
     ok = make([7000], name="Apple iPhone 16e 128GB bílá", category="telefony", shop="istyle")
     db.commit()
     from lovceny.listing_review import queue_listing_review
-    from lovceny.triage import approve
     stats = queue_listing_review(db)
-    assert stats["queued"] >= 2
+    assert stats["queued"] == 0 and stats["published"] >= 1 and stats["hidden"] >= 1
     db.expire_all()
-    assert named.needs_review and bare.needs_review and not ok.needs_review
+    assert named.needs_review is False and bare.needs_review and not ok.needs_review
     home = client.get("/").text
     cat = client.get("/kategorie/chytre-hodinky").text
     sm = client.get("/sitemap.xml").text
-    assert "xiaomi watch" not in home.lower() and "Monitor bez kategorie" not in home
-    assert "xiaomi watch" not in cat.lower()
-    assert f"/produkt/{named.id}-" not in sm and f"/produkt/{bare.id}-" not in sm
-    assert f"/produkt/{ok.id}-" in sm
-    page = client.get(f"/produkt/{named.id}")
+    assert "Monitor bez kategorie" not in home
+    assert "xiaomi" in cat.lower()
+    assert f"/produkt/{bare.id}-" not in sm and f"/produkt/{ok.id}-" in sm
+    page = client.get(f"/produkt/{bare.id}")
     assert page.status_code == 200
     assert 'name="robots" content="noindex' in page.text
-    decision = db.query(TriageDecision).filter_by(product_id=named.id, kind="confirm_listing").one()
-    approve(db, decision, "karel", category="chytre-hodinky")
-    db.commit()
-    db.expire_all()
-    assert named.needs_review is False and named.category_slug == "chytre-hodinky"
+    assert "btn-buy" not in page.text
     assert "xiaomi" in client.get("/kategorie/chytre-hodinky").text.lower()
 
 
@@ -227,8 +221,9 @@ def test_repair_catalog_previews_unless_apply_and_admin_can_run_it(monkeypatch):
     db.close()
     seed.main(["--repair-catalog", "--apply"])
     db = SessionLocal()
-    assert db.query(TriageDecision).filter_by(status="pending").count() >= 1
-    assert db.get(Product, pid).category_slug == "telefony"
+    assert db.query(TriageDecision).filter_by(status="pending").count() == 0
+    cable = db.get(Product, pid)
+    assert cable.needs_review is True and cable.category_slug is None
     db.close()
     monkeypatch.setenv("ADMIN_TOKEN", TOKEN)
     client = TestClient(app)

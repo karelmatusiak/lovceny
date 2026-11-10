@@ -1,10 +1,10 @@
 """Týdenní přehled ve vypnutém stavu a dořešení variant, které 0002 nesloučila."""
 import base64
 
+from lovceny.auto_resolve import families_match, resolve_pending
 from lovceny.models import PricePoint, Product, TriageDecision
 from lovceny.part_codes import apply_part_code_merges
-from lovceny.triage import approve
-from lovceny.variant_merge import enqueue_variant_proposals, proposal_family
+from lovceny.variant_merge import apply_variant_merges, enqueue_variant_proposals, proposal_family
 
 
 def test_week_path_with_w_redirects_when_digest_is_off(client_db):
@@ -27,6 +27,7 @@ def test_part_code_merges_only_the_verified_iphone_pair(client_db):
     black.ean = "195949036033"
     black.offers[0].url = "https://istyle.cz/products/iphone-15-mtp03sx-a"
     blue = make([16490], name="iphone 15 mtp43sx a", category="telefony", shop="istyle")
+    blue.needs_review = True
     blue.offers[0].url = "https://istyle.cz/products/iphone-15-mtp43sx-a"
     point_id = blue.offers[0].points[0].id
     pro = make([20000], name="Apple iPhone 15 Pro 128GB", category="telefony", shop="istyle")
@@ -48,59 +49,50 @@ def test_part_code_merges_only_the_verified_iphone_pair(client_db):
     assert again["groups"] == 0
 
 
-def test_title_near_matches_wait_for_approval(client_db, monkeypatch):
+def test_title_near_matches_stay_separate_unless_variant_tokens(client_db, monkeypatch):
     client, db, make = client_db
     long_pods = ("Apple AirPods 4 s aktivním potlačením hluku bílá (2024) / "
                  "bezdrátová sluchátka / ANC / Bluetooth / výdrž až 30 hodin")
     pods_a = make([3599], name=long_pods, category="sluchatka")
     pods_b = make([3390], name="AirPods 4 s aktivním potlačováním hluku", category="sluchatka", shop="istyle")
-    books = [
-        make([209000], name=name, category="notebooky", shop="allegro")
-        for name in (
-            "MacBook Pro 14 128/4T/US/96/N Černý",
-            "MacBook Pro 14 128/4T/N Černý",
-            "MacBook Pro 14 128/4T/US/96W Černý",
-        )
-    ]
+    book_names = (
+        "MacBook Pro 14 M5Max (18+40)-128/4T/US/96/N Černý",
+        "MacBook Pro 14 M5Max (18+40) – 128/4T/N Černý",
+        "MacBook Pro 14 M5Max (18+40) – 128/4T/US/96W Černý",
+    )
+    books = [make([209000], name=name, category="notebooky", shop="allegro") for name in book_names]
     slim = make([13834], name="PlayStation 5 Digital Edition (verze slim)", category="konzole")
     chassis = make([13900], name="PlayStation 5 Digital Edition 825GB (Slim/E-Chassis)", category="konzole")
+    black = make([16000], name="Apple iPhone 15 128 GB černá", category="telefony")
+    white = make([17000], name="Apple iPhone 15 256 GB bílá", category="telefony")
     pro = make([20000], name="Apple iPhone 15 Pro 128GB", category="telefony")
-    plain = make([16000], name="Apple iPhone 15 128 GB Black", category="telefony")
     db.commit()
+    assert not families_match([pods_a.name, pods_b.name], "sluchatka")
+    assert not families_match([slim.name, chassis.name], "konzole")
+    assert not families_match(book_names, "notebooky")
+    assert families_match([black.name, white.name], "telefony")
+    assert not families_match([black.name, pro.name], "telefony")
     assert proposal_family(pods_a.name, "sluchatka") == proposal_family(pods_b.name, "sluchatka")
-    assert proposal_family(pro.name, "telefony") != proposal_family(plain.name, "telefony")
-    washer_a = proposal_family("Bosch WGE03200BY pračka", "pracky")
-    washer_b = proposal_family("Bosch pračka WUU28T71", "pracky")
-    assert washer_a and washer_b and washer_a != washer_b
-    anc = proposal_family("Mcdodo Bezdrátová Bluetooth Sluchátka Do Uší S Mikrofonem Pouzdro Anc Enc", "sluchatka")
-    plain_mcdodo = proposal_family("Mcdodo Sluchátka Do Uší S Mikrofonem Pouzdro", "sluchatka")
-    assert anc != plain_mcdodo
-    nano = "MacBook Pro 14 M5Max (18+40) – 128/8T/96/Nan Černý"
-    plain_book = "MacBook Pro 14 M5Max (18+40)-128/4T/US/96/N Černý"
-    assert proposal_family(nano, "notebooky") == proposal_family(plain_book, "notebooky")
     queued = enqueue_variant_proposals(db)
     db.commit()
-    groups = {tuple(ids) for ids in queued["ids"]}
-    assert (pods_a.id, pods_b.id) in groups or (pods_b.id, pods_a.id) in groups
-    assert tuple(sorted(p.id for p in books)) in groups
-    assert tuple(sorted((slim.id, chassis.id))) in groups
-    assert all(pro.id not in ids for ids in queued["ids"])
+    preview = resolve_pending(db, dry_run=True)
+    assert preview["buckets"]["varianta"]["merged"] == 0
+    assert preview["buckets"]["varianta"]["separate"] == len(queued["ids"])
+    resolve_pending(db, dry_run=False)
+    merged = apply_variant_merges(db, dry_run=False)
+    db.commit()
+    db.expire_all()
     assert db.get(Product, pods_b.id).retired_at is None
-    decision = db.query(TriageDecision).filter_by(kind="variant_merge", product_id=min(pods_a.id, pods_b.id)).one()
-    assert str(pods_a.id) in (decision.payload or "") and str(pods_b.id) in (decision.payload or "")
+    assert db.get(Product, chassis.id).retired_at is None
+    assert all(db.get(Product, book.id).retired_at is None for book in books)
+    assert db.get(Product, pro.id).retired_at is None
+    colour = db.get(Product, max(black.id, white.id))
+    assert colour.retired_at is not None
+    assert colour.redirect_product_id == min(black.id, white.id)
+    assert merged["retired"] >= 1
     monkeypatch.setenv("ADMIN_TOKEN", "triage-admin-token1")
     token = base64.b64encode(b"karel:triage-admin-token1").decode()
     page = client.get("/admin/trideni", headers={"authorization": "Basic " + token})
     assert page.status_code == 200
-    assert "Varianta modelu" in page.text
-    assert f"#{pods_a.id}" in page.text and f"#{pods_b.id}" in page.text
-    ok, _detail = approve(db, decision, "karel")
-    db.commit()
-    assert ok
-    db.expire_all()
-    canonical = min(pods_a.id, pods_b.id)
-    other = max(pods_a.id, pods_b.id)
-    assert db.get(Product, other).redirect_product_id == canonical
-    page = client.get(f"/produkt/{other}", follow_redirects=False)
-    assert page.status_code == 301
-    assert page.headers["location"].startswith(f"/produkt/{canonical}-")
+    assert "Jen záznam" in page.text
+    assert "Schválit" not in page.text
