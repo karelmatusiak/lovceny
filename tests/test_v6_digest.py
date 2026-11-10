@@ -12,6 +12,12 @@ SUB = {"endpoint": "https://fcm.googleapis.com/fcm/send/tydenni-1", "keys": {"p2
 ROOT = Path(__file__).resolve().parent.parent
 
 
+@pytest.fixture(autouse=True)
+def _digest_feature_on(monkeypatch):
+    """Tyhle testy popisují obnovený přehled. Ve výchozím nasazení je vypnutý."""
+    monkeypatch.setenv("LOVCENY_SIDE_FEATURES", "1")
+
+
 @pytest.fixture
 def vapid(monkeypatch):
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
@@ -204,7 +210,9 @@ def test_email_flow_when_enabled(clean, monkeypatch):
 
 def test_workflow_privacy_sw():
     wf = (ROOT / ".github/workflows/digest.yml").read_text()
-    assert 'cron: "17 14,15,16,17,18 * * 5"' in wf and "python weekly_digest.py" in wf and "VAPID_PRIVATE_KEY" in wf
+    assert "schedule:" not in wf and "workflow_dispatch" in wf
+    assert "python weekly_digest.py" in wf and "VAPID_PRIVATE_KEY" in wf
+    assert "Fáze 1" in wf
     from fastapi.testclient import TestClient
     from lovceny.main import app
     c = TestClient(app)

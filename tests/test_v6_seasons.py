@@ -112,4 +112,5 @@ def test_nav_footer_sitemap():
     html = c.get("/").text
     assert 'href="/kdy-nakupovat"' in html and 'href="/over-slevu"' in html
     sm = c.get("/sitemap.xml").text
-    assert "/kdy-nakupovat</loc>" in sm and "/over-slevu</loc>" in sm and "/rozsireni</loc>" in sm
+    assert "/kdy-nakupovat</loc>" in sm and "/over-slevu</loc>" in sm
+    assert "/rozsireni</loc>" not in sm and "/prehled</loc>" not in sm and "/hlidat-rozpocet</loc>" not in sm

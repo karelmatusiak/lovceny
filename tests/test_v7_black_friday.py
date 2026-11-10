@@ -81,6 +81,7 @@ def test_demo_excluded_by_default(client_db, monkeypatch):
 
 @pytest.fixture
 def vapid(monkeypatch):
+    monkeypatch.setenv("LOVCENY_FEATURE_PUSH", "1")
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "privatekeyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 

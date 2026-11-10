@@ -11,6 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SUB = {"endpoint": "https://fcm.googleapis.com/fcm/send/rozpocet-1", "keys": {"p256dh": "B" * 87, "auth": "a" * 22}}
 
 
+@pytest.fixture(autouse=True)
+def _budget_feature_on(monkeypatch):
+    """Tyhle testy popisují obnovené hlídání rozpočtu. Ve výchozím nasazení je vypnuté."""
+    monkeypatch.setenv("LOVCENY_SIDE_FEATURES", "1")
+
+
 @pytest.fixture
 def vapid(monkeypatch):
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")

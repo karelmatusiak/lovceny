@@ -10,6 +10,7 @@ SUB = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc123", "keys": {"p256d
 
 @pytest.fixture
 def vapid(monkeypatch):
+    monkeypatch.setenv("LOVCENY_FEATURE_PUSH", "1")
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "privatekeyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     monkeypatch.setenv("VAPID_SUBJECT", "mailto:test@example.cz")
@@ -119,6 +120,7 @@ def test_real_encryption_and_vapid_signing(monkeypatch, client_db):
     from cryptography.hazmat.primitives import serialization
     b = lambda x: base64.urlsafe_b64encode(x).rstrip(b"=").decode()  # noqa: E731
     srv = ec.generate_private_key(ec.SECP256R1())
+    monkeypatch.setenv("LOVCENY_FEATURE_PUSH", "1")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", b(srv.private_numbers().private_value.to_bytes(32, "big")))
     monkeypatch.setenv("VAPID_PUBLIC_KEY", b(srv.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)))
     cli = ec.generate_private_key(ec.SECP256R1())

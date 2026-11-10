@@ -262,6 +262,7 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     else:
         products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
     from .availability import offer_is_buyable
+    from .offer_trust import offer_is_captcha_hidden
     scored = []
     for p in products:
         if is_accessory_text(p.name or "", p.category):
@@ -269,7 +270,8 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
         best, v = product_summary(p)
         if best is None:
             continue
-        n_shops = len({o.shop for o in p.offers if offer_is_buyable(o) and o.price is not None})
+        n_shops = len({o.shop for o in p.offers
+                       if offer_is_buyable(o) and o.price is not None and not offer_is_captcha_hidden(o)})
         scored.append((0 if n_shops >= 2 else 1, p, best, v))
     scored.sort(key=lambda x: x[0])
     out = [(p, best, v) for _, p, best, v in scored[:limit]]
@@ -279,10 +281,17 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
 
 def gemini_search_on() -> bool:
     import os
-    return bool(os.environ.get("GEMINI_API_KEY"))
+    from .features import ai_on
+    return ai_on() and bool(os.environ.get("GEMINI_API_KEY"))
 
+
+from . import features as _features  # noqa: E402
 
 tpl.env.globals["AI_SEARCH_ON"] = gemini_search_on
+tpl.env.globals["BUDGET_ON"] = _features.budget_on
+tpl.env.globals["DIGEST_ON"] = _features.digest_on
+tpl.env.globals["EXTENSION_ON"] = _features.extension_on
+tpl.env.globals["PUSH_ON"] = _features.push_on
 
 
 def _wants_html_404(request: Request) -> bool:
@@ -1646,6 +1655,9 @@ def api_verify(request: Request, url: str = "", name: str = "", price: float = 0
                db=Depends(get_db)):
     """Veřejné JSON API pro rozšíření: verdikt, kontrola 30 dní, nejnižší cena jinde.
     Rozšíření posílá název a cenu z otevřené stránky (pak stránku obchodu vůbec nestahujeme)."""
+    if not _features.extension_on():
+        return JSONResponse({"ok": False, "error": "Rozšíření je vypnuté."}, 410,
+                            headers=_api_headers(request, cache=False))
     try:
         clean = verifymod.clean_url(url)
     except verifymod.BadUrl as e:
@@ -1675,6 +1687,8 @@ def _ext_build():
 
 @app.get("/rozsireni", response_class=HTMLResponse)
 def extension_page(request: Request):
+    if not _features.extension_on():
+        return RedirectResponse("/", status_code=301)
     b = _ext_build()
     shops = sorted({SHOPS[s].name for s in SHOPS if SHOPS[s].status == "ok"}, key=str.lower)
     crumbs = [("Lovceny", "/"), ("Rozšíření do prohlížeče", "/rozsireni")]
@@ -1685,6 +1699,8 @@ def extension_page(request: Request):
 @app.get("/rozsireni/lovceny-{target}.zip")
 def extension_zip(target: str):
     """Zip rozšíření sestavený z repozitáře (stejný jako `python extension/build.py`)."""
+    if not _features.extension_on():
+        raise HTTPException(410, "Rozšíření je vypnuté.")
     if target not in ("chrome", "firefox"):
         raise HTTPException(404)
     if target not in _ext_zip:
@@ -1705,6 +1721,8 @@ def _digest_ctx(request: Request, **kw) -> dict:
 
 @app.get("/prehled", response_class=HTMLResponse)
 def digest_archive(request: Request, email: str = "", db=Depends(get_db)):
+    if not _features.digest_on():
+        return RedirectResponse("/slevy", status_code=301)
     from .models import WeeklyDigest
     rows = db.scalars(select(WeeklyDigest).order_by(WeeklyDigest.year.desc(), WeeklyDigest.week.desc()).limit(104)).all()
     crumbs = [("Lovceny", "/"), ("Týdenní přehled slev", "/prehled")]
@@ -1715,6 +1733,8 @@ def digest_archive(request: Request, email: str = "", db=Depends(get_db)):
 
 @app.get("/prehled/{year:int}-{week:int}", response_class=HTMLResponse)
 def digest_week(request: Request, year: int, week: int, db=Depends(get_db)):
+    if not _features.digest_on():
+        return RedirectResponse("/slevy", status_code=301)
     from .models import WeeklyDigest
     d = db.scalar(select(WeeklyDigest).where(WeeklyDigest.year == year, WeeklyDigest.week == week))
     if d is None:
@@ -1758,6 +1778,8 @@ def digest_push_unsub_link(request: Request, token: str, db=Depends(get_db)):
 
 @app.post("/prehled/email")
 def digest_email_subscribe(request: Request, email: str = Form(""), website: str = Form(""), db=Depends(get_db)):
+    if not _features.digest_on():
+        raise HTTPException(410, "Týdenní přehled je vypnutý.")
     if not digestmod.email_enabled():
         raise HTTPException(404)
     if website:
@@ -1807,6 +1829,8 @@ def _budget_ctx(**kw) -> dict:
 @app.get("/hlidat-rozpocet", response_class=HTMLResponse)
 def budget_page(request: Request, kategorie: str = "", hledat: str = "", max: str = "", email: str = "",
                 category: str = "", keyword: str = "", max_price: str = "", db=Depends(get_db)):
+    if not _features.budget_on():
+        return RedirectResponse("/", status_code=301)
     kategorie, hledat, max = kategorie or category, hledat or keyword, max or max_price
     cat = BY_SLUG.get(kategorie)
     kw = budgetmod.clean_keyword(hledat)
@@ -1826,6 +1850,8 @@ def budget_page(request: Request, kategorie: str = "", hledat: str = "", max: st
 
 @app.post("/api/rozpocet")
 def budget_subscribe(request: Request, payload: dict = Body(...), db=Depends(get_db)):
+    if not _features.budget_on():
+        raise HTTPException(410, "Hlídání rozpočtu je vypnuté.")
     if not pushmod.enabled():
         raise HTTPException(404, "Upozornění v prohlížeči nejsou zapnutá.")
     if not verifymod.rate_ok(_client_ip(request), per_hour=BUDGET_PER_IP_HOUR, scope="rozpocet"):
@@ -1861,6 +1887,8 @@ def budget_unsubscribe_api(payload: dict = Body(...), db=Depends(get_db)):
 def budget_email_subscribe(request: Request, category: str = Form(""), keyword: str = Form(""), max_price: str = Form(""),
                            email: str = Form(""), only_in_stock: str = Form(""), website: str = Form(""),
                            db=Depends(get_db)):
+    if not _features.budget_on():
+        raise HTTPException(410, "Hlídání rozpočtu je vypnuté.")
     if not digestmod.email_enabled():
         raise HTTPException(404)
     back = f"/hlidat-rozpocet?kategorie={quote(category)}&email="
@@ -1913,6 +1941,8 @@ def budget_manage(request: Request, token: str, potvrzeno: int = 0, zmeneno: int
 
 @app.post("/hlidat-rozpocet/{token}/upravit")
 def budget_edit(token: str, max_price: str = Form(""), db=Depends(get_db)):
+    if not _features.budget_on():
+        raise HTTPException(410, "Hlídání rozpočtu je vypnuté. Zrušení dál funguje.")
     b = _budget_or_404(db, token)
     try:
         budgetmod.update(db, b, max_price.replace(" ", ""))

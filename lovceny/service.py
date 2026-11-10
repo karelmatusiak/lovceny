@@ -648,8 +648,11 @@ def smart_offers(db: Session, q: str, live: bool = True, use_ai: bool = True) ->
     Vrací {offers, statuses, intent, summary, ai_used}."""
     from concurrent.futures import ThreadPoolExecutor
     from . import ai
+    from .features import ai_on
     from .shops.search import live_search
     global _term_pool
+    if use_ai and not ai_on():
+        use_ai = False
     intent = ai.understand(q) if use_ai else None
     ai_used = intent is not None
     if intent is None:

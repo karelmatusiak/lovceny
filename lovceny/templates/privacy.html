@@ -29,6 +29,7 @@
   </ul>
 
   <h3>2.2 AI hledání (Google Gemini)</h3>
+  <p><b>Teď vypnuté.</b> Dotazy do Gemini neposíláme. Až funkci znovu zapneme, platí text níže.</p>
   <p>U delších dotazů v přirozené řeči (např. „tichá pračka do 10 tisíc“) můžeme text dotazu a názvy + ceny nabídek z e-shopů poslat službě <b>Google Gemini</b> (free tier API), aby porozuměla filtru a seřadila relevantní výsledky. Z textu před odesláním <b>odstraňujeme e-maily a telefonní čísla</b>. Neposíláme jméno ani údaje z hlídání ceny.</p>
   <ul>
     <li><b>Účel:</b> lepší výsledky hledání.</li>
@@ -37,6 +38,7 @@
   </ul>
 
   <h3>2.3 Upozornění v prohlížeči (Web Push)</h3>
+  <p><b>Teď vypnutá.</b> Nové odběry nepřijímáme a oznámení neposíláme. Odhlášení už uloženého odběru dál funguje. E-mailové hlídání ceny u produktu běží dál.</p>
   <p>Hlídat cenu jde i bez e-mailu – oznámením v prohlížeči. Po tvém výslovném povolení v prohlížeči uložíme:</p>
   <ul>
     <li><b>adresu odběru</b> (endpoint) push služby tvého prohlížeče (Google, Mozilla, Apple nebo Microsoft) a <b>šifrovací klíče</b> odběru,</li>
@@ -67,13 +69,16 @@
   <p>Když na stránce <a href="/over-slevu">Ověř slevu</a> vložíš odkaz na produkt, použijeme ho jen k ověření: u obchodu, který automatické čtení dovoluje, jednou načteme stránku produktu a podle názvu prohledáme další obchody. <b>Vložený odkaz neukládáme do databáze</b> (ve statistice návštěvnosti je jen cesta <code>/over-slevu</code> bez parametrů). Výsledek držíme nejvýš 15 minut v paměti serveru, aby se stejný odkaz nemusel načítat znovu. Proti zahlcení obchodů počítáme dotazy podle jednosměrného otisku IP adresy – jen v paměti, nejdéle hodinu. Odkaz na výsledek obsahuje adresu produktu; komu ho pošleš, je na tobě.</p>
 
   <h3 id="rozsireni">2.9 Rozšíření do prohlížeče</h3>
+  <p><b>Teď vypnuté.</b> Stránku ani API rozšíření nenabízíme. Už nainstalované rozšíření nedostane nové odpovědi.</p>
   <p><a href="/rozsireni">Rozšíření Lovceny</a> běží jen na stránkách obchodů, které sledujeme. Na stránce produktu přečte ze strukturovaných dat jen <b>adresu produktu, jeho název a cenu</b> a pošle je na naše API, aby mohlo ukázat výsledek. Nepoužívá analytiku, identifikátory ani cookies (požadavky jdou bez cookies), nečte jiné weby ani historii prohlížení. Dotazy z rozšíření neukládáme do databáze ani do statistiky; výsledek držíme nejvýš 15 minut v paměti serveru a počet dotazů omezujeme podle otisku IP adresy v paměti (nejdéle hodinu). <b>Právní základ:</b> oprávněný zájem / plnění služby, kterou sis nainstaloval(a). Rozšíření odinstaluješ ve správě rozšíření prohlížeče.</p>
 
   <h3 id="prehled">2.10 Týdenní přehled slev</h3>
+  <p><b>Teď vypnutý.</b> Nový přehled nevytváříme a upozornění neposíláme. Odhlášení starého odběru dál funguje. Uložené snímky týdnů mažeme jen na požádání.</p>
   <p>Týdenní přehled je <b>samostatný odběr</b>, oddělený od hlídání cen. Upozornění v prohlížeči: po tvém povolení uložíme adresu odběru push služby prohlížeče, jeho šifrovací klíče, téma „Týdenní přehled“, datum vytvoření a posledního odeslání a odhlašovací kód – žádný e-mail ani IP adresu. Posíláme jednou týdně (v pátek). Odhlásit se můžeš přepínačem na stránce <a href="/prehled">Týdenní přehled slev</a> nebo tlačítkem „Odhlásit přehled“ přímo v oznámení; zaniklé odběry mažeme při dalším odesílání. V localStorage si pamatujeme odhlašovací kód (klíč <code>lovceny-prehled</code>).</p>
   <p><b>E-mailová verze</b> je připravená, ale zatím <b>vypnutá</b>. Až ji zapneme, bude potřeba zvlášť zadat e-mail a potvrdit ho odkazem (double opt-in); uložíme e-mail, kód pro odhlášení, stav potvrzení a datum posledního odeslání. Nepotvrzené adresy mažeme po 7 dnech, odhlášením (odkaz v každém e-mailu) adresu hned smažeme. <b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR, § 7 zákona č. 480/2004 Sb.). E-maily by odesílalo Brevo (viz bod 3).</p>
 
   <h3 id="rozpocet">2.11 Hlídání podle rozpočtu</h3>
+  <p><b>Teď vypnuté.</b> Nová hlídání nezakládáme a upozornění neposíláme. Zrušení už uloženého hlídání dál funguje.</p>
   <p>Když si zapneš hlídání podle rozpočtu v prohlížeči, uložíme kategorii, volitelné slovo z názvu (např. značku), maximální cenu, volbu „jen skladem“, adresu odběru push služby prohlížeče a jeho šifrovací klíče, náhodný kód pro správu a zrušení, datum vytvoření a posledního upozornění a seznam produktů a cen, o kterých jsme ti už dali vědět (aby se upozornění neopakovala). Jméno ani e-mail nepotřebujeme. Právní základ: plnění služby, o kterou žádáš (čl. 6 odst. 1 písm. b) GDPR). Zrušení: odkazem v upozornění nebo na stránce správy hlídání – záznam se rovnou smaže. Hlídání bez upozornění 12 měsíců mažeme automaticky.</p>
   <p><b>E-mailová verze</b> je připravená, ale zatím <b>vypnutá</b>. Až ji zapneme, bude potřeba e-mail potvrdit odkazem (double opt-in); nepotvrzené adresy mažeme po 7 dnech.</p>
 

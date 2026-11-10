@@ -1,9 +1,8 @@
 name: Týdenní přehled slev
-# Pátek večer pražského času. GitHub cron je UTC a často se zpožďuje o desítky minut;
-# víc slotů (CET/CEST + zpoždění) + skript pošle jen pátek 15–21 h Praha a nejvýš jednou za týden.
+# Fáze 1: plánované spouštění je vypnuté. Ruční běh nic nepošle, dokud není
+# LOVCENY_SIDE_FEATURES=1 nebo LOVCENY_FEATURE_DIGEST=1 (skript sám skončí).
+# Obnovení: vrať schedule a zapni přepínač. Data v weekly_digests zůstávají.
 on:
-  schedule:
-    - cron: "17 14,15,16,17,18 * * 5"
   workflow_dispatch:
     inputs:
       force:

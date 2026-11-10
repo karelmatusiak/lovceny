@@ -23,6 +23,12 @@ FF_ORIGIN = "moz-extension://0b5c3f5e-1a2b-4c3d-9e8f-123456789abc"
 PRODUCT = "https://www.mironet.cz/sluchatka-api-test"
 
 
+@pytest.fixture(autouse=True)
+def _extension_feature_on(monkeypatch):
+    """Tyhle testy popisují obnovené rozšíření. Ve výchozím nasazení je vypnuté."""
+    monkeypatch.setenv("LOVCENY_SIDE_FEATURES", "1")
+
+
 @pytest.fixture
 def c(monkeypatch):
     def boom(*a, **k):

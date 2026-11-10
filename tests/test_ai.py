@@ -22,6 +22,7 @@ class FakeResp:
 
 @pytest.fixture
 def gemini(monkeypatch):
+    monkeypatch.setenv("LOVCENY_FEATURE_AI", "1")
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     calls = []
     answers = {}
