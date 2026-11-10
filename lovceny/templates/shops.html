@@ -4,11 +4,17 @@
 {% block body %}<section style="padding-top:24px"><div class="wrap">
 <div class="eyebrow">Transparentnost</div><h1 class="page-h1">Hlídané obchody</h1>
 <p class="sub">Neobcházíme ochranu proti botům. Obchody, které automatické čtení blokují, napojujeme přes oficiální feed nebo affiliate export – partnerství si nevymýšlíme, stav je vždy vidět tady.</p>
-<div class="card" style="margin-top:28px;padding:8px 28px"><table class="tbl">
-<tr><th>Obchod</th><th>Zdroj cen</th><th>Stav</th><th>Poznámka</th></tr>
+<div class="card shops-card"><table class="tbl tbl-shops">
+<thead><tr><th>Obchod</th><th>Zdroj cen</th><th>Stav</th><th>Poznámka</th></tr></thead>
+<tbody>
 {% for s in shops %}{% set st, label = s.status_label() %}
-<tr><td><b>{{ s.name }}</b></td><td>{% if s.source=='feed' %}oficiální feed{% elif s.ehub_bid %}affiliate odkazy{% else %}stránka produktu{% endif %}</td>
-<td><span class="st st-{{ st }}">{{ label }}</span></td><td class="muted">{{ s.note }}</td></tr>{% endfor %}
+<tr>
+<td data-label="Obchod"><b>{{ s.name }}</b></td>
+<td data-label="Zdroj cen">{% if s.source=='feed' %}oficiální feed{% elif s.ehub_bid %}affiliate odkazy{% else %}stránka produktu{% endif %}</td>
+<td data-label="Stav"><span class="st st-{{ st }}">{{ label }}</span></td>
+<td data-label="Poznámka" class="muted">{{ s.note }}</td>
+</tr>{% endfor %}
+</tbody>
 </table></div>
 <p class="muted" style="margin-top:16px;font-size:14px">Katalog postupně rozšiřujeme. Aktuální úspěšnost stahování: <a href="/stav">Stav obchodů</a>.</p>
 </div></section>{% endblock %}

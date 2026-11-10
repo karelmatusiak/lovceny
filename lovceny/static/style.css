@@ -211,7 +211,7 @@ h2.hero-picks-title{font-size:clamp(22px,2.4vw,28px);font-weight:800;letter-spac
   .hero-pick-img{height:112px;padding:6px}
   .hero-pick-name{font-size:13px;min-height:2.6em}
   .hero-pick-price{font-size:16px}
-  .hero-pick-cat{font-size:11px}
+  .hero-pick-cat{font-size:12px}
   h2.hero-picks-title{font-size:20px}
   .hero-verdicts .verdicts{margin-top:4px}
 }

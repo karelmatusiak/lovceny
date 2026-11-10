@@ -75,7 +75,7 @@ def test_slevy_empty_state(monkeypatch):
     import lovceny.main as m
     monkeypatch.setattr(m, "real_deals", lambda db, **k: {"buys": [], "fakes": [], "include_demo": False})
     h = TestClient(app).get("/slevy").text
-    assert ("Zatím tu žádné skutečné slevy" in h or "Zatím máme málo historie" in h) and "žádnou takovou slevu" in h
+    assert "Dnes tu žádná skutečná sleva není" in h and "žádnou takovou slevu" in h
 
 
 def test_legal_pages_linked_and_accurate():

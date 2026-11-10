@@ -51,19 +51,21 @@
   {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state card">
-    <div class="empty-ico" aria-hidden="true">🏷️</div>
-    <h2 class="h3">Zatím tu žádné skutečné slevy nejsou</h2>
-    <p>Verdikt <b>Kupuj</b> dáváme až po týdnu sledování ceny u minima. To je v pořádku – radši žádný žebříček než marketingové „slevy“.</p>
-    <p>Mezitím ukážeme produkty s aspoň týdnem historie blízko minima – nebo přidej vlastní odkaz z e-shopu.</p>
+  <div class="empty-state card empty-state-honest">
+    <h2 class="h3">Dnes tu žádná skutečná sleva není</h2>
+    <p>Verdikt <b>Kupuj</b> dáváme až po týdnu sledování, když je cena u minima. Prázdný žebříček je v pořádku – marketingové „slevy“ sem nepatří.</p>
     <p class="empty-actions">
       <a class="btn btn-primary" href="/#hledat">Přidat produkt</a>
       <a class="btn btn-ghost" href="/kategorie">Procházet kategorie</a>
     </p>
   </div>
+  {% if near or watched or newest %}
+  <div class="empty-fallback">
+    <h2 class="h3">Dnes žádná skutečná sleva — zatím sledujte tyto produkty</h2>
+    <p class="empty-fallback-note">Níže nejsou slevy. Jsou to produkty ke sledování, než se žebříček naplní.</p>
   {% if near %}
   <div class="empty-suggest">
-    <h2 class="h3">Blízko 90denního minima</h2>
+    <h3 class="empty-subh">Blízko 90denního minima</h3>
     <p class="sub">Ještě nemají verdikt Kupuj, ale aktuální cena je do 12&nbsp;% nad minimem za 90 dní. {{ rank_link() }}</p>
     <div class="deals-list">
     {% for r in near %}
@@ -90,19 +92,19 @@
     </div>
   </div>
   {% endif %}
-  {% if watched or newest %}
   {% if watched %}
   <div class="empty-suggest">
-    <h2 class="h3">Nejsledovanější</h2>
+    <h3 class="empty-subh">Nejsledovanější</h3>
     <div class="grid">{% for p, best, v in watched %}{{ pcard(p, best, v) }}{% endfor %}</div>
   </div>
   {% endif %}
   {% if newest %}
   <div class="empty-suggest">
-    <h2 class="h3">Nejnovější produkty</h2>
+    <h3 class="empty-subh">Nejnovější produkty</h3>
     <div class="grid">{% for p, best, v in newest %}{{ pcard(p, best, v) }}{% endfor %}</div>
   </div>
   {% endif %}
+  </div>
   {% endif %}
   {% endif %}
 </div></section>

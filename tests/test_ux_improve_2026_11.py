@@ -89,7 +89,8 @@ def test_slevy_near_minima_fallback(monkeypatch):
     db.commit()
     db.close()
     h = TestClient(app).get("/slevy").text
-    assert "Zatím tu žádné skutečné slevy" in h
+    assert "Dnes tu žádná skutečná sleva není" in h
+    assert "Dnes žádná skutečná sleva — zatím sledujte tyto produkty" in h
     assert "Blízko 90denního minima" in h
     assert "Near Min Mixer" in h
 

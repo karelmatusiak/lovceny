@@ -53,9 +53,11 @@
 </div>
 </div>
 {%- endmacro %}
-{% macro shop_img(url, px=60, priority=false, alt="") -%}
+{% macro shop_img(url, px=60, priority=false, alt="", sizes="", box=0) -%}
 {%- set a = img_attrs(url, px) -%}
-<span class="img-frame">{%- if a -%}<img src="{{ a.src }}" srcset="{{ a.srcset }}" sizes="{{ a.sizes }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %}{% if a.fallback %} data-fallback="{{ a.fallback }}"{% endif %} data-orig="{{ a.orig }}" onerror="this.onerror=null;this.removeAttribute('srcset');if(this.dataset.fallback){var fb=this.dataset.fallback;this.removeAttribute('data-fallback');this.onerror=function(){this.onerror=null;this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false};this.src=fb}else{this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false}">{%- else -%}<img src="{{ url }}" alt="{{ alt }}" width="{{ px }}" height="{{ px }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %} referrerpolicy="no-referrer" data-orig="{{ url }}" onerror="this.onerror=null;this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false">{%- endif -%}{{ img_missing(true) }}</span>
+{%- set side = box if box else px -%}
+{%- set sz = sizes if sizes else (a.sizes if a else '') -%}
+<span class="img-frame">{%- if a -%}<img src="{{ a.src }}" srcset="{{ a.srcset }}" sizes="{{ sz }}" alt="{{ alt }}" width="{{ side }}" height="{{ side }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %}{% if a.fallback %} data-fallback="{{ a.fallback }}"{% endif %} data-orig="{{ a.orig }}" onerror="this.onerror=null;this.removeAttribute('srcset');if(this.dataset.fallback){var fb=this.dataset.fallback;this.removeAttribute('data-fallback');this.onerror=function(){this.onerror=null;this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false};this.src=fb}else{this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false}">{%- else -%}<img src="{{ url }}" alt="{{ alt }}" width="{{ side }}" height="{{ side }}" decoding="async"{% if priority %} fetchpriority="high"{% else %} loading="lazy"{% endif %} referrerpolicy="no-referrer" data-orig="{{ url }}" onerror="this.onerror=null;this.hidden=true;var m=this.parentNode&&this.parentNode.querySelector('.img-missing');if(m)m.hidden=false">{%- endif -%}{{ img_missing(true) }}</span>
 {%- endmacro %}
 {% macro share(url, text, title, heading="Sdílet produkt") -%}
 {%- set u = url|urlencode -%}{%- set t = text|urlencode -%}
