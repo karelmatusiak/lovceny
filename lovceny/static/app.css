@@ -829,7 +829,8 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 }
 
 /* Out-of-stock offers: demoted, no green CTA */
-.offer-oos{opacity:.72;filter:grayscale(.15)}
+.offer-oos,.offer-unverified{opacity:.72;filter:grayscale(.15)}
+.offer-unverified-note,.price-unverified{color:#5C6B66}
 .offer-oos .stock-oos,.stock-oos{color:#8A5200;font-weight:600}
 .offer-oos-link{font-size:13px;color:var(--muted,#5C6B66);text-decoration:underline;text-underline-offset:2px}
 .offer-oos-link:hover{color:var(--ink,#122018)}

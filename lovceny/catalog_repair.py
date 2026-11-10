@@ -4,8 +4,9 @@ Rizikové kroky (sloučení, odpojení, vyřazení, změna kategorie existujíc�
 se samy nezapíšou. Jdou do fronty /admin/trideni. Po schválení platí totéž co dřív:
 nemazat historii cen, sloučený produkt dostane 301 na přeživšího, příslušenství
 zmizí z výpisu (category_slug = NULL) a řádek zůstane.
-Spuštění: vlákno po startu webu (port se váže hned), fetch_prices.py a
-`python seed.py --repair-catalog`. Zámek brání dvěma běhům najednou.
+Spuštění jen ručně: `python seed.py --repair-catalog` (náhled) a `--apply`,
+nebo akce v /admin. Start webu ani stahování cen ho nespouští.
+Zámek brání dvěma ručním běhům najednou.
 """
 from __future__ import annotations
 
@@ -37,11 +38,7 @@ def _desired_category(name: str, current: str | None) -> str | None:
         return None
     if re.search(r"\bsurface (pro|laptop|go)\b", n):
         return "notebooky"
-    # Vrátit řádky, které starý odhad kategorie přesunul špatně.
-    if current == "televize" and re.search(r"\bmotorola\b", n) and re.search(r"\bedge\b", n):
-        return "telefony"
-    if current == "televize" and re.search(r"\bgigabyte\b", n) and re.search(r"\ba16\b", n):
-        return "notebooky"
+    # Konkrétní řádky (Motorola Edge, Gigabyte A16) jsou v one_off_fixes.py.
     if current == "televize" and re.search(r"\b(notebook|laptop)\b", n):
         return "notebooky"
     if current == "konzole" and re.search(r"\b(quantum|sluchat|headphone|headset)\b", n):
@@ -58,10 +55,7 @@ def _redirect_category(name: str) -> str | None:
 
 
 def _explicit_restore(url: str) -> str | None:
-    """Slug obchodu, který nejmenuje výrobek (Svět počítačů u Surface Pro)."""
-    u = (url or "").lower()
-    if "microsoft-xbox-series-s-1tb" in u:
-        return "surface pro"
+    """Dřív tu byl Surface Pro pod adresou Xboxu. Ta oprava je v one_off_fixes.py."""
     return None
 
 
@@ -352,6 +346,11 @@ def execute_decision(db: Session, decision) -> tuple[bool, str]:
         return _apply_merge(db, decision)
     if kind == "detach":
         return _apply_detach(db, decision)
+    if kind == "model_mismatch":
+        return True, "nepřipojeno, jiný model"
+    if kind == "confirm_listing":
+        from .listing_review import apply_confirm_listing
+        return apply_confirm_listing(db, decision)
     if kind == "reattach":
         return _apply_reattach(db, decision)
     if kind == "retire":
@@ -474,7 +473,7 @@ def _apply_retire(db: Session, decision) -> tuple[bool, str]:
 
 
 def repair_catalog_locked(db: Session, dry_run: bool = False) -> dict:
-    """Jeden běh najednou. Druhý (vlákno webu a fetch_prices) se přeskočí."""
+    """Jeden ruční běh najednou. Druhý se přeskočí."""
     if not _LOCK.acquire(blocking=False):
         log.info("Úklid katalogu už běží, přeskakuji")
         return {"skipped": "locked", "dry_run": bool(dry_run)}

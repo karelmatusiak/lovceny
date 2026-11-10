@@ -174,21 +174,47 @@ def itemlist_ld(rows, path: str, start: int = 0) -> dict:
 STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday"]
 
 
+def _sale_category_slugs(db) -> set[str]:
+    """Kategorie, jejichž /ve-sleve má aspoň jeden produkt. Prázdné do sitemapy nepatří."""
+    from .main import _cat_rows, _ve_sleve_rows
+    out = set()
+    for cat in CATEGORIES:
+        if _ve_sleve_rows(_cat_rows(db, cat)):
+            out.add(cat.slug)
+    return out
+
+
 def sitemap_xml(db) -> str:
+    from collections import defaultdict
     from .models import Offer
-    from sqlalchemy import exists
+    from .offer_trust import offer_is_promoted, use_cutoffs
     base = public_url()
     urls = [(base + p, None) for p in STATIC_PAGES]
+    sale_slugs = _sale_category_slugs(db)
     for c in CATEGORIES:
-        urls += [(f"{base}/kategorie/{c.slug}", None), (f"{base}/kategorie/{c.slug}/nejlevnejsi", None),
-                 (f"{base}/kategorie/{c.slug}/ve-sleve", None)]
-    # Jen produkty s aspoň jednou cenou – bezcené nepatří do výpisů ani sitemap
-    has_price = exists().where(Offer.product_id == Product.id, Offer.price.isnot(None))
-    for pid, slug, created in db.execute(
-        select(Product.id, Product.slug, Product.created_at)
-        .where(has_price, Product.retired_at.is_(None), Product.catalog_hidden.is_(False)).order_by(Product.id)
-    ).all():
-        urls.append((f"{base}/produkt/{pid}-{slug}", created))
+        urls.append((f"{base}/kategorie/{c.slug}", None))
+        urls.append((f"{base}/kategorie/{c.slug}/nejlevnejsi", None))
+        if c.slug in sale_slugs:
+            urls.append((f"{base}/kategorie/{c.slug}/ve-sleve", None))
+    cutoffs = use_cutoffs(db)
+    products = db.execute(
+        select(Product.id, Product.slug, Product.created_at, Product.name)
+        .where(
+            Product.retired_at.is_(None),
+            Product.catalog_hidden.is_(False),
+            Product.needs_review.is_(False),
+            Product.category_slug.isnot(None),
+        )
+        .order_by(Product.id)
+    ).all()
+    offers_by = defaultdict(list)
+    if products:
+        for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
+            offers_by[offer.product_id].append(offer)
+    for pid, slug, created, name in products:
+        holder = type("P", (), {"name": name})()
+        if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):
+            urls.append((f"{base}/produkt/{pid}-{slug}", created))
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for u, lm in urls:
         out.append(f"<url><loc>{escape(u)}</loc>" + (f"<lastmod>{lm.date().isoformat()}</lastmod>" if lm else "") + "</url>")

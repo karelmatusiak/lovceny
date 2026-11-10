@@ -24,6 +24,8 @@ class Product(Base):
     redirect_product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     # Nový produkt z nemapované / málo jisté kategorie zůstane skrytý, dokud ho někdo neschválí.
     catalog_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
+    # Bez kategorie nebo s názvem z adresy: ve výpisech není, dokud to /admin/trideni neschválí.
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")
@@ -48,6 +50,11 @@ class Offer(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
     last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Poslední úspěšně zapsaná cena (ne blokace). NULL u starých řádků = last_checked, pokud status je ok.
+    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Poslední dva běhy, ve kterých tahle nabídka byla na řadě (ne celý obchod).
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_prev: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     product: Mapped[Product] = relationship(back_populates="offers")
     points: Mapped[list["PricePoint"]] = relationship(back_populates="offer", cascade="all, delete-orphan",
                                                       order_by="PricePoint.captured_at")

@@ -62,6 +62,8 @@ def _no_live_network(monkeypatch):
     ai.client.calls_today = 0
     from lovceny import verify, seasons, hero, catcache, deals, blackfriday
     from lovceny.main import clear_display_names_cache
+    from lovceny.offer_trust import reset_cutoffs
+    reset_cutoffs()
     verify.clear_cache()
     seasons.clear_cache()
     hero.clear_cache()

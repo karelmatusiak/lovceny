@@ -46,6 +46,7 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
                  source: str, when: datetime | None = None):
     """Uloží aktuální cenu. price<=0 / None nepatří do historie (graf by jinak šel na 0 Kč)."""
     offer.last_checked = when or datetime.now(timezone.utc)
+    offer.last_ok_at = offer.last_checked
     offer.status, offer.last_error = "ok", None
     offer.in_stock = in_stock
     if original is not None:
@@ -129,13 +130,18 @@ def update_offer(db: Session, offer: Offer, stats=None) -> str:
 
 def _update_offer(db: Session, offer: Offer):
     """→ (stav, druh výsledku pro monitoring, HTTP status, chyba)."""
+    from .offer_trust import note_offer_due
     shop = get_shop(offer.shop)
     if shop is None or not shop.can_scrape:
         if shop and shop.source == "feed":
             return "feed", None, None, None  # řeší import feedu
         offer.status = "blocked"
         offer.last_error = shop.note if shop else "neznámý obchod"
+        note_offer_due(offer)
         return "blocked", "blocked", None, offer.last_error
+    # Tahle nabídka byla v dávce a opravdu se o ni sáhlo. Přeskočené (čerstvé,
+    # mimo limit Mironetu, backoff) se sem nedostanou a za minutí se nepočítají.
+    note_offer_due(offer)
     try:
         html = client().get(offer.url)
         res = (shop.page_parser or parse_product)(html)
@@ -217,7 +223,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     from .models import ShopCategoryMapping
     from .shops.feed import canonicalize_name, names_match, offer_conflicts_product, strip_tracking
     from .triage import (
-        ensure_mappings, queue_category, queue_detach, queue_title_match, resolve_category,
+        ensure_mappings, queue_category, queue_detach, queue_model_mismatch, queue_title_match,
+        resolve_category,
     )
 
     shop = get_shop(shop_slug)
@@ -329,6 +336,19 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             by_gtin.pop(g, None)
             by_gtin_offer.pop(g, None)
 
+    def conflicts_with(prod: Product | None, it: FeedItem, clean: str) -> bool:
+        if prod is None:
+            return False
+        from .matching import clear_model_conflict, label_from_url
+        if it.name and offer_conflicts_product(prod.name or "", clean, it.name):
+            return True
+        return clear_model_conflict(prod.name or "", it.name or label_from_url(clean))
+
+    def refuse_attach(prod: Product, it: FeedItem, clean: str) -> None:
+        if queue_model_mismatch(db, shop=shop_slug, product_id=prod.id, item=it, clean_url=clean):
+            stats["queued"] += 1
+        stats["skipped_mismatch"] += 1
+
     def propose_detach(offer: Offer, it: FeedItem, clean: str) -> None:
         by_url.pop(clean_url(offer.url), None)
         by_url.pop(clean, None)
@@ -376,21 +396,21 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         gtin = normalize_gtin(it.ean)
         o = by_url.get(clean) or by_id.get(it.item_id)
         fresh = False
-        if o is not None and it.name and offer_conflicts_product(o.product.name, clean, it.name):
+        if o is not None and conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)
             continue
         blocked = False
         if o is None and gtin and not blocked:
             shop_offer = by_gtin_offer.get(gtin)
-            if shop_offer is not None and it.name and offer_conflicts_product(shop_offer.product.name, clean, it.name):
-                stats["skipped_mismatch"] += 1
+            if shop_offer is not None and conflicts_with(shop_offer.product, it, clean):
+                refuse_attach(shop_offer.product, it, clean)
                 blocked = True
             elif shop_offer is not None:
                 o = shop_offer
         if o is None and not blocked:
             prod = follow_redirect(by_gtin.get(gtin)) if gtin else None
-            if prod is not None and it.name and offer_conflicts_product(prod.name, clean, it.name):
-                stats["skipped_mismatch"] += 1
+            if prod is not None and conflicts_with(prod, it, clean):
+                refuse_attach(prod, it, clean)
                 prod = None
                 blocked = True
             if prod is None and not gtin and not blocked:
@@ -453,7 +473,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             stats["matched"] += 1
         if o is None:
             continue
-        if it.name and offer_conflicts_product(o.product.name, clean, it.name):
+        if conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)
             stats["skipped_mismatch"] += 1
             continue
@@ -489,6 +509,12 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
         remember_gtin(o.gtin, o.product, o)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
+    # Celý feed je jeden pohled na obchod: každá jeho nabídka byla na řadě,
+    # i ta, která v souboru chyběla. Rotující scrape (Mironet) sem nepatří.
+    from .offer_trust import note_offer_due
+    looked_at = datetime.now(timezone.utc)
+    for existing in db.scalars(select(Offer).where(Offer.shop == shop_slug)).all():
+        note_offer_due(existing, looked_at)
     db.commit()
     return stats
 

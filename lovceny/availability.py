@@ -108,9 +108,14 @@ def priced_offers(offers) -> list:
     return [o for o in offers if getattr(o, "price", None) is not None]
 
 
-def best_buyable_offer(offers):
-    buyable = buyable_offers(offers)
-    return min(buyable, key=lambda o: float(o.price), default=None)
+def best_buyable_offer(offers, cutoffs=None):
+    """Nejlevnější nabídka, kterou smíme ukázat jako cenu a tlačítko Koupit.
+
+    Mimo hru je nedostupná, blokovaná, zastaralá a ta, jejíž adresa patří k jinému modelu.
+    """
+    from .offer_trust import offer_is_promoted
+    promoted = [o for o in offers if offer_is_promoted(o, cutoffs)]
+    return min(promoted, key=lambda o: float(o.price), default=None)
 
 
 def last_known_offer(offers):
@@ -118,9 +123,18 @@ def last_known_offer(offers):
     return min(priced, key=lambda o: float(o.price), default=None)
 
 
-def sort_offers_for_display(offers) -> list:
-    """Koupitelné (cenou) napřed, není-skladem na konci."""
+def sort_offers_for_display(offers, cutoffs=None) -> list:
+    """Ověřené koupitelné napřed, neověřené za nimi, není-skladem na konci."""
+    from .offer_trust import offer_is_promoted, unverified_note
     priced = priced_offers(offers)
-    buyable = sorted([o for o in priced if o.in_stock is not False], key=lambda o: float(o.price))
-    oos = sorted([o for o in priced if o.in_stock is False], key=lambda o: float(o.price))
-    return buyable + oos
+
+    def _key(o):
+        if offer_is_promoted(o, cutoffs):
+            group = 0
+        elif unverified_note(o, cutoffs):
+            group = 1
+        else:
+            group = 2
+        return (group, float(o.price))
+
+    return sorted(priced, key=_key)

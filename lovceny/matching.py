@@ -27,6 +27,8 @@ _BRAND_WORDS: tuple[tuple[str, str], ...] = (
     ("redmi", "xiaomi"), ("poco", "xiaomi"), ("lenovo", "lenovo"), ("asus", "asus"),
     ("acer", "acer"), ("hp", "hp"), ("dell", "dell"), ("huawei", "huawei"),
     ("honor", "honor"), ("realme", "realme"), ("motorola", "motorola"), ("nokia", "nokia"),
+    ("google", "google"), ("pixel", "google"),
+    ("jabra", "jabra"), ("guess", "guess"), ("larma", "larma"),
     ("oneplus", "oneplus"), ("nothing", "nothing"), ("amazfit", "amazfit"),
     ("whirlpool", "whirlpool"), ("electrolux", "electrolux"), ("beko", "beko"),
     ("gorenje", "gorenje"), ("hisense", "hisense"), ("tcl", "tcl"), ("panasonic", "panasonic"),
@@ -63,7 +65,7 @@ _DROP = frozenset({
 _SPEC_KEYS = ("power", "volume", "pressure", "ram", "screen", "load", "storage")
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 _GEN_RE = re.compile(
-    r"\b(?:iphone|pixel|redmi)\s*(\d{1,2})\b|\bgalaxy\s*[asz]\s*(\d{1,2})\b",
+    r"\b(?:iphone|pixel|redmi)\s*(\d{1,2}[a-z]?)\b|\bgalaxy\s*[asz]\s*(\d{1,2})\b",
     re.I,
 )
 _PS_RE = re.compile(r"\bps\s*([45])\b")
@@ -163,6 +165,23 @@ def colors_agree(a: str, b: str) -> bool:
     """
     ca, cb = extract(a or "").get("color"), extract(b or "").get("color")
     return ca == cb
+
+
+def clear_model_conflict(product_name: str, other: str) -> bool:
+    """Adresa nebo název zřetelně patří k jiné značce nebo jiné generaci.
+
+    Číslo v adrese obchodu (t-12345, dp652173) samo o sobě konflikt není.
+    """
+    if not (product_name or "").strip() or not (other or "").strip():
+        return False
+    left, right = brands(product_name), brands(other)
+    if left and right and left.isdisjoint(right):
+        return True
+    from .shops.feed import canonicalize_name
+    gens_left, gens_right = _generations(canonicalize_name(product_name)), _generations(canonicalize_name(other))
+    if gens_left and gens_right and gens_left != gens_right:
+        return True
+    return False
 
 
 def titles_conflict(a: str, b: str) -> bool:

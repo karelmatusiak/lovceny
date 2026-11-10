@@ -65,6 +65,8 @@ _KIND_ORDER = {
     "fallback_category": 30,
     "unmapped_category": 30,
     "detach": 40,
+    "model_mismatch": 45,
+    "confirm_listing": 48,
     "title_match": 50,
     "merge": 60,
     "retire": 70,
@@ -337,6 +339,23 @@ def queue_category(db: Session, *, kind: str, product_id: int, shop: str | None,
         db, kind=kind, fingerprint=f"{kind}:{product_id}:{slug}",
         summary=summary, reason=reason, shop=shop, shop_category=shop_category,
         product_id=product_id, proposed_category=proposed,
+    )
+
+
+def queue_model_mismatch(db: Session, *, shop: str, product_id: int, item, clean_url: str) -> bool:
+    """Nabídka, jejíž adresa nebo název patří k jinému modelu, se nepřipojí. Čeká ve frontě."""
+    return enqueue(
+        db, kind="model_mismatch", fingerprint=f"mismatch:{shop}:{clean_url}"[:200],
+        summary=f"Nepřipojovat „{(item.name or '')[:80]}“ k produktu #{product_id}",
+        reason=("Adresa nebo název nabídky patří k jinému modelu nebo značce. "
+                "Sama se k produktu nepřipojí. Schválení ji k tomuto produktu nepřidá."),
+        shop=shop, shop_category=getattr(item, "category", None), product_id=product_id,
+        payload={
+            "url": clean_url, "shop": shop, "name": item.name, "price": item.price,
+            "original_price": item.original_price, "in_stock": item.in_stock,
+            "item_id": item.item_id, "image": item.image, "shop_category": item.category,
+            "ean": item.ean,
+        },
     )
 
 
