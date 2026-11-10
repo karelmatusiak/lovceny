@@ -109,11 +109,16 @@ def confident_category(db: Session, product: Product) -> str | None:
 
 
 def listing_outcome(db: Session, product: Product) -> tuple[str, str | None]:
-    """publish + slug, nebo hide. Příslušenství, chybějící pravidlo a neověřená nabídka se schovají."""
+    """publish + slug, nebo hide. Příslušenství, chybějící pravidlo a neověřená nabídka se schovají.
+
+    Mapování obchodu samo nestačí: druh v názvu musí s kategorií souhlasit.
+    """
+    from .category_guard import guarded_category
     if is_accessory_text(product.name or ""):
         return "hide", None
-    slug = confident_category(db, product)
-    if not slug:
+    mapped = confident_category(db, product) or product.category_slug
+    action, slug = guarded_category(product.name or "", mapped)
+    if action == "hide" or not slug:
         return "hide", None
     promoted = [
         offer for offer in (product.offers or [])

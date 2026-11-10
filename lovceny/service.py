@@ -494,6 +494,14 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             ):
                 hidden = res.action != "high"
                 cat_slug = res.slug if res.action == "high" else None
+                if cat_slug:
+                    from .category_guard import guarded_category
+                    action, guarded = guarded_category(it.name or "", cat_slug)
+                    if action == "hide":
+                        hidden = True
+                        cat_slug = None
+                    elif action == "move" and guarded:
+                        cat_slug = guarded
                 cat_label = BY_SLUG[cat_slug].name if cat_slug and cat_slug in BY_SLUG else None
                 prod = Product(
                     name=it.name, slug=slugify(it.name), category=cat_label, category_slug=cat_slug,
