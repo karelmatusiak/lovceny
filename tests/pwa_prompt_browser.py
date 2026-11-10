@@ -22,6 +22,41 @@ FAKE = """({
   prompt() { return Promise.resolve(); },
   userChoice: Promise.resolve({outcome: 'dismissed'})
 })"""
+# Headless Chrome občas sám pošle beforeinstallprompt a hned appinstalled
+# (jakmile chytne service worker). To lištu otevře a zase schová mezi dvěma
+# voláními z testu. Události prohlížeče tedy polykáme a výzvu řídíme sami.
+BLOCK_BROWSER_INSTALL_EVENTS = """
+addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+addEventListener('appinstalled', function (e) {
+  e.stopImmediatePropagation();
+}, true);
+"""
+
+
+def _same_url(href: str, url: str) -> bool:
+    def norm(value: str) -> str:
+        return value.split("#", 1)[0].rstrip("/")
+
+    return bool(href) and norm(href) == norm(url)
+
+
+def document_is_ready(state, token, url: str) -> bool:
+    """Nový dokument je hotový. Stejné nav jako před Page.navigate je ještě staré okno.
+
+    Page.navigate se někdy vrátí dřív, než se starý dokument zahodí. Kontrola
+    jen readyState + lovcenyPwa pak projde na stránce, ze které odcházíme,
+    a další příkaz už běží v novém dokumentu bez nasimulované události.
+    """
+    if not isinstance(state, dict):
+        return False
+    if state.get("ready") != "complete" or not state.get("pwa"):
+        return False
+    if token is None or state.get("nav") == token:
+        return False
+    return _same_url(str(state.get("href") or ""), url)
 
 
 def screenshot_dir() -> Path:
@@ -266,14 +301,53 @@ async def run(chrome_port):
             await call("Emulation.setDeviceMetricsOverride", {
                 "width": width, "height": height, "deviceScaleFactor": 1, "mobile": width < 500,
             })
-            await call("Page.navigate", {"url": url})
-            for _ in range(50):
-                if await evaluate("document.readyState") == "complete" and await evaluate("!!window.lovcenyPwa"):
+            token = await evaluate("window.__lovcenyNav = (window.__lovcenyNav || 0) + 1; window.__lovcenyNav")
+            result = await call("Page.navigate", {"url": url})
+            if result.get("errorText"):
+                raise RuntimeError(f"{result['errorText']} {url}")
+            last = None
+            for _ in range(100):
+                try:
+                    state = await evaluate("""({
+                      ready: document.readyState,
+                      pwa: !!(window.lovcenyPwa && window.lovcenyPwa.attemptAuto),
+                      nav: (typeof window.__lovcenyNav === 'number') ? window.__lovcenyNav : null,
+                      href: location.href
+                    })""")
+                except RuntimeError as exc:
+                    last = {"error": str(exc)}
+                    await asyncio.sleep(0.1)
+                    continue
+                last = state
+                if document_is_ready(state, token, url):
                     return
                 await asyncio.sleep(0.1)
-            raise RuntimeError("page not ready " + url)
+            raise RuntimeError(f"page not ready {url} token={token} last={last}")
+
+        async def drive_auto():
+            """beforeinstallprompt + attemptAuto + čtení lišty v jednom tahu.
+
+            Mezi dvěma evaluate Chrome stihne dokončit navigaci nebo schovat
+            lištu událostí appinstalled. Tady to nejde.
+            """
+            return await evaluate(f"""(() => {{
+              lovcenyPwa.onBeforeInstallPrompt({FAKE});
+              lovcenyPwa.attemptAuto();
+              const box = document.getElementById('pwa-install');
+              let st = {{}};
+              try {{ st = JSON.parse(localStorage.getItem('lovceny-pwa') || '{{}}'); }} catch (e) {{ st = {{}}; }}
+              return {{
+                hidden: box ? box.hidden : null,
+                href: location.href,
+                sessions: st.sessions,
+                dismissed: st.dismissed == null ? null : st.dismissed,
+                prompted: sessionStorage.getItem('lovceny-pwa-prompted'),
+                now: Date.now()
+              }};
+            }})()""")
 
         await call("Page.enable")
+        await call("Page.addScriptToEvaluateOnNewDocument", {"source": BLOCK_BROWSER_INSTALL_EVENTS})
         await goto(BASE + "/", 1280, 900)
         # 1) první relace: ani po události a zájmu lišta nevyjede
         state = await evaluate("""(() => {
@@ -281,9 +355,8 @@ async def run(chrome_port):
           return {hidden: box.hidden, sessions: localStorage.getItem('lovceny-pwa'), ios: window.lovcenyPwa && window.lovcenyPwa.iosSafari};
         })()""")
         assert state["hidden"] is True, state
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
+        shown = await drive_auto()
+        assert shown["hidden"] is True, shown
         sessions = await evaluate("JSON.parse(localStorage.getItem('lovceny-pwa')).sessions")
         assert sessions == 1, sessions
 
@@ -293,9 +366,8 @@ async def run(chrome_port):
         await goto(BASE + "/", 1280, 900)
         assert await evaluate("document.getElementById('pwa-install').hidden") is True
         active = await evaluate("document.activeElement && document.activeElement.id")
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is False
+        shown = await drive_auto()
+        assert shown["hidden"] is False, shown
         assert await evaluate("document.activeElement === document.body || document.activeElement === document.documentElement || !document.getElementById('pwa-install').contains(document.activeElement)") is True, active
 
         # 3) Teď ne vydrží reload
@@ -304,24 +376,22 @@ async def run(chrome_port):
         dismissed = await evaluate("JSON.parse(localStorage.getItem('lovceny-pwa')).dismissed")
         assert dismissed and abs(dismissed - time.time() * 1000) < 60_000
         await goto(BASE + "/o-nas", 1280, 900)
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
+        shown = await drive_auto()
+        assert shown["hidden"] is True, shown
 
-        # 4) po 30 dnech a nové relaci znovu; v téže relaci po zobrazení už ne
-        old = int(time.time() * 1000) - 31 * 86400 * 1000
-        await evaluate(
-            "localStorage.setItem('lovceny-pwa', JSON.stringify({sessions:3, dismissed:%d}));"
-            "sessionStorage.removeItem('lovceny-pwa-prompted');" % old
-        )
+        # 4) po 30 dnech a nové relaci znovu; v téže relaci po zobrazení už ne.
+        # Čas bere hodiny stránky, ne Pythonu (30denní klid se porovnává s Date.now).
+        await evaluate("""(() => {
+          const dismissed = Date.now() - 31 * 864e5;
+          localStorage.setItem('lovceny-pwa', JSON.stringify({sessions:3, dismissed}));
+          sessionStorage.removeItem('lovceny-pwa-prompted');
+        })()""")
         await goto(BASE + "/", 1280, 900)
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is False
+        shown = await drive_auto()
+        assert shown["hidden"] is False, shown
         await goto(BASE + "/kategorie", 1280, 900)
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
+        shown = await drive_auto()
+        assert shown["hidden"] is True, shown
 
         # 5) ruční vstup v klidu otevře a fokus jde na Zavřít; Escape zavře
         await evaluate(
@@ -331,9 +401,16 @@ async def run(chrome_port):
         await goto(BASE + "/", 1280, 900)
         await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
         assert await evaluate("document.querySelector('[data-pwa-open]').hidden") is False
-        await evaluate("document.querySelector('[data-pwa-open]').click()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is False
-        assert await evaluate("document.activeElement && document.activeElement.classList.contains('pwa-close')") is True
+        opened = await evaluate("""(() => {
+          document.querySelector('[data-pwa-open]').click();
+          const box = document.getElementById('pwa-install');
+          return {
+            hidden: box.hidden,
+            close: !!(document.activeElement && document.activeElement.classList.contains('pwa-close'))
+          };
+        })()""")
+        assert opened["hidden"] is False, opened
+        assert opened["close"] is True, opened
         await evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))")
         # Escape listener is on the region, so dispatch there
         await evaluate("document.getElementById('pwa-install').hidden = false")
@@ -342,15 +419,18 @@ async def run(chrome_port):
 
         # 6) druhý beforeinstallprompt v téže relaci lištu znovu neotevře
         await evaluate("sessionStorage.setItem('lovceny-pwa-prompted','1')")
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE})")
-        await evaluate("lovcenyPwa.attemptAuto()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
+        shown = await drive_auto()
+        assert shown["hidden"] is True, shown
 
         # 7) appinstalled jen schová, nepřidá hlášku o úspěchu
-        await evaluate("document.getElementById('pwa-install').hidden = false")
-        await evaluate("lovcenyPwa.onAppInstalled()")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
-        assert await evaluate("document.body.textContent.includes('instalace se povedla')") is False
+        installed = await evaluate("""(() => {
+          const box = document.getElementById('pwa-install');
+          box.hidden = false;
+          lovcenyPwa.onAppInstalled();
+          return {hidden: box.hidden, text: document.body.textContent.includes('instalace se povedla')};
+        })()""")
+        assert installed["hidden"] is True, installed
+        assert installed["text"] is False
 
         # 8) rozložení: lišta v toku, nepřekrývá karty ani patičku
         await evaluate(
@@ -361,10 +441,14 @@ async def run(chrome_port):
         for width, name in ((1280, "pwa-fixture-1280.png"), (390, "pwa-fixture-390.png"), (360, "pwa-fixture-360.png")):
             await evaluate("sessionStorage.removeItem('lovceny-pwa-prompted')")
             await goto(BASE + "/kategorie/sluchatka", width, 1600 if width > 500 else 2200)
-            await evaluate("sessionStorage.removeItem('lovceny-pwa-prompted')")
-            await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE}); lovcenyPwa.attemptAuto();")
-            visible = await evaluate("document.getElementById('pwa-install').hidden === false")
-            assert visible, name
+            shown = await evaluate(f"""(() => {{
+              sessionStorage.removeItem('lovceny-pwa-prompted');
+              lovcenyPwa.onBeforeInstallPrompt({FAKE});
+              lovcenyPwa.attemptAuto();
+              const box = document.getElementById('pwa-install');
+              return {{hidden: box ? box.hidden : null, href: location.href}};
+            }})()""")
+            assert shown["hidden"] is False, (name, shown)
             metrics = await evaluate("""(() => {
               const banner = document.getElementById('pwa-install');
               const foot = document.querySelector('footer .foot');
@@ -404,8 +488,8 @@ async def run(chrome_port):
           Storage.prototype.setItem = boom;
         """})
         await goto(BASE + "/", 1280, 800)
-        await evaluate(f"lovcenyPwa.onBeforeInstallPrompt({FAKE}); lovcenyPwa.attemptAuto();")
-        assert await evaluate("document.getElementById('pwa-install').hidden") is True
+        shown = await drive_auto()
+        assert shown["hidden"] is True, shown
 
         # 10) standalone: lišta ani ruční vstup
         await call("Page.removeScriptToEvaluateOnNewDocument", {}) if False else None
