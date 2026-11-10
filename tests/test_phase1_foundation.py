@@ -9,10 +9,10 @@ from lovceny.triage import ensure_mappings, resolve_category
 
 def test_alembic_baseline_is_idempotent():
     init_db()
-    assert _revision() == "0001_baseline"
-    assert _head() == "0001_baseline"
+    assert _head() == "0002_variants"
+    assert _revision() == _head()
     init_db()
-    assert _revision() == "0001_baseline"
+    assert _revision() == "0002_variants"
 
 
 def test_category_comes_from_mapping_not_the_title(client_db):

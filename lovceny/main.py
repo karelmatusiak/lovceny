@@ -551,6 +551,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     best, v = product_summary(p)
     last_known = last_known_offer(p.offers)
     offers = sort_offers_for_display(p.offers, cutoffs)
+    from .models import Variant
+    variants = list(db.scalars(select(Variant).where(Variant.product_id == p.id).order_by(Variant.id)).all())
+    variant_labels = {v.id: v.label for v in variants}
     notes = {o.id: note for o in offers if (note := unverified_note(o, cutoffs, p))}
     unverified_head = next(
         (o for o in offers if o.id in notes and o.in_stock is not False and o.price is not None),
@@ -583,6 +586,7 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     schema_offers = [o for o in offers if o.id not in notes]
     return tpl.TemplateResponse(request, "product.html", {
         "p": p, "best": best, "last_known": last_known, "all_oos": all_oos,
+        "variants": variants if len(variants) > 1 else [], "variant_labels": variant_labels,
         "unverified_head": unverified_head, "offer_notes": notes,
         "display_price": display_price, "v": v, "offers": offers, "noindex": review,
         "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
