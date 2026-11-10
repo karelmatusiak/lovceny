@@ -11,6 +11,7 @@ import unicodedata
 from .specs import extract
 
 # Slovo v názvu → kanonická značka. Delší fráze se hledají dřív.
+# KNOWN_BRANDS je tahle množina kanonických značek. Allegro-only produkt bez ní se vyřadí.
 _BRAND_WORDS: tuple[tuple[str, str], ...] = (
     ("apple", "apple"), ("iphone", "apple"), ("ipad", "apple"), ("macbook", "apple"),
     ("airpods", "apple"), ("imac", "apple"),
@@ -20,7 +21,7 @@ _BRAND_WORDS: tuple[tuple[str, str], ...] = (
     ("nintendo", "nintendo"),
     ("microsoft", "microsoft"), ("xbox", "microsoft"), ("surface", "microsoft"),
     ("klarstein", "klarstein"), ("aigostar", "aigostar"), ("libeica", "libeica"),
-    ("modecom", "modecom"), ("delonghi", "delonghi"), ("krups", "krups"),
+    ("modecom", "modecom"), ("de longhi", "delonghi"), ("delonghi", "delonghi"), ("krups", "krups"),
     ("bosch", "bosch"), ("siemens", "siemens"), ("philips", "philips"),
     ("lg", "lg"), ("dyson", "dyson"), ("roborock", "roborock"), ("rowenta", "rowenta"),
     ("jbl", "jbl"), ("bose", "bose"), ("garmin", "garmin"), ("xiaomi", "xiaomi"),
@@ -99,6 +100,9 @@ def label_from_url(url: str) -> str:
     slug = path.rstrip("/").split("/")[-1]
     slug = re.sub(r"\.(html?|php|aspx)$", "", slug, flags=re.I)
     return prepare_offer_label(slug)
+
+
+KNOWN_BRANDS = frozenset(canon for _word, canon in _BRAND_WORDS)
 
 
 def brands(name: str) -> set[str]:
