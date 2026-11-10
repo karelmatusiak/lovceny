@@ -146,13 +146,14 @@ def main(argv=None):
         db.rollback()
         log.error("Úklid katalogu selhal: %s", e)
     try:
-        from lovceny import catcache, deals, hero
+        from lovceny import blackfriday, catcache, deals, hero
         from lovceny.main import clear_display_names_cache
         catcache.clear()
         deals.clear_cache()
+        blackfriday.clear_cache()
         hero.clear_cache()
         clear_display_names_cache()
-        log.info("Vyprázdněny cache kategorií, slev, hero a display names")
+        log.info("Vyprázdněny cache kategorií, slev, Black Friday, hero a display names")
     except Exception as e:  # noqa: BLE001
         log.error("Vyprázdnění cache selhalo: %s", e)
     log.info("SOUHRN: %s", dict(report))

@@ -334,17 +334,21 @@ def kontakt_get():
 def deals_page(request: Request, db=Depends(get_db)):
     data = real_deals(db)
     assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
-    near = []
+    # Karty a „blízko minima“ jsou jen prázdný stav. Když Kupuj existuje, šablona je nečte
+    # a jejich selectinload historie by zbytečně držel TTFB.
+    near, newest, watched = [], [], []
     if not data.get("buys"):
         from . import deals as dealsmod
         near = dealsmod.near_minima(db, limit=12)
+        newest = priced_product_cards(db, limit=6, order="new")
+        watched = priced_product_cards(db, limit=6, order="watched")
     return tpl.TemplateResponse(request, "deals.html", {
         **data,
         "push_key": pushmod.public_key() if pushmod.enabled() else "",
         "email_on": False,
         "thin_history": price_history_thin(db),
-        "newest": _slevy_promo(priced_product_cards(db, limit=6, order="new")),
-        "watched": _slevy_promo(priced_product_cards(db, limit=6, order="watched")),
+        "newest": _slevy_promo(newest),
+        "watched": _slevy_promo(watched),
         "near": near,
     })
 
@@ -1699,7 +1703,14 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
     kategorie = kategorie if kategorie in BY_SLUG else ""
     obchod = obchod if obchod in SHOPS else ""
     s = bfmod.season()
-    all_rows = bfmod.rows(db)
+    bundle = bfmod.listing(db)
+    all_rows = bundle.rows
+    drops = bundle.drops
+    if kategorie:
+        drops = [d for d in drops if d.product.category_slug == kategorie]
+    if obchod:
+        drops = [d for d in drops if d.offer.shop == obchod]
+    real_groups = bfmod.group_by_category(drops, only_slug=kategorie)
     rows = [r for r in all_rows if (not kategorie or r.product.category_slug == kategorie) and (not obchod or r.best.shop == obchod)]
     cats = sorted({r.product.category_slug for r in all_rows if r.product.category_slug}, key=lambda c: [x.slug for x in CATEGORIES].index(c))
     shops = sorted({r.best.shop for r in all_rows}, key=lambda x: SHOPS[x].name if x in SHOPS else x)
@@ -1714,6 +1725,7 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
     return tpl.TemplateResponse(request, "black_friday.html", {
         "s": s, "today": bfmod.today_prague(), "countdown": bfmod.countdown_text(), "phase": s.phase(bfmod.today_prague()),
         "rows": rows, "sm": bfmod.summary(rows), "lowest": [r for r in rows if r.is_lowest][:6], "cats": cats, "shops": shops,
+        "real_groups": real_groups,
         "kategorie": kategorie, "obchod": obchod, "crumbs": crumbs, "ld": ld, "faq": BF_FAQ, "cz_date": bfmod.cz_date,
         "canonical_path": "/black-friday", "noindex": bool(kategorie or obchod), "get_shop": get_shop,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "include_demo": bfmod_include_demo(),

@@ -35,6 +35,13 @@ _ADD_COLUMNS = [("watches", "notified_price", "NUMERIC(12, 2)"),
                 ("products", "redirect_product_id", "INTEGER")]
 
 
+# Indexy, které create_all na existující tabulku nepřidá. Idempotentní (SQLite i Postgres).
+_ADD_INDEXES = [
+    ("price_points", "CREATE INDEX IF NOT EXISTS ix_pp_offer_time ON price_points (offer_id, captured_at)"),
+    ("offers", "CREATE INDEX IF NOT EXISTS ix_offers_last_checked ON offers (last_checked)"),
+]
+
+
 def _migrate():
     from sqlalchemy import inspect, text
     insp = inspect(engine)
@@ -42,3 +49,8 @@ def _migrate():
         if table in insp.get_table_names() and col not in {c["name"] for c in insp.get_columns(table)}:
             with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+    names = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, sql in _ADD_INDEXES:
+            if table in names:
+                conn.execute(text(sql))
