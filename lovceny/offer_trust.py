@@ -136,8 +136,12 @@ def offer_mismatches_product(offer, product=None) -> bool:
     url = getattr(offer, "url", None) or ""
     if not name.strip() or not url.strip():
         return False
+    from .category_guard import offer_type_conflict
     from .matching import clear_model_conflict, label_from_url
-    return clear_model_conflict(name, label_from_url(url))
+    label = label_from_url(url)
+    if offer_type_conflict(name, label):
+        return True
+    return clear_model_conflict(name, label)
 
 
 def unverified_note(offer, cutoffs: dict[str, datetime] | None = None, product=None) -> str | None:

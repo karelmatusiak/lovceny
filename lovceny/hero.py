@@ -57,13 +57,8 @@ def clear_cache() -> None:
 
 
 def _badge_for(cur: float, v: Verdict, hist_n: int) -> str | None:
-    """Štítek jen když je pravdivý – nehádat při řídké historii."""
+    """Štítek jen z naměřené historie. Maximum z pár dní ani cizí kapacita nestačí."""
     if hist_n < MIN_DAYS:
-        # Tenká historie: štítek jen když je aktuální cena zjevně pod maximem z naměřených bodů
-        if v.max90 and cur < float(v.max90) * 0.97:
-            pct = round((1 - cur / float(v.max90)) * 100)
-            if pct >= 5:
-                return f"−{pct} %"
         return None
     if v.min90 is not None and cur <= float(v.min90) * 1.005:
         return "Nejnižší cena"
@@ -274,13 +269,29 @@ def _score_products(db, lights: list[_Light]) -> list[HeroPick]:
             continue
         if not (p.image_url or "").strip():
             continue
+        from .categories import BY_SLUG
+        from .category_guard import guarded_category
+        if p.category_slug in BY_SLUG and guarded_category(p.name or "", p.category_slug)[0] != "keep":
+            continue
         bucket = _bucket(p.category_slug, p.name or "", p.category)
         if bucket is None:
             continue
         best = best_buyable_offer(p.offers)
         if not best or not offer_is_buyable(best):
             continue
-        pts, _ = _points_for(p, allow)
+        from .category_guard import offer_type_conflict, storage_conflict
+        from .matching import label_from_url
+        pts = []
+        for offer in p.offers:
+            label = label_from_url(offer.url or "")
+            if offer_type_conflict(p.name or "", label):
+                continue
+            if storage_conflict(p.name or "", f"{label} {offer.url or ''}"):
+                continue
+            for point in offer.points:
+                if point.is_demo and not allow:
+                    continue
+                pts.append(point)
         days = {pt.captured_at.date() for pt in pts if getattr(pt, "captured_at", None)}
         hist_n = len(days) if days else len(pts)
         v = compute(pts, float(best.price),
@@ -293,7 +304,12 @@ def _score_products(db, lights: list[_Light]) -> list[HeroPick]:
                 v.max90 = max(vals) if v.max90 is None else v.max90
                 v.median90 = median(vals) if v.median90 is None and len(vals) >= 2 else v.median90
         known = _known_brand(p.name or "")
-        badge = _badge_for(cur, v, hist_n)
+        best_label = label_from_url(best.url or "")
+        unreliable = (
+            offer_type_conflict(p.name or "", best_label)
+            or storage_conflict(p.name or "", f"{best_label} {best.url or ''}")
+        )
+        badge = None if unreliable else _badge_for(cur, v, hist_n)
         score = _score(cur, v, hist_n, watches.get(p.id, 0), known=known)
         n_shops = len({o.shop for o in p.offers if offer_is_buyable(o) and o.price is not None})
         if n_shops >= 2:
@@ -356,12 +372,22 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
             p = by_id.get(c["id"])
             if not p or not (p.image_url or "").strip():
                 continue
+            from .category_guard import guarded_category, offer_type_conflict, storage_conflict
+            from .categories import BY_SLUG as _by_slug
+            if p.category_slug in _by_slug and guarded_category(p.name or "", p.category_slug)[0] != "keep":
+                continue
             bucket = _bucket(p.category_slug, p.name or "", p.category)
             if bucket is None:
                 continue
             best = best_buyable_offer(p.offers)
             if not best or not offer_is_buyable(best):
                 continue
+            from .matching import label_from_url
+            best_label = label_from_url(best.url or "")
+            if offer_type_conflict(p.name or "", best_label) or storage_conflict(
+                p.name or "", f"{best_label} {best.url or ''}",
+            ):
+                c = {**c, "badge": None}
             pts, _ = _points_for(p, include_demo())
             v = compute(pts, float(best.price),
                         float(best.original_price) if best.original_price else None)
