@@ -7,7 +7,7 @@
 - Počkej: jinak (typicky cena nad mediánem 90 dní).
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from statistics import median
 
 from .util import czk
@@ -115,6 +115,61 @@ def daily_best(points, since: datetime) -> dict:
     for d, price in rows:
         out[d] = min(out.get(d, float("inf")), price)
     return dict(sorted(out.items()))
+
+
+@dataclass(frozen=True)
+class HistoryDrop:
+    """Pokles dnešní ceny vůči naší historii. Bez „původní ceny“ z obchodu.
+
+    `median30` / `min30` jsou z dní před dneškem (dnešní akce nesráží základ).
+    `at_min30` = dnešní cena je na nejnižším naměřeném bodu těch 30 dní, nebo pod ním.
+    """
+    current: float
+    days: int
+    min30: float
+    min30_date: date
+    median30: float
+    drop_czk: float
+    drop_pct: float
+    at_min30: bool
+
+
+def history_drop(points, current: float | None, now: datetime | None = None, *,
+                 min_days: int = MIN_DAYS) -> HistoryDrop | None:
+    """Skutečný pokles proti cenám, které jsme sami naměřili za předchozích 30 dní.
+
+    Vrací None, když není aspoň `min_days` různých dní před dneškem, nebo když
+    dnešní cena není aspoň o 0,5 Kč (a 0,5 %) pod mediánem těch dní. Deklarovanou
+    slevu obchodu tahle funkce vůbec nečte — patří do verdiktu, ne sem.
+    """
+    if current is None:
+        return None
+    try:
+        cur = float(current)
+    except (TypeError, ValueError):
+        return None
+    if cur <= 0:
+        return None
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    series = daily_best(points, now - timedelta(days=30))
+    prior = [(d, p) for d, p in series.items() if today - timedelta(days=30) <= d < today]
+    if len(prior) < min_days:
+        return None
+    prices = [p for _, p in prior]
+    med = float(median(prices))
+    if med <= 0:
+        return None
+    d0, p0 = min(prior, key=lambda x: (x[1], x[0]))
+    drop = med - cur
+    pct = drop / med * 100
+    # Pod mediánem předchozích 30 dní. Haléře a „−0 %“ nebereme jako slevu.
+    if drop <= 0.5 or pct < 0.5:
+        return None
+    return HistoryDrop(
+        current=cur, days=len(prior), min30=float(p0), min30_date=d0, median30=med,
+        drop_czk=drop, drop_pct=pct, at_min30=cur <= float(p0) + 0.5,
+    )
 
 
 def compute(points, current: float | None, claimed_original: float | None = None,

@@ -31,6 +31,35 @@
   </ul>
 </div></section>
 
+<section class="bf-real" id="prehled-skutecnych-slev" aria-labelledby="bf-real-h"><div class="wrap">
+  <h2 id="bf-real-h">Black Friday přehled skutečných slev</h2>
+  <p class="sub">Jen zboží skladem, jehož dnešní nejnižší cena je pod mediánem cen, které jsme sami naměřili za předchozích 30 dní (aspoň 7 dní dat). „Původní cenu“ z obchodu nepočítáme.</p>
+  {% for cat, items in real_groups %}
+  <div class="bf-real-cat">
+    <h3><span aria-hidden="true">{{ cat.icon }}</span> {{ cat.name }}</h3>
+    {% if items %}
+    <ul class="bf-real-list">{% for r in items %}{% set sh = get_shop(r.offer.shop) %}
+      <li class="card bf-real-card">
+        <a class="bf-real-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+          <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 52) }}{% else %}{{ img_missing() }}{% endif %}</span>
+          <span class="bf-info">
+            <span class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</span>
+            <span class="bf-meta">{{ sh.name if sh else r.offer.shop }} · obvykle {{ r.median30|czk }}{% if r.at_min30 %} · <span class="bf-min30">nejnižší za 30 dní</span>{% endif %}</span>
+          </span>
+          <span class="bf-drop"><b>{{ r.offer.price|czk }}</b><span>−{{ r.drop_czk|czk }} · −{{ '%.0f'|format(r.drop_pct) }}&nbsp;%</span></span>
+        </a>
+        {% if r.offer.in_stock and sh %}
+        <a class="btn btn-shop-sm" href="{{ sh.affiliate_link(r.offer.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        {% endif %}
+      </li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="bf-real-empty">Teď tu žádný skutečný pokles nevidíme.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div></section>
+
 <section class="bf-low-sec" aria-labelledby="bf-low-h"><div class="wrap">
   <h2 id="bf-low-h"><span aria-hidden="true">🏆</span> Opravdu nejnižší ceny</h2>
   <p class="sub">Dnešní cena je nejnižší, jakou jsme u produktu za celou dobu sledování naměřili (aspoň 30 dní dat), a zároveň u 90denního minima. Nic lepšího v našich datech není.</p>

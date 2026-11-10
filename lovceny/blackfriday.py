@@ -154,6 +154,26 @@ def _fresh(o: Offer, now: datetime) -> bool:
     return bool(lc) and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) >= now - timedelta(days=FRESH_DAYS)
 
 
+@dataclass
+class RealDrop:
+    """Produkt skladem, jehož dnešní nejnižší cena je pod naším mediánem 30 dní."""
+    product: Product
+    offer: Offer
+    days: int
+    min30: float
+    min30_date: date | None
+    median30: float
+    drop_czk: float
+    drop_pct: float
+    at_min30: bool
+
+
+@dataclass
+class Listing:
+    rows: list[BfRow]
+    drops: list[RealDrop]
+
+
 def _row_payload(r: BfRow) -> dict:
     return {
         "product_id": r.product.id, "offer_id": r.best.id, "verdict": r.verdict,
@@ -162,52 +182,58 @@ def _row_payload(r: BfRow) -> dict:
     }
 
 
-def _rehydrate(db, payload: list[dict]) -> list[BfRow]:
-    if not payload:
-        return []
-    ids = [p["product_id"] for p in payload]
-    products = db.scalars(
-        select(Product).where(Product.id.in_(ids)).options(selectinload(Product.offers))
-    ).all()
-    by = {p.id: p for p in products}
-    out = []
-    for pl in payload:
-        p = by.get(pl["product_id"])
-        if not p or p.retired_at is not None:
-            continue
-        best = next((o for o in p.offers if o.id == pl["offer_id"]), None)
-        if best is None:
-            continue
-        out.append(BfRow(
-            p, best, pl["verdict"], pl["claimed_pct"], pl["real_pct"], pl["min30"], pl["min30_date"],
-            pl["lowest"], pl["days"], pl["is_lowest"], pl["has_demo"],
-        ))
-    return out
+def _drop_payload(r: RealDrop) -> dict:
+    return {
+        "product_id": r.product.id, "offer_id": r.offer.id, "days": r.days, "min30": r.min30,
+        "min30_date": r.min30_date, "median30": r.median30, "drop_czk": r.drop_czk,
+        "drop_pct": r.drop_pct, "at_min30": r.at_min30,
+    }
 
 
-def _compute_rows(db, now: datetime, category: str, shop: str, allow: bool, require_fresh: bool) -> list[BfRow]:
-    from .deals import load_offers_for, load_points_for_offers, points_from_map
-    from .verdict import compute, daily_best
+def _prepare(db, now: datetime, *, category: str = "", require_fresh: bool = True):
+    """Jedno načtení produktů, nabídek a historie pro verdikty i přehled skutečných slev."""
+    from .deals import load_offers_for, load_points_for_offers
     q = select(Product).where(Product.retired_at.is_(None))
     if category:
         q = q.where(Product.category_slug == category)
     products = db.scalars(q).all()
     offers_by = load_offers_for(db, products)
-    pending = []
+    row_pending = []
+    drop_pending = []
     offer_ids = []
+    seen: set[int] = set()
+
+    def take(offs):
+        for o in offs:
+            if o.id is not None and o.id not in seen:
+                seen.add(o.id)
+                offer_ids.append(o.id)
+
     for p in products:
         if is_accessory_text(p.name or "", p.category):
             continue
         offs = offers_by.get(p.id, [])
         cands = [o for o in offs if offer_is_buyable(o) and o.status == "ok" and (not require_fresh or _fresh(o, now))]
         best = min(cands, key=lambda o: float(o.price), default=None)
-        if not best or (shop and best.shop != shop):
-            continue
-        pending.append((p, offs, best))
-        offer_ids.extend(o.id for o in offs)
-    by_pts = load_points_for_offers(db, offer_ids)
+        if best is not None:
+            row_pending.append((p, offs, best))
+            take(offs)
+        stock = [o for o in offs if o.in_stock is True and o.status == "ok" and o.price is not None
+                 and (not require_fresh or _fresh(o, now))]
+        best_stock = min(stock, key=lambda o: float(o.price), default=None)
+        if best_stock is not None:
+            drop_pending.append((p, offs, best_stock))
+            take(offs)
+    return row_pending, drop_pending, load_points_for_offers(db, offer_ids)
+
+
+def _rows_from(pending, by_pts, allow: bool, now: datetime, shop: str) -> list[BfRow]:
+    from .deals import points_from_map
+    from .verdict import compute, daily_best
     out = []
     for p, offs, best in pending:
+        if shop and best.shop != shop:
+            continue
         pts, saw_demo = points_from_map(offs, by_pts, allow)
         cur = float(best.price)
         orig = float(best.original_price) if best.original_price else None
@@ -232,28 +258,125 @@ def _compute_rows(db, now: datetime, category: str, shop: str, allow: bool, requ
     return out
 
 
+def _drops_from(pending, by_pts, allow: bool, now: datetime) -> list[RealDrop]:
+    from .deals import points_from_map
+    from .verdict import history_drop
+    out = []
+    for p, offs, best in pending:
+        if not p.category_slug:
+            continue
+        pts, _ = points_from_map(offs, by_pts, allow)
+        hd = history_drop(pts, float(best.price), now=now)
+        if hd is None:
+            continue
+        out.append(RealDrop(
+            p, best, hd.days, hd.min30, hd.min30_date, hd.median30, hd.drop_czk, hd.drop_pct, hd.at_min30,
+        ))
+    return out
+
+
+def _compute_rows(db, now: datetime, category: str, shop: str, allow: bool, require_fresh: bool) -> list[BfRow]:
+    pending, _, by_pts = _prepare(db, now, category=category, require_fresh=require_fresh)
+    return _rows_from(pending, by_pts, allow, now, shop)
+
+
+def _compute_listing(db, now: datetime, allow: bool) -> Listing:
+    row_pending, drop_pending, by_pts = _prepare(db, now, require_fresh=True)
+    return Listing(
+        _rows_from(row_pending, by_pts, allow, now, ""),
+        _drops_from(drop_pending, by_pts, allow, now),
+    )
+
+
+def _rehydrate_listing(db, payload: dict) -> Listing:
+    row_pl = payload.get("rows") or []
+    drop_pl = payload.get("drops") or []
+    ids = [p["product_id"] for p in row_pl] + [p["product_id"] for p in drop_pl]
+    if not ids:
+        return Listing([], [])
+    products = db.scalars(
+        select(Product).where(Product.id.in_(set(ids))).options(selectinload(Product.offers))
+    ).all()
+    by = {p.id: p for p in products}
+
+    def offer_of(p, oid):
+        return next((o for o in p.offers if o.id == oid), None)
+
+    rows = []
+    for pl in row_pl:
+        p = by.get(pl["product_id"])
+        if not p or p.retired_at is not None:
+            continue
+        best = offer_of(p, pl["offer_id"])
+        if best is None:
+            continue
+        rows.append(BfRow(
+            p, best, pl["verdict"], pl["claimed_pct"], pl["real_pct"], pl["min30"], pl["min30_date"],
+            pl["lowest"], pl["days"], pl["is_lowest"], pl["has_demo"],
+        ))
+    drops = []
+    for pl in drop_pl:
+        p = by.get(pl["product_id"])
+        if not p or p.retired_at is not None or not p.category_slug:
+            continue
+        best = offer_of(p, pl["offer_id"])
+        if best is None or best.in_stock is not True:
+            continue
+        drops.append(RealDrop(
+            p, best, pl["days"], pl["min30"], pl["min30_date"], pl["median30"],
+            pl["drop_czk"], pl["drop_pct"], pl["at_min30"],
+        ))
+    return Listing(rows, drops)
+
+
+def listing(db, now: datetime | None = None, allow_demo: bool | None = None) -> Listing:
+    """Verdikty i přehled skutečných slev z jednoho načtení historie. Cache sdílí razítko katalogu."""
+    from .deals import include_demo, catalog_stamp
+    allow = include_demo() if allow_demo is None else allow_demo
+    # Pevný čas (digest) cache nepoužije — přehled na stránce ano.
+    if now is not None or allow_demo is not None:
+        when = now or datetime.now(timezone.utc)
+        return _compute_listing(db, when, allow)
+    stamp = catalog_stamp(db)
+    key = ("listing", allow)
+    t = time.monotonic()
+    with _cache_lock:
+        hit = _rows_cache.get(key)
+        if hit and hit[1] == stamp and t - hit[0] < _CACHE_TTL_S:
+            payload = hit[2]
+        else:
+            payload = None
+    if payload is not None:
+        return _rehydrate_listing(db, payload)
+    computed = _compute_listing(db, datetime.now(timezone.utc), allow)
+    with _cache_lock:
+        _rows_cache[key] = (t, stamp, {
+            "rows": [_row_payload(r) for r in computed.rows],
+            "drops": [_drop_payload(r) for r in computed.drops],
+        })
+    return computed
+
+
+def group_by_category(drops: list[RealDrop], only_slug: str = "") -> list[tuple]:
+    """Kategorie v pořadí menu. Prázdný seznam u kategorie = žádný skutečný pokles, ne výplň."""
+    from .categories import CATEGORIES
+    chosen = [c for c in CATEGORIES if not only_slug or c.slug == only_slug]
+    buckets: dict[str, list[RealDrop]] = {c.slug: [] for c in chosen}
+    for d in drops:
+        if d.product.category_slug in buckets:
+            buckets[d.product.category_slug].append(d)
+    for items in buckets.values():
+        items.sort(key=lambda r: (-r.drop_pct, -r.drop_czk, r.product.id))
+    return [(c, buckets[c.slug]) for c in chosen]
+
+
 def rows(db, now: datetime | None = None, category: str = "", shop: str = "", allow_demo: bool | None = None,
          require_fresh: bool = True) -> list[BfRow]:
-    from .deals import include_demo, catalog_stamp
-    # Výchozí volání ze stránky. Explicitní now (digest, testy s pevným časem) cache nepoužije.
+    from .deals import include_demo
     cacheable = now is None and not category and not shop and allow_demo is None and require_fresh
-    allow = include_demo() if allow_demo is None else allow_demo
     if cacheable:
-        stamp = catalog_stamp(db)
-        key = (allow, True)
-        t = time.monotonic()
-        with _cache_lock:
-            hit = _rows_cache.get(key)
-            if hit and hit[1] == stamp and t - hit[0] < _CACHE_TTL_S:
-                payload = hit[2]
-            else:
-                payload = None
-        if payload is not None:
-            return _rehydrate(db, payload)
-        computed = _compute_rows(db, datetime.now(timezone.utc), "", "", allow, True)
-        with _cache_lock:
-            _rows_cache[key] = (t, stamp, [_row_payload(r) for r in computed])
-        return computed
+        return listing(db).rows
+    allow = include_demo() if allow_demo is None else allow_demo
     when = now or datetime.now(timezone.utc)
     return _compute_rows(db, when, category, shop, allow, require_fresh)
 

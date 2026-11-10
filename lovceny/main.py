@@ -1651,7 +1651,14 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
     kategorie = kategorie if kategorie in BY_SLUG else ""
     obchod = obchod if obchod in SHOPS else ""
     s = bfmod.season()
-    all_rows = bfmod.rows(db)
+    bundle = bfmod.listing(db)
+    all_rows = bundle.rows
+    drops = bundle.drops
+    if kategorie:
+        drops = [d for d in drops if d.product.category_slug == kategorie]
+    if obchod:
+        drops = [d for d in drops if d.offer.shop == obchod]
+    real_groups = bfmod.group_by_category(drops, only_slug=kategorie)
     rows = [r for r in all_rows if (not kategorie or r.product.category_slug == kategorie) and (not obchod or r.best.shop == obchod)]
     cats = sorted({r.product.category_slug for r in all_rows if r.product.category_slug}, key=lambda c: [x.slug for x in CATEGORIES].index(c))
     shops = sorted({r.best.shop for r in all_rows}, key=lambda x: SHOPS[x].name if x in SHOPS else x)
@@ -1666,6 +1673,7 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
     return tpl.TemplateResponse(request, "black_friday.html", {
         "s": s, "today": bfmod.today_prague(), "countdown": bfmod.countdown_text(), "phase": s.phase(bfmod.today_prague()),
         "rows": rows, "sm": bfmod.summary(rows), "lowest": [r for r in rows if r.is_lowest][:6], "cats": cats, "shops": shops,
+        "real_groups": real_groups,
         "kategorie": kategorie, "obchod": obchod, "crumbs": crumbs, "ld": ld, "faq": BF_FAQ, "cz_date": bfmod.cz_date,
         "canonical_path": "/black-friday", "noindex": bool(kategorie or obchod), "get_shop": get_shop,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "include_demo": bfmod_include_demo(),
