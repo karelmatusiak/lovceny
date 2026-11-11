@@ -127,22 +127,44 @@ def _points_for(p: Product, allow_demo: bool) -> tuple[list, bool]:
     return pts, saw_demo
 
 
-def product_rows(db, *, allow_demo: bool | None = None, limit_products: int = 500) -> list[DealRow]:
+def _series_offers(product, offers):
+    """Do verdiktu patří jen nabídka stejného výrobku. Sporná a stažená cena medián nehne."""
+    from .offer_trust import offer_mismatches_product
+    kept = []
+    for offer in offers:
+        if getattr(offer, "withheld", False):
+            continue
+        if offer_mismatches_product(offer, product):
+            continue
+        kept.append(offer)
+    return kept
+
+
+def public_products(db, *, limit_products: int | None = None) -> list:
+    """Všechny veřejné produkty, od nejstaršího id. Okno „500 nejnovějších“ vynechalo
+    produkty s týdnem cen, protože nově zveřejněné ho zaplnily."""
+    rows = db.scalars(
+        select(Product).where(
+            Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
+        .order_by(Product.id.asc())
+    ).all()
+    if limit_products is not None:
+        return list(rows[:limit_products])
+    return list(rows)
+
+
+def product_rows(db, *, allow_demo: bool | None = None, limit_products: int | None = None) -> list[DealRow]:
     allow = include_demo() if allow_demo is None else allow_demo
     from .offer_trust import use_cutoffs
     use_cutoffs(db)
-    products = db.scalars(
-        select(Product).where(
-            Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
-        .order_by(Product.created_at.desc()).limit(limit_products)
-    ).all()
+    products = public_products(db, limit_products=limit_products)
     offers_by = load_offers_for(db, products)
     pending = []
     offer_ids = []
     for p in products:
         if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
-        offs = offers_by.get(p.id, [])
+        offs = _series_offers(p, offers_by.get(p.id, []))
         best = best_buyable_offer(offs)
         if not best or best.in_stock is False:
             continue
@@ -284,18 +306,14 @@ def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]
         return out
     from .offer_trust import use_cutoffs
     use_cutoffs(db)
-    products = db.scalars(
-        select(Product).where(
-            Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
-        .order_by(Product.created_at.desc()).limit(500)
-    ).all()
+    products = public_products(db)
     offers_by = load_offers_for(db, products)
     pending = []
     offer_ids = []
     for p in products:
         if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
-        offs = offers_by.get(p.id, [])
+        offs = _series_offers(p, offers_by.get(p.id, []))
         best = best_buyable_offer(offs)
         if not best or best.in_stock is False:
             continue

@@ -130,6 +130,10 @@ def listing_outcome(db: Session, product: Product) -> tuple[str, str | None]:
 
 
 def apply_listing(db: Session, product: Product) -> str:
+    from .allegro_narrow import allegro_only, is_known_brand
+    if allegro_only(product) and not is_known_brand(product.name or ""):
+        product.needs_review = True
+        return "hidden"
     outcome, slug = listing_outcome(db, product)
     if outcome == "publish" and slug:
         product.category_slug = slug

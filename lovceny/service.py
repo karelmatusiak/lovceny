@@ -254,6 +254,12 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     by_url = {clean_url(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
     products = list(db.scalars(select(Product)).all())
+    # Jednou, ne na položku. Allegro-only neznámá značka se nesmí vrátit do výpisu.
+    other_shop_ids: set[int] = set()
+    if shop_slug == "allegro":
+        other_shop_ids = set(db.scalars(
+            sa_select(Offer.product_id).where(Offer.shop != "allegro")
+        ).all())
     by_gtin: dict[str, Product] = {}
     by_gtin_offer: dict[str, Offer] = {}
 
@@ -509,6 +515,11 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             elif create_missing and res.action in ("high", "unmapped") and (
                 max_create is None or created + held < max_create
             ):
+                if shop_slug == "allegro":
+                    from .allegro_narrow import is_known_brand
+                    if not is_known_brand(it.name or ""):
+                        stats["skipped"] += 1
+                        continue
                 hidden = res.action != "high"
                 cat_slug = res.slug if res.action == "high" else None
                 if cat_slug:
@@ -565,8 +576,6 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             propose_detach(o, it, clean)
             stats["skipped_mismatch"] += 1
             continue
-        if o.product.retired_at is not None:
-            o.product.retired_at = None
         o.url = clean
         o.external_id = it.item_id or o.external_id
         if it.name and (o.product.name == _name_from_url(o.url) or not o.product.name):
@@ -578,17 +587,35 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             o.product.category = BY_SLUG[o.product.category_slug].name if o.product.category_slug in BY_SLUG else None
         remember_gtin(o.gtin, o.product, o)
         record_price(db, o, it.price, it.original_price, it.in_stock, "feed")
-        from .categories import is_accessory_text
-        if not fresh and res.action == "high" and res.slug in BY_SLUG and not is_accessory_text(o.product.name or ""):
-            if o.product.category_slug != res.slug:
-                o.product.category_slug = res.slug
-                o.product.category = BY_SLUG[res.slug].name
-            if o.product.catalog_hidden or o.product.needs_review:
-                from .auto_resolve import apply_listing
+        # Vyřazený produkt zůstane vyřazený. Stažení cen ho nevrací do výpisu.
+        if not fresh and o.product.retired_at is None:
+            from .allegro_narrow import is_known_brand
+            from .auto_resolve import apply_listing
+            from .categories import is_accessory_text
+            from .category_guard import guarded_category
+            unknown_allegro = (
+                shop_slug == "allegro"
+                and o.product.id not in other_shop_ids
+                and not is_known_brand(o.product.name or "")
+            )
+            if unknown_allegro:
+                o.product.retired_at = datetime.now(timezone.utc)
+                o.product.redirect_product_id = None
+                stats["retired"] = stats.get("retired", 0) + 1
+            elif o.product.catalog_hidden or o.product.needs_review:
                 apply_listing(db, o.product)
-        elif not fresh and res.action == "unmapped" and (it.category or "").strip() and not o.product.category_slug:
-            o.product.needs_review = True
-            o.product.catalog_hidden = True
+            elif is_accessory_text(o.product.name or ""):
+                o.product.needs_review = True
+            elif res.action == "high" and (o.product.category_slug or res.slug) in BY_SLUG:
+                action, target = guarded_category(o.product.name or "", o.product.category_slug or res.slug)
+                if action == "move" and target in BY_SLUG:
+                    o.product.category_slug = target
+                    o.product.category = BY_SLUG[target].name
+                elif action == "hide":
+                    o.product.needs_review = True
+            elif res.action == "unmapped" and (it.category or "").strip() and not o.product.category_slug:
+                o.product.needs_review = True
+                o.product.catalog_hidden = True
     # Celý feed je jeden pohled na obchod: každá jeho nabídka byla na řadě,
     # i ta, která v souboru chyběla. Rotující scrape (Mironet) sem nepatří.
     from .offer_trust import note_offer_due

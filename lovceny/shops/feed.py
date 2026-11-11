@@ -760,13 +760,23 @@ def parse_tradedoubler(data: bytes | str) -> tuple[list[FeedItem], int | None]:
     return items, total
 
 
+# Idle mezi kusy, a celý soubor. Visící spojení se přeskočí, pomalý obchod neblokuje ostatní.
+FEED_READ_TIMEOUT_S = 25
+FEED_TOTAL_S = 180
+
+
 def _http_get(url: str) -> bytes:
+    deadline = time.monotonic() + FEED_TOTAL_S
     try:
-        with httpx.stream("GET", url, timeout=120, follow_redirects=True) as r:
+        with httpx.stream(
+            "GET", url, timeout=httpx.Timeout(FEED_READ_TIMEOUT_S, connect=10.0), follow_redirects=True,
+        ) as r:
             r.raise_for_status()
             chunks = []
             total = 0
             for chunk in r.iter_bytes():
+                if time.monotonic() > deadline:
+                    raise RuntimeError("feed přesáhl časový limit")
                 chunks.append(chunk)
                 total += len(chunk)
                 if total > 80 * 1024 * 1024:  # 80 MB strop

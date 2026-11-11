@@ -404,7 +404,13 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             stats[slug] = {"error": str(e)}
             continue
         st_attach = apply_feed(db, slug, items, create_missing=False)
-        bf = _apple_only if slug == "istyle" else None
+        if slug == "istyle":
+            bf = _apple_only
+        elif slug == "allegro":
+            from lovceny.allegro_narrow import is_known_brand
+            bf = is_known_brand
+        else:
+            bf = None
         picked = pick_feed_create_items(
             items, cats, brand_filter=bf,
             max_per_brand_cat=ALLEGRO_BRAND_CAP if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,

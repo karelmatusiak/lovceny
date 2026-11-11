@@ -83,8 +83,9 @@ def min_gap(host: str, rng: random.Random | None = None) -> float:
 
 class PoliteClient:
     def __init__(self):
+        # Krátký strop. Visící obchod (Softcom ReadTimeout) se přeskočí, nesežere běh.
         self.client = httpx.Client(headers={"User-Agent": USER_AGENT, "Accept-Language": "cs-CZ,cs;q=0.9"},
-                                   follow_redirects=True, timeout=20)
+                                   follow_redirects=True, timeout=httpx.Timeout(8.0, connect=5.0))
         self._robots: dict[str, Robots] = {}
         self._last: dict[str, float] = {}
 
