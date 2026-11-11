@@ -13,7 +13,9 @@ import argparse
 import logging
 import signal
 import sys
+import time
 from collections import Counter
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -31,6 +33,72 @@ log = logging.getLogger("fetch")
 # (limit 30 min včetně testů) doběhne a Mironet nedostane desítky captcha za sebou.
 MIRONET_MAX_PER_RUN = 24
 MIRONET_BACKOFF_AFTER = 3
+# Feedy jedou najednou. Jeden pomalý soubor (po hlavičce 200 ještě minutu a půl) nečeká,
+# až doběhnou ostatní. Strop je v lovceny.shops.feed.FEED_TOTAL_S.
+FEED_WORKERS = 6
+# Scrapery: celý blok, jeden obchod, a tři chyby za sebou (Softcom 8× ReadTimeout).
+SCRAPE_BUDGET_S = 12 * 60
+SHOP_BUDGET_S = 90
+MIRONET_BUDGET_S = 180
+SHOP_FAIL_STREAK = 3
+
+
+def load_feed_items(slug: str, src: str):
+    shop = SHOPS.get(slug)
+    if shop and src == shop.feed_url:
+        return feedmod.load_shop(shop)
+    return feedmod.load(src)
+
+
+def iter_feed_results(jobs, *, wall_s: float | None = None, workers: int = FEED_WORKERS,
+                      loader=load_feed_items):
+    """Stáhne feedy vedle sebe. Obchod, který se nevejde do wall_s, se přeskočí.
+
+    Vrací (slug, položky nebo None, chyba nebo None, sekundy). Zápis do databáze
+    zůstává ve volajícím vlákně.
+    """
+    from lovceny.shops.feed import FEED_TOTAL_S
+    if wall_s is None:
+        wall_s = FEED_TOTAL_S
+    if not jobs:
+        return
+    pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="feed")
+    futs = {}
+    starts = {}
+    try:
+        for slug, src in jobs:
+            fut = pool.submit(loader, slug, src)
+            futs[fut] = slug
+            starts[fut] = time.monotonic()
+        pending = set(futs)
+        while pending:
+            done, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+            now = time.monotonic()
+            for fut in done:
+                seconds = now - starts[fut]
+                exc = fut.exception()
+                if exc is not None:
+                    yield futs[fut], None, exc, seconds
+                else:
+                    yield futs[fut], fut.result(), None, seconds
+            for fut in list(pending):
+                if now - starts[fut] > wall_s:
+                    pending.discard(fut)
+                    yield futs[fut], None, TimeoutError(f"feed přes {wall_s:.0f} s"), now - starts[fut]
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
+def scrape_pause_reason(shop: str, shop_elapsed: float, all_elapsed: float, fail_streak: int) -> str | None:
+    """None = tahle nabídka se ještě stáhne. Jinak důvod, proč obchod nebo běh skončil."""
+    if all_elapsed > SCRAPE_BUDGET_S:
+        return "overall"
+    limit = MIRONET_BUDGET_S if shop == "mironet" else SHOP_BUDGET_S
+    if shop_elapsed > limit:
+        return "shop"
+    if fail_streak >= SHOP_FAIL_STREAK:
+        return "errors"
+    return None
 
 
 def scrape_slugs(only: str | None) -> list[str]:
@@ -93,17 +161,19 @@ def main(argv=None):
     for s in SHOPS.values():
         if s.source == "feed" and s.feed_url and s.slug not in feeds:
             feeds[s.slug] = s.feed_url
-    for slug, src in feeds.items():
-        if a.shop and slug != a.shop:
+    jobs = [(slug, src) for slug, src in feeds.items() if not a.shop or slug == a.shop]
+    for slug, items, err, seconds in iter_feed_results(jobs):
+        if err is not None:
+            db.rollback()
+            log.error("feed %s přeskočen po %.0fs: %s", slug, seconds, err)
+            report[f"{slug}:feed_error"] += 1
+            stats.add(slug, "errors", None, str(err))
+            checkpoint()
             continue
         try:
-            shop = SHOPS.get(slug)
-            if shop and src == shop.feed_url:
-                items = feedmod.load_shop(shop)
-            else:
-                items = feedmod.load(src)
+            t0 = time.perf_counter()
             st = apply_feed(db, slug, items)
-            log.info("feed %s: %s", slug, st)
+            log.info("feed %s: stažení %.0fs, zápis %.1fs, %s", slug, seconds, time.perf_counter() - t0, st)
             report[f"{slug}:feed_ok"] += st["matched"]
             stats.add(slug, "ok", 200)
             checkpoint()
@@ -130,8 +200,15 @@ def main(argv=None):
         batches.append(load_scrape_offers(db, others, a.limit))
     mironet_streak = 0
     mironet_paused = False
+    scrape_started = time.monotonic()
+    shop_started: dict[str, float] = {}
+    fail_streak: Counter = Counter()
+    paused: set[str] = set()
+    scrape_stopped = False
     for batch in batches:
         for o in batch:
+            if scrape_stopped:
+                break
             if o.status == "unavailable":
                 # Vyřazené produkty nezkoušíme znovu (šetří kvótu a nekazí zdraví obchodu).
                 report[f"{o.shop}:skipped_unavailable"] += 1
@@ -141,15 +218,39 @@ def main(argv=None):
                 report[f"{o.shop}:skipped_backoff"] += 1
                 stats.add(o.shop, "skipped")
                 continue
+            if o.shop in paused:
+                report[f"{o.shop}:skipped_budget"] += 1
+                stats.add(o.shop, "skipped")
+                continue
             lc = o.last_checked
             if lc and (lc if lc.tzinfo else lc.replace(tzinfo=timezone.utc)) > cutoff:
                 report[f"{o.shop}:skipped_recent"] += 1
+                stats.add(o.shop, "skipped")
+                continue
+            shop_started.setdefault(o.shop, time.monotonic())
+            reason = scrape_pause_reason(
+                o.shop, time.monotonic() - shop_started[o.shop],
+                time.monotonic() - scrape_started, fail_streak[o.shop],
+            )
+            if reason == "overall":
+                log.warning("Scrapery dosáhly %s s, zbytek obchodů čeká na další běh", SCRAPE_BUDGET_S)
+                scrape_stopped = True
+                checkpoint()
+                break
+            if reason in ("shop", "errors"):
+                paused.add(o.shop)
+                log.warning("Obchod %s končí (%s), další nabídky se přeskočí", o.shop, reason)
+                report[f"{o.shop}:skipped_budget"] += 1
                 stats.add(o.shop, "skipped")
                 continue
             st = update_offer(db, o, stats=stats)
             db.commit()
             report[f"{o.shop}:{st}"] += 1
             log.info("%-8s %-7s %s %s", o.shop, st, o.price, o.url if st == "ok" else o.last_error)
+            if st == "ok":
+                fail_streak[o.shop] = 0
+            elif st in ("error", "blocked"):
+                fail_streak[o.shop] += 1
             if o.shop == "mironet":
                 if st == "blocked":
                     mironet_streak += 1
@@ -159,6 +260,8 @@ def main(argv=None):
                                     mironet_streak)
                 elif st == "ok":
                     mironet_streak = 0
+        if scrape_stopped:
+            break
 
     # 2b) monitoring blokací. Feedy už jsou zapsané průběžně; tady doplníme scrapery.
     try:
