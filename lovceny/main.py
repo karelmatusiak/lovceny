@@ -201,20 +201,35 @@ def _merged_target(db, p: Product):
     return None
 
 
-def product_summary(p: Product):
+def product_summary(p: Product, points_by_offer: dict | None = None):
     """Nejlepší *koupitelná* nabídka (ne „Není skladem“) + verdikt.
 
     Verdikt počítáme z koupitelné ceny; když žádná není, z poslední známé
     (historie zůstává), ale `best` je None → UI bez CTA.
+    `points_by_offer` je už načtené okno 90 dní. Bez něj se čte vztah offer.points.
+    Cizí nabídka (vysavač na hodinkách) do verdiktu nepatří a nespouští další SELECT.
     """
+    from .deals import _series_offers
     visible = [o for o in p.offers if not getattr(o, "withheld", False)]
-    best = best_buyable_offer(visible)
+    trusted = _series_offers(p, visible)
+    best = best_buyable_offer(trusted, product=p)
     last = last_known_offer(visible)
     ref = best or last
-    pts = [pt for o in visible for pt in o.points]
+    if points_by_offer is None:
+        pts = [pt for o in trusted for pt in o.points]
+    else:
+        pts = [pt for o in trusted for pt in points_by_offer.get(o.id, ())]
     v = compute(pts, float(ref.price) if ref else None,
                 float(ref.original_price) if ref and ref.original_price else None)
     return best, v
+
+
+def _points_for_products(db, products) -> dict:
+    """Jedna dávka cen za 90 dní pro už načtené nabídky. Žádný selectinload celé historie."""
+    from .deals import load_points_for_offers
+    ids = [o.id for p in products for o in p.offers]
+    since = datetime.now(timezone.utc) - timedelta(days=90)
+    return load_points_for_offers(db, ids, since=since)
 
 
 def price_history_thin(db) -> bool:
@@ -247,7 +262,7 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     from sqlalchemy.orm import selectinload
     q = (select(Product).where(
         Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
-         .options(selectinload(Product.offers).selectinload(Offer.points)))
+         .options(selectinload(Product.offers)))
     if order == "watched":
         watched_ids = [r[0] for r in db.execute(
             select(Watch.product_id, func.count(Watch.id).label("n"))
@@ -264,11 +279,12 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
         products = db.scalars(q.order_by(Product.created_at.desc()).limit(limit * 4)).all()
     from .availability import offer_is_buyable
     from .offer_trust import offer_is_captcha_hidden
+    points = _points_for_products(db, products)
     scored = []
     for p in products:
         if is_accessory_text(p.name or "", p.category):
             continue
-        best, v = product_summary(p)
+        best, v = product_summary(p, points)
         if best is None:
             continue
         n_shops = len({o.shop for o in p.offers
@@ -893,7 +909,8 @@ def _cat_rows(db, c):
     products = db.scalars(select(Product).where(
         Product.category_slug == c.slug, Product.retired_at.is_(None),
         Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
-                          .options(selectinload(Product.offers).selectinload(Offer.points))).all()
+                          .options(selectinload(Product.offers))).all()
+    points = _points_for_products(db, products)
     rows = []
     payload = []
     for p in products:
@@ -901,7 +918,7 @@ def _cat_rows(db, c):
         # sem nepatří: 6,67" u telefonu a „for Xbox“ u sluchátek by je z kategorie vyřadily.
         if is_accessory_text(p.name or "", p.category):
             continue
-        buyable, v = product_summary(p)
+        buyable, v = product_summary(p, points)
         # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.
         # Neověřená cena výpis nevede.
         display = buyable or last_known_offer(p.offers)
