@@ -313,21 +313,31 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             return without[0]
         return None  # nejednoznačné → konzervativně přeskočit
 
+    from .matching import brand_and_mpn
+    mpn_index: dict[tuple, list[Product]] = {}
+
+    def index_mpn(product: Product) -> None:
+        if product.retired_at is not None:
+            return
+        key = brand_and_mpn(product.name or "")
+        if key is None:
+            return
+        mpn_index.setdefault(key, []).append(product)
+
+    for product in products:
+        index_mpn(product)
+
     def find_by_brand_mpn(feed_name: str, feed_gtin: str | None) -> Product | None:
-        """Jedna shoda značky a kódu výrobce. Jiný GTIN nebo víc kandidátů se nepřipojí."""
-        from .matching import brand_and_mpn, primary_brand
+        """Jedna shoda značky a kódu výrobce. Jiný GTIN nebo víc kandidátů se nepřipojí.
+
+        Index se staví jednou. Dřív se kód počítal pro každý produkt u každé položky feedu.
+        """
         key = brand_and_mpn(feed_name)
         if key is None:
             return None
-        brand, mpns = key
         hits: dict[int, Product] = {}
-        for cand in products:
+        for cand in mpn_index.get(key, ()):
             if cand.retired_at is not None:
-                continue
-            if primary_brand(cand.name or "") != brand:
-                continue
-            other = brand_and_mpn(cand.name or "")
-            if other is None or other[1] != mpns:
                 continue
             known = normalize_gtin(cand.ean)
             if feed_gtin and known and feed_gtin != known:
@@ -469,9 +479,16 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 elif mpn_hit is not None:
                     prod = mpn_hit
             if prod is None and not gtin and not blocked:
-                named = find_by_name(it.name)
-                if named is None and res.slug:
-                    named = find_by_identity(it.name, res.slug)
+                # Stažení cen nic nezakládá. Přesná shoda kanonického názvu stačí na záznam.
+                # Procházení celého katalogu (names_match + same_model) by u tisíců položek
+                # bez GTIN sežralo desítky minut a nabídku stejně nepřipojí.
+                if create_missing:
+                    named = find_by_name(it.name)
+                    if named is None and res.slug:
+                        named = find_by_identity(it.name, res.slug)
+                else:
+                    canon = canonicalize_name(it.name)
+                    named = by_canon.get(canon) if canon else None
                 if named is not None and named.retired_at is None:
                     from .auto_resolve import record_auto
                     record_auto(
@@ -513,6 +530,7 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 db.add(o)
                 db.flush()
                 products.append(prod)
+                index_mpn(prod)
                 by_url[clean] = o
                 if it.item_id:
                     by_id[it.item_id] = o
