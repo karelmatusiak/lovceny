@@ -3,9 +3,12 @@ on:
   pull_request:
   workflow_dispatch: {}
   workflow_call: {}
+# actions: read stačí. Job neruší běhy ani nezapisuje do Actions API
+# (cache i artefakt jedou bez zápisu). Volající fetch.yml zápis nemá
+# a volaný workflow oprávnění zvýšit nesmí, jinak se celý běh nespustí.
 permissions:
   contents: read
-  actions: write
+  actions: read
 concurrency:
   group: static-site-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
