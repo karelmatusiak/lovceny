@@ -13,6 +13,24 @@ from lovceny.staticsite import _Redirects, build, norm_offer_url, rewrite_img_pr
 from lovceny.util import slugify
 
 
+def test_preview_build_does_not_migrate(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr("lovceny.db.init_db", lambda: calls.append("migrate"))
+    monkeypatch.setattr(
+        "lovceny.staticsite.build",
+        lambda *args, **kwargs: {
+            "pages": 1, "files": 1, "bytes": 1, "seconds": 0, "products": 0,
+            "search_index_bytes": 0, "redirect_mode": "file", "affiliate": [],
+            "url_changes": ["x"],
+        },
+    )
+    from lovceny.staticsite import main
+    assert main(["--out", str(tmp_path / "dist"), "--report", str(tmp_path / "report.json")]) == 0
+    assert calls == []
+    assert main(["--migrate", "--out", str(tmp_path / "dist2"), "--report", str(tmp_path / "report2.json")]) == 0
+    assert calls == ["migrate"]
+
+
 def test_rewrites_keep_pagination_and_original_photos():
     html = '<a href="https://lovceny.cz/kategorie/telefony?strana=2">2</a>'
     assert rewrite_pagination(html) == '<a href="https://lovceny.cz/kategorie/telefony/strana/2">2</a>'
@@ -139,6 +157,8 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert report["seconds"] > 0
     assert report["seconds"] < 120
     assert report["redirect_mode"] == "file"
+    alza = next(row for row in report["affiliate"] if row["shop"] == "Alza")
+    assert alza["wrapper"] == "ALZA_AFFILIATE_ID" and alza["wrapped"] >= 1 and alza["plain"] == 0
     assert report["search_index_bytes"] < 200_000
     assert report["url_changes"]
     assert any("Hlídání ceny" in line for line in report["not_published"])

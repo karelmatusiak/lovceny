@@ -275,6 +275,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
     tpl.env.globals["STATIC_SITE"] = True
     db = SessionLocal()
     db.expire_on_commit = False
+    _read_only(db)
     pages = 0
     try:
         log.info("Načítám katalog")
@@ -402,6 +403,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         book.add("/porovnani", _location(legacy), _status(legacy))
 
         mode = write_redirects(root, book, static_limit=redirect_static_limit)
+        affiliate = _affiliate_stats(products)
         total_bytes = sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
         file_count = sum(1 for p in root.rglob("*") if p.is_file())
         seconds = round(time.perf_counter() - started, 2)
@@ -413,6 +415,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
             "products": len(public_rows),
             "search_index_bytes": len(index_bytes),
             "redirect_mode": mode,
+            "affiliate": affiliate,
             "redirects_static": sum(1 for line in (root / "_redirects").read_text().splitlines() if line and not line.startswith("#") and "*" not in line.split()[0] and ":" not in line.split()[0]),
             "url_changes": [
                 "Stránkování kategorií: /kategorie/{slug}?strana={n} je /kategorie/{slug}/strana/{n} (stejně /nejlevnejsi a /ve-sleve). Staré ?strana= prohlížeč přesměruje.",
@@ -561,6 +564,60 @@ def _index_row(product) -> dict | None:
     return row
 
 
+def _read_only(db) -> None:
+    """Na Postgresu další příkazy v relaci jen čtou. SQLite (testy) to neumí."""
+    from sqlalchemy import text
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    db.execute(text("SET default_transaction_read_only = on"))
+    db.rollback()
+
+
+def _affiliate_stats(products) -> list[dict]:
+    """Kolik tlačítek Do obchodu má obal affiliate a kolik jde na holou URL z databáze.
+
+    Uložená URL je po importu očištěná (utm pryč, TradeDoubler a Allegro affiliate rozbalené).
+    Obalení se dělá až při renderu. Hodnoty tajemství sem nepatří, jen počty.
+    """
+    from .offer_trust import offer_is_promoted
+    tallies: dict[str, dict] = {}
+    for product in products:
+        if product.retired_at is not None or product.catalog_hidden or product.needs_review:
+            continue
+        for offer in product.offers:
+            if offer.price is None or offer.in_stock is False or getattr(offer, "withheld", False):
+                continue
+            if not offer_is_promoted(offer, product=product):
+                continue
+            shop = get_shop(offer.shop)
+            if shop is None:
+                continue
+            href = shop.affiliate_link(offer.url or "")
+            row = tallies.setdefault(shop.slug, {
+                "shop": shop.name,
+                "wrapper": _wrapper_kind(shop),
+                "buy_links": 0,
+                "wrapped": 0,
+                "plain": 0,
+            })
+            row["buy_links"] += 1
+            if href != (offer.url or ""):
+                row["wrapped"] += 1
+            else:
+                row["plain"] += 1
+    return [tallies[key] for key in sorted(tallies)]
+
+
+def _wrapper_kind(shop) -> str:
+    if shop.affiliate_env:
+        return shop.affiliate_env
+    if shop.ehub_bid:
+        return "EHUB_AID"
+    if shop.dognet_chid:
+        return "DOGNET_CHID"
+    return ""
+
+
 def main(argv=None) -> int:
     import argparse
     import os
@@ -569,9 +626,12 @@ def main(argv=None) -> int:
     parser.add_argument("--out", default="dist")
     parser.add_argument("--report", default="build-report.json")
     parser.add_argument("--redirect-limit", type=int, default=REDIRECT_STATIC_LIMIT)
+    parser.add_argument("--migrate", action="store_true",
+                        help="Pustí Alembic upgrade. Bez flagu build jen čte.")
     args = parser.parse_args(argv)
-    from .db import init_db
-    init_db()
+    if args.migrate:
+        from .db import init_db
+        init_db()
     report = build(args.out, redirect_static_limit=args.redirect_limit)
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(
@@ -582,6 +642,7 @@ def main(argv=None) -> int:
         f"Produktů v indexu: {report['products']}\n"
         f"Index: {report['search_index_bytes']} B\n"
         f"Přesměrování: {report['redirect_mode']}\n"
+        "Affiliate: " + json.dumps(report.get("affiliate") or [], ensure_ascii=False) + "\n"
         "URL, které se změnily:\n- " + "\n- ".join(report["url_changes"])
     )
     if report["pages"] < 1:
