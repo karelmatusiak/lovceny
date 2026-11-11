@@ -1,4 +1,4 @@
-/* Lovceny – service worker: Web Push upozornění „cena klesla“ + PWA (offline stránka, cache statických souborů).
+/* Lovceny – service worker: PWA (offline stránka, cache statických souborů). Upozornění na cenu neposílá.
    Verze: {{ version }} (mění se se změnou statických souborů → prohlížeč SW aktualizuje).
    Zásady: HTML stránky, hledání a /api/ NIKDY necachujeme (ceny musí být čerstvé) – jen při výpadku sítě
    ukážeme offline stránku. Verzované /static/ (?v=hash) a zmenšené obrázky /img/ jsou cache-first. */

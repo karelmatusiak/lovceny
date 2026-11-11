@@ -71,7 +71,14 @@ def request_for(path: str, query: str = "") -> Request:
 
 
 def output_path(root: Path, url_path: str) -> Path:
-    """Adresa bez tečky v posledním úseku → složka/index.html. Soubor (sitemap.xml) zůstane soubor."""
+    """Soubor, který Cloudflare Pages servíruje na tuhle adresu stavem 200.
+
+    `produkt/12-slug/index.html` Pages přesměruje z `/produkt/12-slug` na
+    `/produkt/12-slug/` (308). `produkt/12-slug.html` na adrese bez lomítka
+    vrací 200. Kanonické URL, sitemap a odkazy lomítko na konci nemají,
+    proto stránky píšeme jako `.html`. `/` zůstane `index.html`. Soubor s
+    tečkou v názvu (sitemap.xml) zůstane soubor.
+    """
     path = url_path.split("?", 1)[0]
     if not path.startswith("/"):
         path = "/" + path
@@ -83,7 +90,7 @@ def output_path(root: Path, url_path: str) -> Path:
     rel = path.lstrip("/")
     if "." in name:
         return root / rel
-    return root / rel / "index.html"
+    return root / f"{rel}.html"
 
 
 def rewrite_img_proxy(html: str) -> str:
@@ -216,12 +223,19 @@ def _write_product_function(root: Path, book: _Redirects) -> None:
         "}\n"
         "async function fetchAsset(context, pathname) {\n"
         "  const url = new URL(context.request.url);\n"
-        "  url.pathname = pathname;\n"
         "  url.search = \"\";\n"
-        "  let res = await context.env.ASSETS.fetch(new Request(url, context.request));\n"
-        "  if (res.status !== 404 || pathname.endsWith(\"/\")) return res;\n"
-        "  url.pathname = pathname + \"/\";\n"
-        "  return context.env.ASSETS.fetch(new Request(url, context.request));\n"
+        "  const candidates = [pathname];\n"
+        "  if (!pathname.endsWith(\"/\")) {\n"
+        "    candidates.push(pathname + \".html\");\n"
+        "    candidates.push(pathname + \"/\");\n"
+        "  }\n"
+        "  let last = null;\n"
+        "  for (const candidate of candidates) {\n"
+        "    url.pathname = candidate;\n"
+        "    last = await context.env.ASSETS.fetch(new Request(url, context.request));\n"
+        "    if (last.status !== 404) return last;\n"
+        "  }\n"
+        "  return last;\n"
         "}\n",
         encoding="utf-8",
     )
@@ -338,7 +352,11 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
 
         public_rows = []
         url_map: dict[str, str] = {}
+        from .exclusions import is_excluded_brand
         for item in products:
+            if is_excluded_brand(item.name or ""):
+                book.add_retired(item, _redirect_target(db, item))
+                continue
             if item.catalog_hidden:
                 continue
             if item.retired_at is not None:
@@ -353,7 +371,12 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                     continue
                 raise
             if _status(response) in (301, 302, 303, 307, 308):
-                book.add(path, _location(response), _status(response))
+                dest = _location(response)
+                code = _status(response)
+                book.add(path, dest, code)
+                bare = f"/produkt/{item.id}"
+                if path != bare:
+                    book.add(bare, dest, code)
                 continue
             write_html(path, response)
             book.add_live_id(item)

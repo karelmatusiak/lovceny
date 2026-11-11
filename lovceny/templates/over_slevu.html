@@ -1,12 +1,12 @@
 {% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img, img_missing %}
-{% block title %}{% if r %}Ověření slevy: {{ (r.name or (r.query|pretty_name) or 'produkt')[:70] }}{% else %}Ověř slevu z jakéhokoli e-shopu{% endif %} | Lovceny{% endblock %}
-{% block description %}Vlož odkaz na produkt z e-shopu: ukážeme aktuální cenu, historii, nejnižší cenu za posledních 30 dní (§ 12a zákona o ochraně spotřebitele) a nabídky v dalších obchodech.{% endblock %}
+{% block title %}{% if r %}Ověření slevy: {{ (r.name or (r.query|pretty_name) or 'produkt')[:70] }}{% else %}Ověř slevu z katalogu{% endif %} | Lovceny{% endblock %}
+{% block description %}Vlož odkaz na produkt z našeho katalogu. Ukážeme historii a nejnižší cenu za 30 dní. Odkazy mimo katalog nenačítáme.{% endblock %}
 {% block body %}
 <section class="ov"><div class="wrap">
   <div class="ov-hero">
     <div class="eyebrow">Ověř slevu</div>
     <h1 class="page-h1">{% if r %}Ověření slevy{% else %}Je ta sleva opravdu sleva?{% endif %}</h1>
-    {% if not r %}<p class="sub">Vlož odkaz na produkt z <b>jakéhokoli</b> e-shopu. Ukážeme aktuální cenu, historii, nejnižší cenu za posledních 30 dní a kde je produkt levněji.</p>{% endif %}
+    {% if not r %}<p class="sub">Vlož odkaz na produkt, který už máme v katalogu. Ukážeme historii a nejnižší cenu za 30 dní. Odkaz z e-shopu, který v katalogu není, nenačteme.</p>{% endif %}
     <form class="search ov-form" action="/over-slevu" method="get" role="search" autocomplete="off">
       <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
         <input id="ov-url" name="url" type="url" inputmode="url" required maxlength="2000" value="{{ url_in }}" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu"></label>
@@ -24,7 +24,7 @@
         <div><h2 class="p-name" id="ov-name">{{ r.name or (r.query|pretty_name) or 'Produkt' }}</h2>
           <div class="p-cat">{% if r.shop %}<span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}{% else %}{{ host }}{% endif %} · <a href="{{ r.url }}" target="_blank" rel="noopener nofollow">otevřít v obchodě ↗</a></div></div>
       </div>
-      {% if r.message %}<div class="notice {{ 'info' if r.status in ('feed','unknown_shop') else 'warn' }} ov-status">{{ r.message }}{% if r.status == 'unknown_shop' %} <a href="/o-nas?tema=obchod#kontakt">Navrhnout obchod ke sledování</a>{% endif %}</div>{% endif %}
+      {% if r.message %}<div class="notice {{ 'info' if r.status in ('feed','unknown_shop') else 'warn' }} ov-status">{{ r.message }}{% if r.status == 'unknown_shop' %} <a href="mailto:info@lovceny.cz">Napiš na info@lovceny.cz</a>{% endif %}</div>{% endif %}
       {% if r.price %}
       <div class="price-row"><span class="price">{{ r.price|czk }}</span>
         {% if r.original_price %}<span class="was">{{ r.original_price|czk }}</span><span class="claimed">−{{ ((1 - r.price/r.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}</div>
@@ -55,7 +55,7 @@
 
       {% if r.product and r.verdict %}<div class="ov-verdict">{{ badge(r.verdict, link=true) }}</div>{% endif %}
       <div class="ov-actions">
-        {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}#hlidani"><span aria-hidden="true">🔔</span> Detail a hlídání ceny</a>{% endif %}
+        {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Detail produktu</a>{% endif %}
         {% if r.can_track %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ r.url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>{% endif %}
         {{ share(share_url, share_text, 'Ověření slevy na Lovceny') }}
       </div>
@@ -77,8 +77,8 @@
   </script>{% endif %}
   {% else %}
   <div class="ov-how">
-    <div class="card ov-step"><span class="num">1</span><h2 class="h3">Vlož odkaz</h2><p>Z jakéhokoli e-shopu – Alza, Datart, Mironet, menší obchody…</p></div>
-    <div class="card ov-step"><span class="num">2</span><h2 class="h3">Ověříme cenu</h2><p>U obchodů, které čtení dovolují, načteme aktuální cenu ze stránky. Ostatní neobcházíme – najdeme produkt podle názvu jinde.</p></div>
+    <div class="card ov-step"><span class="num">1</span><h2 class="h3">Vlož odkaz</h2><p>Jen na produkt z našeho katalogu. Odkaz z e-shopu, který v katalogu není, nenačteme.</p></div>
+    <div class="card ov-step"><span class="num">2</span><h2 class="h3">Najdeme ho v katalogu</h2><p>Porovnáme odkaz s produkty, které už sledujeme. Aktuální cenu z libovolné stránky e-shopu nenačítáme.</p></div>
     <div class="card ov-step"><span class="num">3</span><h2 class="h3">Uvidíš fakta</h2><p>Nejnižší cenu za 30 dní (pokud produkt sledujeme), verdikt a nejlevnější nabídky v dalších obchodech.</p></div>
   </div>
   <p class="ov-muted ov-foot">Ověřený odkaz si můžeš poslat dál – výsledek má vlastní adresu.{% if EXTENSION_ON() %} Rychleji to jde s naším <a href="/rozsireni">rozšířením do prohlížeče</a>.{% endif %} Odkaz, který vložíš, neukládáme.</p>

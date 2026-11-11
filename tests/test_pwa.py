@@ -67,8 +67,9 @@ def test_push_ios_hint_and_pwa_js(client_db, monkeypatch):
     monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPUBLICKEYxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "privatekeyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     client, _, make = client_db
-    html = client.get(f"/produkt/{make([1000]).id}").text
-    assert "Na iPhonu fungují upozornění jen z plochy" in html and "data-pwa-open" in html
+    html = client.get("/").text
+    assert "tam fungují i upozornění" not in html
+    assert "data-pwa-open" in html
     js = (STATIC / "pwa.js").read_text()
     assert "beforeinstallprompt" in js and "navigator.serviceWorker.register('/sw.js'" in js
     assert "Přidat na plochu" in js and "standalone" in js

@@ -143,11 +143,13 @@ def _series_offers(product, offers):
 def public_products(db, *, limit_products: int | None = None) -> list:
     """Všechny veřejné produkty, od nejstaršího id. Okno „500 nejnovějších“ vynechalo
     produkty s týdnem cen, protože nově zveřejněné ho zaplnily."""
+    from .exclusions import is_excluded_brand
     rows = db.scalars(
         select(Product).where(
             Product.retired_at.is_(None), Product.catalog_hidden.is_(False), Product.needs_review.is_(False))
         .order_by(Product.id.asc())
     ).all()
+    rows = [p for p in rows if not is_excluded_brand(p.name or "")]
     if limit_products is not None:
         return list(rows[:limit_products])
     return list(rows)

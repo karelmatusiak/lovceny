@@ -256,11 +256,14 @@ def _product_line(canon: str) -> str | None:
     return None
 
 
-def offer_conflicts_product(product_name: str, offer_url: str, offer_title: str | None = None) -> bool:
+def offer_conflicts_product(product_name: str, offer_url: str, offer_title: str | None = None,
+                            category_slug: str | None = None) -> bool:
     """True = nabídka zjevně patří k jinému produktu (špatný desturl / přepsané URL).
 
     Nestačí neshoda názvu. Konflikt je jiná řada, jiná značka, jiný příkon/objem/
-    úložiště, jiná barva nebo jiná generace. Stejné EAN pak nabídku nepřipojí.
+    úložiště, jiná barva, jiná generace, jiný rozlišující token modelu
+    (Origin/Absolute/Detect/Cyclone, FE/Ultra/Plus/Pro/Max), jiný modelový kód,
+    nebo jiný druh (telefon na televizi). Stejné EAN pak nabídku nepřipojí.
     """
     other = offer_title or ""
     if not other:
@@ -275,6 +278,11 @@ def offer_conflicts_product(product_name: str, offer_url: str, offer_title: str 
         return False
     # Značka / příkon / objem / barva / generace přebíjí i shodu „bar1“ z „20 bar 1,4 l“.
     if _hard_conflict(product_name, other) or titles_conflict(product_name, other):
+        return True
+    from ..category_guard import category_against_offer, offer_type_conflict
+    if offer_type_conflict(product_name, other):
+        return True
+    if category_against_offer(category_slug, other):
         return True
     return False
 

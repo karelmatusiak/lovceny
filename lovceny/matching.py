@@ -246,6 +246,14 @@ def titles_conflict(a: str, b: str) -> bool:
     va, vb = _variants(ca), _variants(cb)
     if va != vb and (va or vb):
         return True
+    # Řada modelu (Origin ≠ Absolute ≠ Cyclone). Prázdná strana nevadí:
+    # zkrácený slug „v8“ bez řady není jiný výrobek. Obě strany jinou řadu mají.
+    marks_a, marks_b = _line_markers(ca), _line_markers(cb)
+    if marks_a and marks_b and marks_a != marks_b:
+        return True
+    dyson_a, dyson_b = _dyson_versions(ca), _dyson_versions(cb)
+    if dyson_a and dyson_b and dyson_a != dyson_b:
+        return True
     ga, gb = _generations(ca), _generations(cb)
     if ga and gb and ga != gb:
         return True
@@ -255,11 +263,59 @@ def titles_conflict(a: str, b: str) -> bool:
     return False
 
 
+# Odlišuje variantu stejné řady. Ne „originální“ (to je originalni) a ne barva.
+_LINE_MARKERS = frozenset({"origin", "absolute", "detect", "cyclone"})
+
+
+def _line_markers(canon: str) -> set[str]:
+    return {token for token in canon.split() if token in _LINE_MARKERS}
+
+
+def _dyson_versions(canon: str) -> set[str]:
+    """Číslo řady Dyson (V8 ≠ V15). Bez slova dyson se nepočítá."""
+    if "dyson" not in canon.split():
+        return set()
+    return set(re.findall(r"\bv(\d{1,2})\b", canon))
+
+
+def url_model_conflict(product_name: str, offer_text: str) -> bool:
+    """True = adresa nebo krátký název nabídky přidává jiný model.
+
+    Chybějící slovo ve zkráceném slugu (produkt má „Pro“, adresa ho neříká)
+    konflikt není. Adresa, která přidá FE/Origin/jiný kód, ano.
+    """
+    from .shops.feed import _variants, canonicalize_name
+    left = canonicalize_name(product_name or "")
+    right = canonicalize_name(offer_text or "")
+    if not left or not right:
+        return False
+    if _variants(right) - _variants(left):
+        return True
+    if _line_markers(right) - _line_markers(left):
+        return True
+    dyson_left, dyson_right = _dyson_versions(left), _dyson_versions(right)
+    if dyson_left and dyson_right and dyson_left != dyson_right:
+        return True
+    gens_left, gens_right = _generations(left), _generations(right)
+    if gens_left and gens_right and gens_left != gens_right:
+        return True
+    # Čisté číslo v adrese je id obchodu nebo čas, ne kód modelu (a55, s25, om55n ano).
+    codes_left = {token for token in _bare_model_tokens(left) if not token.isdigit()}
+    codes_right = {token for token in _bare_model_tokens(right) if not token.isdigit()}
+    if codes_left and codes_right and codes_left.isdisjoint(codes_right):
+        return True
+    return False
+
+
 def _bare_model_tokens(canon: str) -> set[str]:
-    """Modelové kódy bez kapacity (825gb), ať zkrácený slug neshodí plný název."""
+    """Modelové kódy bez kapacity (825gb), ať zkrácený slug neshodí plný název.
+
+    Dlouhé číslo z adresy obchodu (t-123456, 17300000005) modelový kód není.
+    """
     from .shops.feed import _model_tokens
     cap = re.compile(r"^\d+(?:gb|tb|w|mah)$")
-    return {t for t in _model_tokens(canon) if not cap.match(t)}
+    shop_id = re.compile(r"^(?:[a-z]\d{5,}|\d{6,})$")
+    return {t for t in _model_tokens(canon) if not cap.match(t) and not shop_id.match(t)}
 
 
 def _generations(canon: str) -> set[str]:

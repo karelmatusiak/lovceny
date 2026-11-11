@@ -64,7 +64,7 @@
   <div class="card chart-empty cat-empty">
     {% if filters_active %}<p><b>Žádný produkt neodpovídá filtrům.</b> Uprav značku nebo cenu, nebo <a href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">zruš filtry</a>.</p>
     {% elif view == 've-sleve' %}<p><b>Teď tu nic skutečně ve slevě není.</b> Žádný produkt z kategorie není u svého 90denního minima. To je taky užitečná informace: nespěchej.</p>
-    {% else %}<p><b>V této kategorii zatím nic nesledujeme.</b> Vyhledej konkrétní model a začneme ho hlídat.</p>{% endif %}
+    {% else %}<p><b>V této kategorii zatím nic nesledujeme.</b> Vyhledej konkrétní model v katalogu.</p>{% endif %}
     <p style="margin-top:14px"><a class="btn btn-ghost" href="/#hledat">Vyhledat produkt</a></p>
   </div>
   {% endif %}

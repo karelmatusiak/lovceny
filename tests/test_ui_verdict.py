@@ -41,7 +41,7 @@ def test_badges_rendered_with_text_on_cards_and_detail():
         assert 'class="verdict v-none' in html and "Sbíráme data" in html and "Verdikt: " in html
         assert "verdict-reason" in html
     detail = c.get(f"/produkt/{p.id}-{p.slug}").text
-    assert "verdict-lg" in detail and 'id="hlidani"' in detail and "🔔 Hlídat cenu" in detail
+    assert "verdict-lg" in detail and 'id="hlidani"' not in detail and "🔔 Hlídat cenu" not in detail
     db.close()
 
 

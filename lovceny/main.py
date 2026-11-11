@@ -20,7 +20,7 @@ from . import seo
 from .web import static_url, canonical, public_url, CacheHeadersMiddleware, add_compression, AnalyticsMiddleware
 from .shops import SHOPS, get_shop
 from .service import add_by_url, create_watch, search_db, offers_for_query, smart_offers
-from .verdict import compute
+from .verdict import Verdict, compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk, cz_count, cz_plural
@@ -216,6 +216,15 @@ def product_summary(p: Product):
     pts = [pt for o in visible for pt in o.points]
     v = compute(pts, float(ref.price) if ref else None,
                 float(ref.original_price) if ref and ref.original_price else None)
+    priced = [o for o in visible if o.price is not None]
+    if best is None and priced and all(o.in_stock is False for o in priced) and v.code == "buy":
+        # Cena u minima, ale koupit nejde. Verdikt Kupuj by lhal.
+        v = Verdict(
+            "oos", "Není skladem",
+            "Momentálně není skladem v žádném sledovaném obchodě.",
+            current=v.current, min90=v.min90, median90=v.median90, max90=v.max90,
+            reason="žádná nabídka není skladem",
+        )
     return best, v
 
 
@@ -269,6 +278,9 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     scored = []
     for p in products:
         if is_accessory_text(p.name or "", p.category):
+            continue
+        from .exclusions import is_excluded_brand
+        if is_excluded_brand(p.name or ""):
             continue
         best, v = product_summary(p)
         if best is None:
@@ -336,11 +348,7 @@ def home(request: Request, db=Depends(get_db)):
     from . import blackfriday as bfmod
     from .hero import hero_showcase
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
-    cat_counts = dict(db.execute(
-        select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
-               Product.needs_review.is_(False))
-        .group_by(Product.category_slug)).all())
+    cat_counts = listing_category_counts(db)
     return tpl.TemplateResponse(request, "index.html", {
         "cards": cards, "deals": deals, "bf": bf,
         "thin_history": price_history_thin(db),
@@ -412,7 +420,10 @@ def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
     products = search_db(db, q)
     assign_display_names(products)
     results = []
+    from .exclusions import is_excluded_brand
     for p in products:
+        if is_excluded_brand(p.name or ""):
+            continue
         best, v = product_summary(p)
         # Do výsledků i OOS (poslední cena) – bez CTA „Do obchodu“ v šabloně.
         display = best or last_known_offer(p.offers)
@@ -534,7 +545,14 @@ def preview(request: Request, url: str = "", db=Depends(get_db)):
 @app.api_route("/produkt/{pid:int}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str = "", db=Depends(get_db)):
     p = db.get(Product, pid)
-    if not p or p.catalog_hidden:
+    if not p:
+        raise HTTPException(404)
+    from .exclusions import is_excluded_brand
+    if is_excluded_brand(p.name or ""):
+        cat = BY_SLUG.get(p.category_slug or "")
+        target = f"/kategorie/{cat.slug}" if cat else "/"
+        return RedirectResponse(target, status_code=301)
+    if p.catalog_hidden:
         raise HTTPException(404)
     # Soft-retired: 301 na kategorii (nebo /), ať staré URL nepřijdou o SEO/uživatele.
     if p.retired_at is not None:
@@ -799,7 +817,7 @@ def manifest():
              {"src": static_url("brand/icon-maskable-192.png"), "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
              {"src": static_url("brand/icon-maskable-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]
     data = {"name": "Lovceny – poctivý hlídač cen elektroniky", "short_name": "Lovceny", "id": "/",
-            "description": "Historie cen elektroniky a spotřebičů z českých e-shopů, verdikt Kupuj / Počkej a hlídání ceny.",
+            "description": "Historie cen elektroniky a spotřebičů z českých e-shopů a verdikt Kupuj / Počkej.",
             "lang": "cs", "dir": "ltr", "start_url": "/?zdroj=pwa", "scope": "/", "display": "standalone",
             "orientation": "portrait-primary", "theme_color": "#0B6E4F", "background_color": "#FBF8F3",
             "categories": ["shopping", "utilities"], "icons": icons,
@@ -879,6 +897,9 @@ def _cat_rows(db, c):
                 continue
             if p.catalog_hidden or p.needs_review:
                 continue
+            from .exclusions import is_excluded_brand
+            if is_excluded_brand(p.name or ""):
+                continue
             if is_accessory_text(p.name or "", p.category):
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
@@ -898,9 +919,12 @@ def _cat_rows(db, c):
                           .options(selectinload(Product.offers).selectinload(Offer.points))).all()
     rows = []
     payload = []
+    from .exclusions import is_excluded_brand
     for p in products:
         # Výpis je to, co ukazuje stránka produktu (category_slug). classify() z názvu
         # sem nepatří: 6,67" u telefonu a „for Xbox“ u sluchátek by je z kategorie vyřadily.
+        if is_excluded_brand(p.name or ""):
+            continue
         if is_accessory_text(p.name or "", p.category):
             continue
         buyable, v = product_summary(p)
@@ -926,6 +950,11 @@ def _cat_rows(db, c):
     catcache.set(c.slug, payload)
     assign_display_names([p for p, _, _ in rows])
     return rows
+
+
+def listing_category_counts(db) -> dict[str, int]:
+    """Počty na homepage a /kategorie. Stejný filtr jako výpis kategorie."""
+    return {c.slug: len(_cat_rows(db, c)) for c in CATEGORIES}
 
 
 def _ve_sleve_rows(rows):
@@ -999,11 +1028,7 @@ CAT_VIEWS = {
 
 @app.get("/kategorie", response_class=HTMLResponse)
 def categories_index(request: Request, db=Depends(get_db)):
-    counts = dict(db.execute(
-        select(Product.category_slug, func.count(Product.id))
-        .where(Product.retired_at.is_(None), Product.catalog_hidden.is_(False),
-               Product.needs_review.is_(False))
-        .group_by(Product.category_slug)).all())
+    counts = listing_category_counts(db)
     crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
     return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
                                                              "ld": [seo.breadcrumb_ld(crumbs)]})
@@ -1412,13 +1437,13 @@ FAQ = [
     ("Jak často se ceny aktualizují?",
      "Třikrát denně. Stav jednotlivých obchodů a čerstvost jejich cen je veřejně na stránce Stav obchodů."),
     ("Je Lovceny zdarma?",
-     "Ano, pro tebe zdarma a bez registrace. Hlídání ceny e-mailem nebo upozorněním v prohlížeči je také zdarma."),
+     "Ano, pro tebe zdarma a bez registrace."),
     ("Jak budete vydělávat?",
      "Zatím nijak – affiliate odkazy ještě nejsou zapnuté. Až je spustíme, když po kliknutí do obchodu nakoupíš, obchod nám může zaplatit malou provizi. Cena pro tebe je stejná a na pořadí ani verdikt to nemá žádný vliv. Affiliate odkazy vždy označíme."),
     ("Sledujete mě? Potřebujete cookie lištu?",
      "Nesledujeme. Nepoužíváme cookies ani analytiku třetích stran, jen vlastní anonymní statistiku návštěvnosti bez osobních údajů. Proto žádnou cookie lištu nepotřebujeme."),
     ("Můžu si Lovceny dát na plochu telefonu?",
-     "Ano. V Chrome/Edge na Androidu zvol „Přidat na plochu“ / „Nainstalovat aplikaci“. Na iPhonu v Safari klepni na Sdílet a pak „Přidat na plochu“ – teprve takto přidaný web může na iPhonu posílat upozornění na pokles ceny."),
+     "Ano. V Chrome/Edge na Androidu zvol „Přidat na plochu“ / „Nainstalovat aplikaci“. Na iPhonu v Safari klepni na Sdílet a pak „Přidat na plochu“."),
 ]
 CONTACT_TOPICS = {"chyba": "Nahlásit chybu v ceně", "obchod": "Návrh obchodu ke sledování", "spoluprace": "Spolupráce / obchod",
                   "soukromi": "Osobní údaje (GDPR)", "obchod-oprava": "Oprava/vyřazení obchodu",

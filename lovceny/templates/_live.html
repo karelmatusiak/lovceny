@@ -25,7 +25,7 @@
 </div>
 {% else %}
 <h2>{{ q|capitalize }} zatím nikde nenacházíme…</h2>
-<p class="sub">V obchodech, které nám hledání dovolují, jsme nic nenašli. Zkus jiný název (třeba bez barvy či kapacity), nebo vlož přímo odkaz na produkt z e-shopu a začneme ho hlídat.</p>
+<p class="sub">V obchodech, které nám hledání dovolují, jsme nic nenašli. Zkus jiný název (třeba bez barvy či kapacity). Ověřit jde jen odkaz na produkt, který už je v katalogu.</p>
 {% endif %}
 {{ affiliate_note() }}
 <p class="live-note">{% if searched %}Prohledáno živě: {{ searched|join(', ') }}. {% endif %}Alzu a Datart hledáme v jejich oficiálním feedu. Ostatní obchody vyhledávání robotům nedovolují nebo je blokují – ochrany neobcházíme.</p>

@@ -136,10 +136,13 @@ def offer_mismatches_product(offer, product=None) -> bool:
     url = getattr(offer, "url", None) or ""
     if not name.strip() or not url.strip():
         return False
-    from .category_guard import offer_type_conflict
-    from .matching import clear_model_conflict, label_from_url
+    from .category_guard import category_against_offer, offer_type_conflict
+    from .matching import clear_model_conflict, label_from_url, url_model_conflict
     label = label_from_url(url)
-    if offer_type_conflict(name, label):
+    category = getattr(product, "category_slug", None)
+    if url_model_conflict(name, label) or offer_type_conflict(name, label):
+        return True
+    if category_against_offer(category, label):
         return True
     return clear_model_conflict(name, label)
 
