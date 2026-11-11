@@ -98,6 +98,8 @@ def dname(p):
 
 
 tpl.env.globals["dname"] = dname
+# Statický generátor ho na čas zapne. Živý web ho nechává vypnutý.
+tpl.env.globals["STATIC_SITE"] = False
 
 
 def affiliate_on() -> bool:

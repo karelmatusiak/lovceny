@@ -1,7 +1,25 @@
 {% extends "base.html" %}{% from "_macros.html" import pcard, rank_link %}
-{% block title %}Hledání: {{ q }} | Lovceny{% endblock %}
-{% block description %}Ceny a historie pro „{{ q }}“ v českých e-shopech. Poctivé srovnání bez placených pozic – Kupuj, nebo počkat.{% endblock %}
-{% block body %}<section style="padding-top:24px"><div class="wrap">
+{% block title %}{% if STATIC_SITE %}Hledat v katalogu | Lovceny{% else %}Hledání: {{ q }} | Lovceny{% endif %}{% endblock %}
+{% block description %}{% if STATIC_SITE %}Hledání v katalogu Lovceny. Ceny, historie a verdikt bez placených pozic.{% else %}Ceny a historie pro „{{ q }}“ v českých e-shopech. Poctivé srovnání bez placených pozic – Kupuj, nebo počkat.{% endif %}{% endblock %}
+{% block body %}{% if STATIC_SITE %}<section style="padding-top:24px" id="katalog-hledani"><div class="wrap">
+  <h1 class="page-h1 search-h1">Hledat v katalogu</h1>
+  <form class="search search-toolbar" id="katalog-form" action="/hledat" method="get" style="margin:0 0 16px">
+    <label><input name="q" value="{{ q }}" aria-label="Hledat" placeholder="Např. Samsung Galaxy, pračka, EAN"></label>
+    <button class="btn btn-primary">Prověřit cenu</button>
+  </form>
+  <form class="filters search-filters" id="katalog-filtry" action="/hledat" method="get" aria-label="Filtrovat výsledky">
+    <label class="filt-label">Řazení
+      <select name="razeni">
+        <option value="cena">Nejlevnější napřed</option>
+        <option value="cena-desc">Nejdražší napřed</option>
+      </select>
+    </label>
+    <label class="filt-check"><input type="checkbox" name="skladem" value="1"> Jen skladem</label>
+  </form>
+  <p class="sub" id="katalog-stav" style="margin:0 0 24px">Prohledáváme jen produkty, které už sledujeme. Nový odkaz z e-shopu teď z webu přidat nejde.</p>
+  <div class="grid" id="katalog-vysledky"></div>
+  <noscript><p>Hledání v katalogu potřebuje JavaScript. Kategorie a stránky produktů fungují i bez něj.</p></noscript>
+</div></section>{% else %}<section style="padding-top:24px"><div class="wrap">
   <h1 class="page-h1 search-h1">Výsledky pro „{{ q }}“</h1>
   <form class="search search-toolbar" action="/hledat" method="get" style="margin:0 0 16px">
     <label><input name="q" value="{{ q }}" aria-label="Hledat" placeholder="Např. levná televize do 8 tisíc"></label>
@@ -38,4 +56,4 @@
     .then(function(h){el.innerHTML=h;if(window.lovcenyCmp)window.lovcenyCmp.render()}).catch(function(){el.innerHTML='<div class="notice warn">Obchody se nepodařilo prohledat. Zkus to prosím za chvíli znovu.</div>'});})();
   </script>{% endif %}
   {% elif not results and not error %}<h2>Nic jsme nenašli</h2><p class="sub">Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
-</div></section>{% endblock %}
+</div></section>{% endif %}{% endblock %}

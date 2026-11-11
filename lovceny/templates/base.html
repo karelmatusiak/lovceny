@@ -84,6 +84,7 @@
   <button type="button" id="cmp-clear" class="cmp-clear">Zrušit výběr</button>
 </div>
 <script src="{{ static('compare.js') }}" defer></script><script src="{{ static('pwa.js') }}" defer></script>
+{% if STATIC_SITE %}<script src="{{ static('katalog.js') }}" defer></script>{% endif %}
 <script>
 (function(){
   var b=document.getElementById("nav-toggle"),p=document.getElementById("nav-panel");

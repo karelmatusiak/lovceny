@@ -39,7 +39,7 @@
     <h3><span aria-hidden="true">{{ cat.icon }}</span> {{ cat.name }}</h3>
     {% if items %}
     <ul class="bf-real-list">{% for r in items %}{% set sh = get_shop(r.offer.shop) %}
-      <li class="card bf-real-card">
+      <li class="card bf-real-card"{% if STATIC_SITE %} data-cat="{{ r.product.category_slug or '' }}" data-shop="{{ r.offer.shop }}"{% endif %}>
         <a class="bf-real-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
           <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 52) }}{% else %}{{ img_missing() }}{% endif %}</span>
           <span class="bf-info">
@@ -65,7 +65,7 @@
   <p class="sub">Dnešní cena je nejnižší, jakou jsme u produktu za celou dobu sledování naměřili (aspoň 30 dní dat), a zároveň u 90denního minima. Nic lepšího v našich datech není.</p>
   {% if lowest %}
   <div class="bf-low">{% for r in lowest %}
-    <a class="card bf-low-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+    <a class="card bf-low-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}"{% if STATIC_SITE %} data-cat="{{ r.product.category_slug or '' }}" data-shop="{{ r.best.shop }}"{% endif %}>
       <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span>
       <span class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</span>
       <span class="bf-low-price"><b>{{ r.best.price|czk }}</b>{% if r.real_pct >= 1 %}<span class="save-pct">−{{ '%.0f'|format(r.real_pct) }}&nbsp;%</span>{% endif %}</span>
@@ -79,7 +79,7 @@
 
 <section class="bf-list-sec" aria-labelledby="bf-list-h"><div class="wrap">
   <h2 id="bf-list-h">Všechny aktuální slevy s verdiktem</h2>
-  <form class="bf-filter" method="get" action="/black-friday#bf-list-h">
+  <form class="bf-filter" method="get" action="/black-friday#bf-list-h"{% if STATIC_SITE %} data-bf-filter{% endif %}>
     <div class="field"><label for="bf-cat">Kategorie</label><select id="bf-cat" name="kategorie"><option value="">Všechny kategorie</option>{% for c in cats %}{% set cc = CATEGORIES|selectattr('slug', 'equalto', c)|first %}<option value="{{ c }}"{% if c == kategorie %} selected{% endif %}>{{ cc.name }}</option>{% endfor %}</select></div>
     <div class="field"><label for="bf-shop">Obchod</label><select id="bf-shop" name="obchod"><option value="">Všechny obchody</option>{% for x in shops %}<option value="{{ x }}"{% if x == obchod %} selected{% endif %}>{{ SHOPS[x].name if x in SHOPS else x }}</option>{% endfor %}</select></div>
     <button class="btn btn-ghost" type="submit">Filtrovat</button>
@@ -88,7 +88,7 @@
   {% if rows %}
   <p class="cat-count">{{ rows|length }} {% if rows|length == 1 %}sleva{% elif rows|length < 5 %}slevy{% else %}slev{% endif %} · nahoře nejnižší naměřené ceny, pak Kupuj, Počkej, „Za 30 dní bylo levněji“ a nakonec produkty, u kterých máme zatím málo dat</p>
   <ul class="bf-list">{% for r in rows %}{% set sh = get_shop(r.best.shop) %}
-    <li class="card bf-row bf-{{ r.kind }}">
+    <li class="card bf-row bf-{{ r.kind }}"{% if STATIC_SITE %} data-cat="{{ r.product.category_slug or '' }}" data-shop="{{ r.best.shop }}"{% endif %}>
       <a class="bf-main" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
         <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span>
         <span class="bf-info"><span class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</span>

@@ -102,6 +102,9 @@
     <p class="muted">Našel jsi chybu v ceně, chybí ti obchod, nebo máš nápad? Zpráva dorazí přímo autorovi. E-mail vyplň jen, pokud chceš odpověď. Můžeš také napsat na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
     {% if sent %}<div class="notice ok-notice" role="status">Díky, zprávu jsme dostali. Pokud jsi nechal(a) e-mail, ozveme se.</div>{% endif %}
     {% if err %}<div class="notice warn" role="alert">{{ err }}</div>{% endif %}
+    {% if STATIC_SITE %}
+    <p>Formulář na statickém webu zprávu neuloží. Napiš přímo na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
+    {% else %}
     <form method="post" action="/kontakt" class="contact-form">
       <div class="row2">
         <div class="field"><label for="c-name">Jméno <span class="muted">(nepovinné)</span></label><input id="c-name" name="name" maxlength="100" autocomplete="name"></div>
@@ -113,6 +116,7 @@
       <button class="btn btn-primary btn-sm" type="submit">Odeslat zprávu</button>
       <p class="small muted">Zprávu uložíme jen kvůli odpovědi a smažeme nejpozději po 12 měsících. Viz <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>
     </form>
+    {% endif %}
   </div>
 </div></section>
 {% endblock %}

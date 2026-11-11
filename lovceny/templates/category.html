@@ -1,7 +1,9 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, pcard, rank_link %}
 {% block title %}{{ page_title }} | Lovceny{% endblock %}
 {% block description %}{{ page_desc }}{% endblock %}
-{% block head %}{% if page_prev %}<link rel="prev" href="{{ canonical(page_prev) }}">{% endif %}{% if page_next %}<link rel="next" href="{{ canonical(page_next) }}">{% endif %}{% endblock %}
+{% block head %}{% if page_prev %}<link rel="prev" href="{{ canonical(page_prev) }}">{% endif %}{% if page_next %}<link rel="next" href="{{ canonical(page_next) }}">{% endif %}
+{% if STATIC_SITE %}<script>(function(){var q=new URLSearchParams(location.search),s=q.get("strana");if(s&&s!=="1"&&/^[1-9]\d*$/.test(s)){q.delete("strana");var rest=q.toString(),p=location.pathname.replace(/\/$/,"")+"/strana/"+s;location.replace(p+(rest?"?"+rest:"")+location.hash);}})();</script>{% endif %}
+{% endblock %}
 {% block body %}
 <section class="cat-hero"><div class="wrap">
   <div class="eyebrow"><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }}</div>
@@ -22,10 +24,10 @@
   <div class="cat-filters-wrap">
   <input class="filters-check" type="checkbox" id="filtry"{% if filters_active %} checked{% endif %}>
   <label class="filters-summary" for="filtry">Filtry{% if filters_active %} <span class="filters-badge">aktivní</span>{% endif %}</label>
-  <form class="filters cat-filters" method="get" action="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}" aria-label="Filtrovat produkty">
+  <form class="filters cat-filters" method="get" action="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}" aria-label="Filtrovat produkty"{% if STATIC_SITE %} data-katalog="{{ c.slug }}" data-view="{{ view }}"{% endif %}>
     {% if brands %}
     <label class="filt-label">Značka
-      <select name="znacka" onchange="this.form.submit()">
+      <select name="znacka"{% if not STATIC_SITE %} onchange="this.form.submit()"{% endif %}>
         <option value="">Všechny značky</option>
         {% for b in brands %}
         <option value="{{ b }}"{% if filter_brand == b %} selected{% endif %}>{{ b }}</option>
@@ -39,7 +41,7 @@
     <label class="filt-label">Cena do
       <input type="number" name="do" inputmode="decimal" min="0" step="1" placeholder="Kč" value="{{ filter_do or '' }}" aria-label="Cena do">
     </label>
-    <label class="filt-check"><input type="checkbox" name="skladem" value="1"{% if filter_skladem %} checked{% endif %} onchange="this.form.submit()"> Jen skladem</label>
+    <label class="filt-check"><input type="checkbox" name="skladem" value="1"{% if filter_skladem %} checked{% endif %}{% if not STATIC_SITE %} onchange="this.form.submit()"{% endif %}> Jen skladem</label>
     <button class="btn btn-ghost btn-sm" type="submit">Filtrovat</button>
     {% if filters_active %}
     <a class="btn-link" href="/kategorie/{{ c.slug }}{% if view %}/{{ view }}{% endif %}">Zrušit filtry</a>
