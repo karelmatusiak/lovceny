@@ -108,7 +108,7 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
-          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.cz' }}
         run: python fetch_prices.py --health-out health.json
       - name: Hlídání obchodů (GitHub issue při blokaci / starých cenách)
         if: always()

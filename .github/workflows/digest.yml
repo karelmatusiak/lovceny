@@ -32,5 +32,5 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: Lovceny
-          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.onrender.com' }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.cz' }}
         run: python weekly_digest.py ${{ inputs.force && '--force' || '' }}
