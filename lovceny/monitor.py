@@ -51,10 +51,17 @@ class FetchStats:
         if error and kind != "ok":
             a.last_error = str(error)[:300]
 
-    def save(self, db) -> list[ShopRunStat]:
+    def save(self, db, only: list[str] | None = None) -> list[ShopRunStat]:
+        """Zapíše statistiku. `only` uloží jen uvedené obchody, ať se průběžný zápis nezdvojí."""
         now = datetime.now(timezone.utc)
         rows = []
-        for shop, a in sorted(self.shops.items()):
+        shops = list(self.shops.items() if only is None else ((shop, self.shops[shop]) for shop in only if shop in self.shops))
+        names = [shop for shop, _acc in shops]
+        if names:
+            db.query(ShopRunStat).filter(
+                ShopRunStat.run_id == self.run_id, ShopRunStat.shop.in_(names),
+            ).delete(synchronize_session="fetch")
+        for shop, a in sorted(shops):
             c = a.counts
             r = ShopRunStat(run_id=self.run_id, run_at=now, shop=shop, ok=c["ok"], blocked=c["blocked"],
                             captcha=c["captcha"], robots=c["robots"], errors=c["errors"], skipped=c["skipped"],
@@ -63,8 +70,10 @@ class FetchStats:
                             last_error=a.last_error)
             db.add(r)
             rows.append(r)
-        db.execute(delete(ShopRunStat).where(ShopRunStat.run_at < now - timedelta(days=RETENTION_DAYS))
-                   .execution_options(synchronize_session=False))
+        db.flush()
+        with db.no_autoflush:
+            db.execute(delete(ShopRunStat).where(ShopRunStat.run_at < now - timedelta(days=RETENTION_DAYS))
+                       .execution_options(synchronize_session=False))
         db.commit()
         return rows
 

@@ -11,6 +11,7 @@ přeskočíme. Captcha se neobchází.
 """
 import argparse
 import logging
+import signal
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -64,6 +65,28 @@ def main(argv=None):
     report = Counter()
     from lovceny import monitor
     stats = monitor.FetchStats()
+    recorded: list = []
+
+    def checkpoint() -> None:
+        """Přepíše statistiku tohoto běhu. Timeout (SIGTERM) nepřijde o už hotové obchody."""
+        try:
+            recorded[:] = stats.save(db) if stats.shops else []
+            if a.health_out:
+                import json
+                health = monitor.evaluate(db, recorded)
+                with open(a.health_out, "w", encoding="utf-8") as fh:
+                    json.dump(health, fh, ensure_ascii=False, indent=1)
+        except Exception as exc:  # noqa: BLE001 – zápis zdraví nesmí shodit zbytek
+            db.rollback()
+            log.error("Průběžný zápis zdraví selhal: %s", exc)
+
+    def stop_early(signum, _frame) -> None:
+        log.warning("Běh přerušen signálem %s, zapisuji dosavadní zdraví obchodů", signum)
+        checkpoint()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop_early)
+    signal.signal(signal.SIGINT, stop_early)
 
     # 1) feedy (oficiální zdroj – Alza, Datart…)
     feeds = dict(f.split("=", 1) for f in a.feed)
@@ -83,11 +106,13 @@ def main(argv=None):
             log.info("feed %s: %s", slug, st)
             report[f"{slug}:feed_ok"] += st["matched"]
             stats.add(slug, "ok", 200)
+            checkpoint()
         except Exception as e:
             db.rollback()
             log.error("feed %s selhal: %s", slug, e)
             report[f"{slug}:feed_error"] += 1
             stats.add(slug, "errors", getattr(getattr(e, "response", None), "status_code", None), str(e))
+            checkpoint()
     for s in SHOPS.values():
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
             log.info("%s: feed URL není nastaven (%s) – nabídky zůstávají 'cena bude doplněna'", s.name, s.feed_url_env)
@@ -135,16 +160,12 @@ def main(argv=None):
                 elif st == "ok":
                     mironet_streak = 0
 
-    # 2b) monitoring blokací: statistiky běhu do DB + vyhodnocení (→ GitHub issue ve workflow)
+    # 2b) monitoring blokací. Feedy už jsou zapsané průběžně; tady doplníme scrapery.
     try:
-        rows = stats.save(db)
-        health = monitor.evaluate(db, rows)
+        checkpoint()
+        health = monitor.evaluate(db, recorded)
         bad = {k: [r["code"] for r in v["reasons"]] for k, v in health["shops"].items() if not v["ok"]}
         log.info("Zdraví obchodů: %s", bad or "vše v pořádku")
-        if a.health_out:
-            import json
-            with open(a.health_out, "w", encoding="utf-8") as f:
-                json.dump(health, f, ensure_ascii=False, indent=1)
     except Exception as e:  # noqa: BLE001 – monitoring nesmí shodit stahování
         db.rollback()
         log.error("Monitoring obchodů selhal: %s", e)
