@@ -267,8 +267,8 @@ def test_listing_keeps_products_classify_mislabels():
     rows = [
         ("Motorola EDGE 70 12+512 GB Pantone Gadget Grey / 6.67\" / 512GB / Android 16",
          "telefony", "Mobilní telefony", "edge-70"),
-        ("Gigabyte GAMING/A16 PRO DYHG5CZCC4SH/7-240H/16''/2560x1600/32GB/1TB",
-         "notebooky", "Notebooky", "a16-pro"),
+        ("MSI Katana 16'' 16GB 1TB",
+         "notebooky", "Notebooky", "katana-16"),
         ("JBL Quantum 910X Wireless for Xbox barva Black",
          "sluchatka", "Sluchátka", "quantum-910x"),
     ]
@@ -296,7 +296,7 @@ def test_listing_keeps_products_classify_mislabels():
     db.commit()
     phones = client.get("/kategorie/telefony").text
     assert "EDGE 70" in phones and "DualSense" not in phones and "vyřazený" not in phones
-    assert "A16 PRO" in client.get("/kategorie/notebooky").text
+    assert "Katana" in client.get("/kategorie/notebooky").text
     assert "Quantum 910X" in client.get("/kategorie/sluchatka").text
     page = client.get("/produkt/" + str(db.query(Product).filter(Product.slug == "edge-70").one().id)).text
     assert "Mobilní telefony" in page and "Koupit za" in page

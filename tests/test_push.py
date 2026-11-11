@@ -30,7 +30,7 @@ def test_optin_ui_and_subscribe_dedup_unsubscribe(client_db, vapid):
     client, db, make = client_db
     p = make([1000, 990])
     html = client.get(f"/produkt/{p.id}").text
-    assert "Zapnout upozornění v prohlížeči" in html and 'data-vapid="BPUBLIC' in html and "push.js" in html
+    assert "Zapnout upozornění v prohlížeči" not in html and "push.js" not in html
     assert "privatekey" not in html
     r = client.post("/api/push/odebirat", json={"product_id": p.id, "target_price": 900, "subscription": SUB})
     assert r.status_code == 200 and r.json()["ok"]

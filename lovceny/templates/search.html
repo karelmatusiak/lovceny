@@ -55,5 +55,5 @@
     fetch('/hledat/zive?q='+encodeURIComponent(el.dataset.q)).then(function(r){return r.text()})
     .then(function(h){el.innerHTML=h;if(window.lovcenyCmp)window.lovcenyCmp.render()}).catch(function(){el.innerHTML='<div class="notice warn">Obchody se nepodařilo prohledat. Zkus to prosím za chvíli znovu.</div>'});})();
   </script>{% endif %}
-  {% elif not results and not error %}<h2>Nic jsme nenašli</h2><p class="sub">Vlož odkaz z e-shopu a začneme hlídat.</p>{% endif %}
+  {% elif not results and not error %}<h2>Nic jsme nenašli</h2><p class="sub">V katalogu tenhle název není. Ověřit jde jen odkaz na produkt, který už sledujeme.</p>{% endif %}
 </div></section>{% endif %}{% endblock %}

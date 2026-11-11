@@ -221,6 +221,19 @@ def add_by_url(db: Session, url: str, fetch_now: bool = True, *,
     return prod, msg
 
 
+def _skip_excluded_brand(offer, item) -> bool:
+    """Gigabyte a Karl Lagerfeld se nepřipojují a už připojený řádek se schová."""
+    from .exclusions import bury_excluded, is_excluded_brand
+    names = [getattr(item, "name", None) or ""]
+    if offer is not None and getattr(offer, "product", None) is not None:
+        names.append(offer.product.name or "")
+    if not any(is_excluded_brand(name) for name in names):
+        return False
+    if offer is not None:
+        bury_excluded(offer.product)
+    return True
+
+
 def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missing: bool = False,
                max_create: int | None = None) -> dict:
     """Spáruje položky feedu s nabídkami a zapíše ceny.
@@ -391,7 +404,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if prod is None:
             return False
         from .matching import clear_model_conflict, label_from_url
-        if it.name and offer_conflicts_product(prod.name or "", clean, it.name):
+        if offer_conflicts_product(
+            prod.name or "", clean, it.name or None, category_slug=prod.category_slug,
+        ):
             return True
         return clear_model_conflict(prod.name or "", it.name or label_from_url(clean))
 
@@ -460,6 +475,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         gtin = normalize_gtin(it.ean)
         o = by_url.get(clean) or by_id.get(it.item_id)
         fresh = False
+        if _skip_excluded_brand(o, it):
+            stats["skipped"] += 1
+            continue
         if o is not None and conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)
             continue

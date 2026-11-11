@@ -59,12 +59,12 @@
 <section id="jak-to-funguje" class="about-how"><div class="wrap">
   <div class="card about-wide">
     <div class="eyebrow">Jak to funguje</div>
-    <h2>Od odkazu k hlídání ceny</h2>
+    <h2>Od odkazu k porovnání ceny</h2>
     <picture class="section-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" loading="lazy" decoding="async"></picture>
     <ol class="about-how-steps">
       <li><b>Vlož</b> odkaz z e-shopu nebo název produktu.</li>
       <li><b>Porovnej</b> ceny v obchodech, historii a verdikt Kupuj / Počkej.</li>
-      <li><b>Hlídej</b> cílovou cenu – dáme vědět e-mailem nebo v prohlížeči.</li>
+      <li><b>Otevři</b> nejlevnější nabídku v obchodě.</li>
     </ol>
   </div>
 </div></section>
@@ -99,24 +99,7 @@
   </div>
   <div class="card contact">
     <h2>Napiš nám</h2>
-    <p class="muted">Našel jsi chybu v ceně, chybí ti obchod, nebo máš nápad? Zpráva dorazí přímo autorovi. E-mail vyplň jen, pokud chceš odpověď. Můžeš také napsat na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
-    {% if sent %}<div class="notice ok-notice" role="status">Díky, zprávu jsme dostali. Pokud jsi nechal(a) e-mail, ozveme se.</div>{% endif %}
-    {% if err %}<div class="notice warn" role="alert">{{ err }}</div>{% endif %}
-    {% if STATIC_SITE %}
-    <p>Formulář na statickém webu zprávu neuloží. Napiš přímo na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
-    {% else %}
-    <form method="post" action="/kontakt" class="contact-form">
-      <div class="row2">
-        <div class="field"><label for="c-name">Jméno <span class="muted">(nepovinné)</span></label><input id="c-name" name="name" maxlength="100" autocomplete="name"></div>
-        <div class="field"><label for="c-mail">E-mail pro odpověď <span class="muted">(nepovinné)</span></label><input id="c-mail" name="reply_to" type="email" maxlength="320" autocomplete="email" placeholder="ty@example.cz"></div>
-      </div>
-      <div class="field"><label for="c-topic">Téma</label><select id="c-topic" name="topic">{% for k, v in topics.items() %}<option value="{{ k }}"{% if k == topic %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
-      <div class="field"><label for="c-msg">Zpráva</label><textarea id="c-msg" name="message" rows="5" minlength="10" maxlength="3000" required></textarea></div>
-      <div class="hp" aria-hidden="true"><label for="c-web">Web (nevyplňuj)</label><input id="c-web" name="website" tabindex="-1" autocomplete="off"></div>
-      <button class="btn btn-primary btn-sm" type="submit">Odeslat zprávu</button>
-      <p class="small muted">Zprávu uložíme jen kvůli odpovědi a smažeme nejpozději po 12 měsících. Viz <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>
-    </form>
-    {% endif %}
+    <p>Našel jsi chybu v ceně, chybí ti obchod, nebo máš nápad? Napiš na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>. Zpráva jde e-mailem, formulář na webu není.</p>
   </div>
 </div></section>
 {% endblock %}

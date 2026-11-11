@@ -2,6 +2,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi.testclient import TestClient
 
@@ -9,7 +10,8 @@ from lovceny.categories import is_accessory_text
 from lovceny.main import app, tpl
 from lovceny.models import Offer, PricePoint, Product
 from lovceny.seo import robots_txt, sitemap_xml
-from lovceny.staticsite import _Redirects, build, norm_offer_url, rewrite_img_proxy, rewrite_pagination, write_redirects
+from lovceny.staticsite import _Redirects, build, norm_offer_url, output_path, rewrite_img_proxy, rewrite_pagination, write_redirects
+from lovceny.web import public_url
 from lovceny.util import slugify
 
 
@@ -29,6 +31,17 @@ def test_preview_build_does_not_migrate(monkeypatch, tmp_path):
     assert calls == []
     assert main(["--migrate", "--out", str(tmp_path / "dist2"), "--report", str(tmp_path / "report2.json")]) == 0
     assert calls == ["migrate"]
+
+
+def test_output_path_is_html_so_pages_returns_200():
+    """Pages servíruje soubor.html na adrese bez lomítka. Složka/index.html by 308 na lomítko."""
+    root = Path("/tmp/lovceny-paths")
+    assert output_path(root, "/") == root / "index.html"
+    assert output_path(root, "/sitemap.xml") == root / "sitemap.xml"
+    assert output_path(root, "/produkt/12-slug") == root / "produkt" / "12-slug.html"
+    assert output_path(root, "/kategorie/telefony") == root / "kategorie" / "telefony.html"
+    assert output_path(root, "/kategorie/telefony/strana/2") == root / "kategorie" / "telefony" / "strana" / "2.html"
+    assert output_path(root, "/kategorie/telefony/").name == "telefony.html"
 
 
 def test_rewrites_keep_pagination_and_original_photos():
@@ -163,7 +176,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert report["url_changes"]
     assert any("Hlídání ceny" in line for line in report["not_published"])
 
-    good_path = out / "produkt" / f"{good.id}-{good.slug}" / "index.html"
+    good_path = out / "produkt" / f"{good.id}-{good.slug}.html"
     good_html = good_path.read_text()
     assert "btn-buy" in good_html
     assert "nofollow sponsored" in good_html
@@ -173,30 +186,32 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "/img/" not in good_html.replace("/static/img/", "")
     assert 'action="/produkt/' not in good_html
 
-    thin_html = (out / "produkt" / f"{thin.id}-{thin.slug}" / "index.html").read_text()
+    thin_html = (out / "produkt" / f"{thin.id}-{thin.slug}.html").read_text()
     assert "v-none" in thin_html and "v-buy" not in thin_html
-    oos_html = (out / "produkt" / f"{oos.id}-{oos.slug}" / "index.html").read_text()
+    oos_html = (out / "produkt" / f"{oos.id}-{oos.slug}.html").read_text()
     assert "btn-buy" not in oos_html and "Momentálně není skladem" in oos_html
-    stale_html = (out / "produkt" / f"{stale.id}-{stale.slug}" / "index.html").read_text()
+    stale_html = (out / "produkt" / f"{stale.id}-{stale.slug}.html").read_text()
     assert "btn-buy" not in stale_html and "Cena neověřena" in stale_html
 
-    phones = (out / "kategorie" / "telefony" / "index.html").read_text()
+    phones = (out / "kategorie" / "telefony.html").read_text()
     assert "Galaxy A55 128GB" in phones or "Galaxy A55" in phones
     assert "silikonový kryt" not in phones
     assert "Lagerfeld" not in phones
     assert "GeForce" not in phones
     assert "?strana=" not in phones
     assert f"/kategorie/telefony/strana/2" in phones
-    page2 = (out / "kategorie" / "telefony" / "strana" / "2" / "index.html").read_text()
+    page2 = (out / "kategorie" / "telefony" / "strana" / "2.html").read_text()
     assert "A54" in page2
-    notebooks = (out / "kategorie" / "notebooky" / "index.html").read_text()
-    assert "A16" in notebooks and "RTX 4070" not in notebooks
+    notebooks = (out / "kategorie" / "notebooky.html").read_text()
+    assert "A16" not in notebooks and "Gigabyte" not in notebooks and "RTX 4070" not in notebooks
+    assert not (out / "produkt" / f"{laptop.id}-{laptop.slug}.html").exists()
 
     index = json.loads((out / "data" / "katalog.json").read_text())
     names = {row["n"] for row in index}
     assert "Samsung Galaxy A55 128GB" in names
     assert "Karl Lagerfeld parfém" not in names
     assert "Gigabyte GeForce RTX 4070" not in names
+    assert "Gigabyte GAMING A16 PRO notebook 16GB" not in names
     assert "Nejistý iPhone 16e" not in names
     assert "Skrytý iPhone 16" not in names
     kryt = next(row for row in index if row["n"] == accessory_name)
@@ -207,23 +222,39 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert not (out / "admin").exists()
     assert not (out / "produkt" / f"{hidden.id}-{hidden.slug}").exists()
     assert not (out / "produkt" / f"{perfume.id}-{perfume.slug}").exists()
-    review_html = (out / "produkt" / f"{review.id}-{review.slug}" / "index.html").read_text()
+    review_html = (out / "produkt" / f"{review.id}-{review.slug}.html").read_text()
     assert "noindex" in review_html and "btn-buy" not in review_html
 
     sitemap = (out / "sitemap.xml").read_text()
     assert sitemap == sitemap_xml(db)
     assert f"/produkt/{good.id}-" in sitemap
     assert f"/produkt/{perfume.id}-" not in sitemap
+    assert f"/produkt/{laptop.id}-" not in sitemap
     assert f"/produkt/{review.id}-" not in sitemap
+    base = public_url()
+    for loc in sitemap.split("<loc>")[1:]:
+        url = loc.split("</loc>", 1)[0]
+        path = urlparse(url).path or "/"
+        assert output_path(out, path).is_file(), url
+        if path != "/":
+            assert not path.endswith("/"), url
+    canon = good_html.split('rel="canonical" href="', 1)[1].split('"', 1)[0]
+    og = good_html.split('property="og:url" content="', 1)[1].split('"', 1)[0]
+    assert canon == og == f"{base}/produkt/{good.id}-{good.slug}"
+    assert output_path(out, urlparse(canon).path).is_file()
+    assert f'href="/produkt/{good.id}-{good.slug}"' in phones
+    assert f'href="/produkt/{good.id}-{good.slug}/"' not in phones
     assert (out / "robots.txt").read_text() == robots_txt()
-    assert (out / "hledat" / "index.html").read_text().count("katalog.js") == 1
-    assert "/hledat/zive" not in (out / "hledat" / "index.html").read_text()
-    assert (out / "stav" / "index.html").exists()
-    assert (out / "slevy" / "index.html").exists()
-    assert (out / "black-friday" / "index.html").exists()
-    assert (out / "bez-serveru" / "index.html").exists()
-    assert "mailto:info@lovceny.cz" in (out / "o-nas" / "index.html").read_text()
-    assert 'action="/kontakt"' not in (out / "o-nas" / "index.html").read_text()
+    assert (out / "hledat.html").read_text().count("katalog.js") == 1
+    assert "/hledat/zive" not in (out / "hledat.html").read_text()
+    assert (out / "stav.html").exists()
+    assert (out / "slevy.html").exists()
+    assert (out / "black-friday.html").exists()
+    assert (out / "bez-serveru.html").exists()
+    about_html = (out / "o-nas.html").read_text()
+    assert "mailto:info@lovceny.cz" in about_html
+    assert 'action="/kontakt"' not in about_html
+    assert "dáme vědět e-mailem" not in about_html
     assert (out / "404.html").exists()
     assert (out / "sw.js").exists()
 
@@ -232,6 +263,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     for path in ("/kontakt", "/metodika", "/bot", "/pro-e-shopy", "/podminky-uzivani",
                  "/porovnani", "/prehled", "/rozsireni", "/hlidat-rozpocet",
                  f"/produkt/{perfume.id}-{perfume.slug}", f"/produkt/{perfume.id}",
+                 f"/produkt/{laptop.id}-{laptop.slug}", f"/produkt/{laptop.id}",
                  f"/produkt/{merged.id}-{merged.slug}"):
         response = live.get(path, follow_redirects=False)
         assert response.status_code in (301, 302), path

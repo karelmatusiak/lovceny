@@ -108,9 +108,9 @@ def test_side_features_are_off_and_unsubscribe_still_works(client_db, monkeypatc
     assert weekly_digest.main(["--force"]) == 0
 
 
-def test_email_price_watch_stays(client_db):
+def test_email_price_watch_is_not_on_the_product_page(client_db):
     client, db, make = client_db
     p = make([1000], name="E-mail hlídání zůstává", category="telefony")
     html = client.get(f"/produkt/{p.id}").text
-    assert 'id="hlidani"' in html and 'name="email"' in html
-    assert "push-box" not in html
+    assert 'id="hlidani"' not in html and 'name="email"' not in html
+    assert "Hlídání ceny" not in html and "push-box" not in html

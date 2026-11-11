@@ -51,8 +51,11 @@ class Verdict:
             return ""
         return f"nejnižší za 30 dní: {czk(self.ref_min30)} ({_cz_date(self.ref_date)})"
 
-    ICONS = {"buy": "✅", "wait": "⏳", "fake": "⚠️", "none": "📊", "new": "🆕"}
-    HEADLINES = {"buy": "Kupuj – cena u minima", "wait": "Počkej – bývalo levněji", "fake": FAKE_LABEL}
+    ICONS = {"buy": "✅", "wait": "⏳", "fake": "⚠️", "none": "📊", "new": "🆕", "oos": ""}
+    HEADLINES = {
+        "buy": "Kupuj – cena u minima", "wait": "Počkej – bývalo levněji", "fake": FAKE_LABEL,
+        "oos": "Není skladem",
+    }
 
     @property
     def icon(self) -> str:
@@ -240,5 +243,5 @@ def compute(points, current: float | None, claimed_original: float | None = None
     if diff > 0:
         v.text = f"Cena je o {diff:.0f} % nad obvyklou úrovní ({czk(md)}). Minimum za 90 dní bylo {czk(mn)}."
     else:
-        v.text = f"Cena je slušná, ale za 90 dní byla až {czk(mn)}. Nastav si hlídání ceny."
+        v.text = f"Cena je slušná, ale za 90 dní byla až {czk(mn)}."
     return v

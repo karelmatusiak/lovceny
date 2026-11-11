@@ -338,6 +338,10 @@ def _apply_category(db: Session, decision) -> tuple[bool, str]:
     product = db.get(Product, decision.product_id)
     if product is None:
         return True, "produkt už neexistuje"
+    from .exclusions import bury_excluded, is_excluded_brand
+    if is_excluded_brand(product.name or ""):
+        bury_excluded(product)
+        return True, "značka je mimo katalog"
     target = decision.proposed_category
     if target in BY_SLUG:
         product.category_slug = target

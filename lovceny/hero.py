@@ -205,7 +205,10 @@ def _light_rows(db) -> list[_Light]:
                Product.image_url.isnot(None), Product.image_url != "")
     ).all()
     out: list[_Light] = []
+    from .exclusions import is_excluded_brand
     for pid, name, shop_cat, slug, image, n_shops, cur, n_pts, avg in rows:
+        if is_excluded_brand(name or ""):
+            continue
         if not (image or "").strip() or cur is None:
             continue
         bucket = _bucket(slug, name or "", shop_cat)

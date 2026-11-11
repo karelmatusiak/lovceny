@@ -222,7 +222,10 @@ def sitemap_xml(db) -> str:
     if products:
         for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
             offers_by[offer.product_id].append(offer)
+    from .exclusions import is_excluded_brand
     for pid, slug, created, name in products:
+        if is_excluded_brand(name or ""):
+            continue
         holder = type("P", (), {"name": name})()
         if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):
             urls.append((f"{base}/produkt/{pid}-{slug}", created))

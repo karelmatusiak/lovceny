@@ -37,7 +37,7 @@
     <div class="p-chart">
       <div class="chart-top"><h2 class="h3" id="hist-h">Historie ceny</h2></div>
       {% if chart_ranges[2].n == 0 %}
-      <div class="chart-empty"><p><b>{% if best %}Historie zatím není k dispozici.{% else %}Cena zatím není k dispozici.{% endif %}</b> {% if best %}Cenu začneme zapisovat při nejbližším stahování (3× denně).{% else %}Jakmile některý obchod cenu vrátí, ukážeme ji tady i s historií. Mezitím můžeš produkt stejně hlídat.{% endif %}</p></div>
+      <div class="chart-empty"><p><b>{% if best %}Historie zatím není k dispozici.{% else %}Cena zatím není k dispozici.{% endif %}</b> {% if best %}Cenu začneme zapisovat při nejbližším stahování (3× denně).{% else %}Jakmile některý obchod cenu vrátí, ukážeme ji tady i s historií.{% endif %}</p></div>
       {% else %}
       <div class="chart-box" role="group" aria-labelledby="hist-h">
         {% set def_key = '90' if chart_ranges[1].n >= 2 else 'all' %}
@@ -90,44 +90,5 @@
     </div>
   </div>
 </div></section>
-
-<section id="hlidani" style="padding-top:0"><div class="wrap"><div class="watch">
-  <div><div class="eyebrow">🔔 Hlídání ceny</div><h2>Dáme vědět, až cena klesne</h2>
-    <p class="sub">Zadej cílovou cenu{% if push_key %} a vyber, jak ti dáme vědět: e-mailem, nebo oznámením v prohlížeči{% else %} a e-mail{% endif %}. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, ozveme se. Odhlášení jedním klikem.</p>
-    <picture class="watch-art"><source type="image/webp" srcset="{{ static('img/hlidani-720.webp') }}"><img src="{{ static('img/hlidani-720.jpg') }}" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
-  {% if STATIC_SITE %}
-  <div class="card watch-form">
-    <p>Hlídání ceny e-mailem a upozornění v prohlížeči na statickém webu neběží – není tu server, který by odběr uložil. Cenu na téhle stránce přepočítáváme třikrát denně. Když chceš vědět o poklesu, napiš na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
-  </div>
-  {% else %}
-  <form class="card watch-form" method="post" action="/produkt/{{ p.id }}/hlidat">
-    <div class="row2">
-      <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (display_price.price if display_price else ''))|int if (v.suggested_target or display_price) else '' }}"><span>Kč</span></div></div>
-      <div class="field"><label for="em">E-mail</label><input id="em" name="email" type="email" required placeholder="ty@example.cz"></div>
-    </div>
-    <label class="check"><input type="checkbox" name="only_in_stock" value="true"> Jen když je skladem</label>
-    <button class="btn btn-primary" type="submit">🔔 Hlídat cenu</button>
-    {% if ok %}<div class="ok" style="display:block">Hotovo! Poslali jsme ti potvrzovací e-mail (v MVP jen do logu).</div>{% endif %}
-    <p class="small">Žádný spam. E-mail použijeme jen pro toto hlídání ceny.</p>
-    {% if push_key %}
-    <div class="push-box" id="push-box" data-vapid="{{ push_key }}" data-pid="{{ p.id }}">
-      <div class="or"><span>nebo bez e-mailu</span></div>
-      <div class="push-ui" hidden>
-        <p class="push-lead"><b>Upozornění v prohlížeči.</b> Pošleme oznámení do tohoto zařízení, jakmile cena klesne na cílovou cenu výše. Nepotřebujeme e-mail.</p>
-        <button type="button" class="btn btn-push" id="push-on"><span aria-hidden="true">🔔</span> Zapnout upozornění v prohlížeči</button>
-        <button type="button" class="btn btn-push-off" id="push-off" hidden>Vypnout upozornění v prohlížeči</button>
-        <p class="push-msg" id="push-msg" role="status" aria-live="polite"></p>
-      </div>
-      <p class="push-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje. Použij prosím e-mail.</p>
-      <div class="push-ios" hidden>
-        <p class="small"><b>Na iPhonu fungují upozornění jen z plochy.</b> Přidej si Lovceny na plochu (Safari → Sdílet → Přidat na plochu), otevři je odtud a upozornění zapni tady. Nebo použij e-mail.</p>
-        <button type="button" class="btn btn-ghost btn-sm" data-pwa-open hidden><span aria-hidden="true">📲</span> Jak přidat na plochu</button>
-      </div>
-      <noscript><p class="small">Upozornění v prohlížeči vyžadují JavaScript. E-mail funguje i bez něj.</p></noscript>
-    </div>
-    {% endif %}
-  </form>
-  {% endif %}
-</div></div></section>
 {% endblock %}
-{% block scripts %}<script src="{{ static('share.js') }}" defer></script>{% if push_key %}<script src="{{ static('push.js') }}" defer></script>{% endif %}{% endblock %}
+{% block scripts %}<script src="{{ static('share.js') }}" defer></script>{% endblock %}

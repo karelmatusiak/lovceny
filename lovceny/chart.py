@@ -215,8 +215,7 @@ def verdict_note(v, ranges: list[ChartRange]) -> str:
     if v.code == "buy" and r90 and r90.min:
         return f"Kupuj: dnešní cena je {v.reason}. Levněji za posledních 90 dní nebylo."
     if v.code == "wait" and r90 and r90.min:
-        return (f"Počkej: cena je {v.reason}; {_d(r90.min_date)} stál {czk(r90.min)}. "
-                "Nastav si hlídání ceny, dáme vědět.")
+        return f"Počkej: cena je {v.reason}; {_d(r90.min_date)} stál {czk(r90.min)}."
     if v.code == "fake":
         return f"{v.tooltip} Podrobnosti v metodice Jak řadíme a hodnotíme."
     return v.text

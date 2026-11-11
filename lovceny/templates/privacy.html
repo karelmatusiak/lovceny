@@ -6,7 +6,7 @@
 <section class="legal-page"><div class="wrap prose">
   <div class="eyebrow">Právní informace</div>
   <h1>Ochrana osobních údajů</h1>
-  <p class="sub">Platnost od 14.&nbsp;10.&nbsp;2026. Text popisuje, co služba Lovceny.cz skutečně dělá. <em>Nejde o právní radu</em> – při pochybnostech se obraťte na právníka nebo ÚOOÚ.</p>
+  <p class="sub">Platnost od 11.&nbsp;11.&nbsp;2026. Text popisuje, co služba Lovceny.cz skutečně dělá. <em>Nejde o právní radu</em> – při pochybnostech se obraťte na právníka nebo ÚOOÚ.</p>
 
   <h2>1. Správce</h2>
   <p>Správcem osobních údajů je:</p>
@@ -19,14 +19,8 @@
   </ul>
 
   <h2>2. Co zpracováváme a proč</h2>
-  <h3>2.1 Hlídání ceny (e-mail + cílová cena)</h3>
-  <p>Když si nastavíš hlídání ceny, uložíme <b>e-mail</b>, <b>cílovou cenu</b>, identifikátor produktu, volitelně příznak „jen skladem“, unikátní token a stav (nepotvrzeno / aktivní / zrušeno).</p>
-  <ul>
-    <li><b>Účel:</b> poslat potvrzovací e-mail (double opt-in) a později upozornění, až cena klesne na cíl.</li>
-    <li><b>Právní základ:</b> souhlas (čl. 6 odst. 1 písm. a GDPR) – udělený potvrzením odkazu v e-mailu. Bez potvrzení hlídání neaktivujeme. Odhlásit se lze kdykoli odkazem v e-mailu nebo na stránce zrušení.</li>
-    <li><b>Doba uložení:</b> do odhlášení – odkazem v e-mailu hlídání i e-mail okamžitě smažeme. Nepotvrzená hlídání mažeme po 7 dnech. Hlídání mažeme automaticky, když od vytvoření i od posledního upozornění uplynulo více než 24 měsíců (úklid běží s každým stažením cen).</li>
-    <li><b>Odesílání:</b> e-maily (potvrzení a „cena klesla“) odesíláme přes službu Brevo (viz bod 3). Každý e-mail obsahuje odkaz na odhlášení jedním klikem.</li>
-  </ul>
+  <h3>2.1 Hlídání ceny</h3>
+  <p><b>Nenabízíme ho.</b> Cílovou cenu ani e-mail kvůli upozornění na zlevnění neukládáme a e-mail „cena klesla“ neposíláme. Ceny na stránkách přepočítáváme při generování webu.</p>
 
   <h3>2.2 AI hledání (Google Gemini)</h3>
   <p><b>Teď vypnuté.</b> Dotazy do Gemini neposíláme. Až funkci znovu zapneme, platí text níže.</p>
@@ -38,7 +32,7 @@
   </ul>
 
   <h3>2.3 Upozornění v prohlížeči (Web Push)</h3>
-  <p><b>Teď vypnutá.</b> Nové odběry nepřijímáme a oznámení neposíláme. Odhlášení už uloženého odběru dál funguje. E-mailové hlídání ceny u produktu běží dál.</p>
+  <p><b>Teď vypnutá.</b> Nové odběry nepřijímáme a oznámení neposíláme. E-mailové hlídání ceny neběží.</p>
   <p>Hlídat cenu jde i bez e-mailu – oznámením v prohlížeči. Po tvém výslovném povolení v prohlížeči uložíme:</p>
   <ul>
     <li><b>adresu odběru</b> (endpoint) push služby tvého prohlížeče (Google, Mozilla, Apple nebo Microsoft) a <b>šifrovací klíče</b> odběru,</li>
@@ -59,14 +53,14 @@
   </ul>
   <p>Nepoužíváme k tomu cookies ani úložiště v prohlížeči, nevytváříme profily a data nikomu nepředáváme. Pokud má prohlížeč zapnuté <b>Do Not Track</b> (DNT) nebo <b>Global Privacy Control</b> (GPC), nezaznamenáme nic. <b>Právní základ:</b> oprávněný zájem (čl. 6 odst. 1 písm. f) na zlepšování služby. Souhrnné záznamy (bez otisků) mažeme po 13 měsících. Protože nepoužíváme cookies ani nic neukládáme do tvého zařízení kvůli statistice, <b>není potřeba cookie lišta</b> ani souhlas.</p>
 
-  <h3>2.6 Kontaktní formulář</h3>
-  <p>Když nám napíšeš přes formulář na stránce <a href="/o-nas#kontakt">O nás</a>, uložíme text zprávy, zvolené téma, čas a – jen pokud je vyplníš – jméno a e-mail pro odpověď. <b>Účel:</b> odpovědět a vyřešit podnět. <b>Právní základ:</b> oprávněný zájem / jednání na tvou žádost. <b>Doba uložení:</b> nejdéle 12 měsíců, pak zprávu automaticky smažeme. IP adresu neukládáme (jen dočasně v paměti serveru jako ochranu proti spamu, nejdéle hodinu).</p>
+  <h3>2.6 Kontakt</h3>
+  <p>Kontaktní formulář nemáme. Napíšeš-li na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>, zprávu zpracuje tvůj poskytovatel pošty a schránka správce. Do databáze Lovceny se text zprávy neukládá.</p>
 
   <h3>2.7 Technické logy hostingu</h3>
-  <p>Hosting (Render) a databáze (Neon) mohou krátkodobě zaznamenat IP adresu, User-Agent a čas požadavku v provozních logách – nezbytné pro bezpečnost a provoz služby (oprávněný zájem).</p>
+  <p>Web je statický a běží na <b>Cloudflare Pages</b>. Cloudflare jako zpracovatel může v provozních logách krátkodobě zaznamenat IP adresu, User-Agent a čas požadavku – nezbytné pro doručení stránky a bezpečnost (oprávněný zájem). Databáze Neon se z prohlížeče nevolá; sahá na ni jen GitHub Actions při generování webu.</p>
 
   <h3 id="over-slevu">2.8 Ověř slevu</h3>
-  <p>Když na stránce <a href="/over-slevu">Ověř slevu</a> vložíš odkaz na produkt, použijeme ho jen k ověření: u obchodu, který automatické čtení dovoluje, jednou načteme stránku produktu a podle názvu prohledáme další obchody. <b>Vložený odkaz neukládáme do databáze</b> (ve statistice návštěvnosti je jen cesta <code>/over-slevu</code> bez parametrů). Výsledek držíme nejvýš 15 minut v paměti serveru, aby se stejný odkaz nemusel načítat znovu. Proti zahlcení obchodů počítáme dotazy podle jednosměrného otisku IP adresy – jen v paměti, nejdéle hodinu. Odkaz na výsledek obsahuje adresu produktu; komu ho pošleš, je na tobě.</p>
+  <p>Stránka <a href="/over-slevu">Ověř slevu</a> porovná vložený odkaz jen s produkty, které už jsou v katalogu. Neznámý odkaz nenačítáme ze stránky obchodu a do databáze ho neukládáme. Živé stahování cizí stránky na požádání neběží.</p>
 
   <h3 id="rozsireni">2.9 Rozšíření do prohlížeče</h3>
   <p><b>Teď vypnuté.</b> Stránku ani API rozšíření nenabízíme. Už nainstalované rozšíření nedostane nové odpovědi.</p>
@@ -90,13 +84,14 @@
 
   <h2>3. Kde data leží (zpracovatelé)</h2>
   <ul>
-    <li><b>Render</b> – hosting aplikace, region Frankfurt (EU).</li>
-    <li><b>Neon</b> – PostgreSQL databáze, region Frankfurt (EU).</li>
-    <li><b>Obchody</b> – obrázky produktů načítá a zmenšuje náš server (bez tvé IP adresy); tvůj prohlížeč se tak k obchodu nepřipojuje.</li>
+    <li><b>Cloudflare</b> – hosting statického webu (Cloudflare Pages). Zpracovatel; v provozních logách může vidět IP adresu návštěvníka.</li>
+    <li><b>Neon</b> – PostgreSQL databáze, region Frankfurt (EU). Používá ji import cen v GitHub Actions, ne prohlížeč návštěvníka.</li>
+    <li><b>wsrv.nl</b> – prohlížeč si z této služby (zmenšování obrázků) sám stahuje část náhledů. Služba tím dostane IP adresu návštěvníka a adresu obrázku.</li>
+    <li><b>CDN obchodů</b> – další obrázky prohlížeč načítá přímo, například z <code>a.allegroimg.com</code> nebo <code>data.planeo.cz</code>. Tyto strany dostanou IP adresu návštěvníka.</li>
     <li><b>Google</b> – Gemini API (jen při AI hledání; viz výše).</li>
-    <li><b>Brevo</b> (Francie, EU) – odesílání e-mailů pro hlídání ceny; zpracovává e-mailovou adresu a obsah e-mailu (název produktu, cena, odkazy). Brevo vede o odeslaných e-mailech technický záznam (doručení, případně otevření/kliknutí podle jeho výchozího nastavení).</li>
+    <li><b>Brevo</b> (Francie, EU) – služba na odesílání e-mailů. Hlídání ceny neběží, takže e-mailovou adresu ani text upozornění jí nepředáváme.</li>
     <li><b>Push služby prohlížečů</b> (Google Firebase Cloud Messaging, Mozilla Push Service, Apple Push Notification service, Windows Push Notification Services) – doručují zašifrovaná upozornění v prohlížeči, pokud je zapneš. Kterou službu použije, určuje tvůj prohlížeč.</li>
-    <li><b>GitHub</b> (GitHub Actions) – automatické stahování cen a rozesílání upozornění (včetně Týdenního přehledu slev); během běhu se e-mailová adresa načte z databáze a předá Brevu, v GitHubu se neukládá.</li>
+    <li><b>GitHub</b> (GitHub Actions) – stahování cen z databáze Neon a generování statického webu. Upozornění na cenu se nerozesílají.</li>
   </ul>
 
   <h2>4. Cookies a úložiště v prohlížeči</h2>
@@ -106,7 +101,7 @@
   <p>U některých obchodů (např. Smarty, iStyle, Sencor, XM.cz, EVOLVEO, Počítače24 přes eHUB; případně Alza/Datart) můžeme k odkazu přidat affiliate parametr nebo tracking odkaz. Na pořadí výsledků ani na verdikt to nemá vliv. Viz <a href="/#vydelavame">Jak vyděláváme</a>.</p>
 
   <h2>6. Tvá práva</h2>
-  <p>Máš právo na přístup, opravu, výmaz, omezení zpracování, přenositelnost a námitku proti zpracování založenému na oprávněném zájmu, a právo souhlas kdykoli odvolat (odhlášením hlídání nebo vypnutím upozornění v prohlížeči). Pro uplatnění napiš přes <a href="/o-nas#kontakt">kontaktní formulář</a> (téma „Osobní údaje“) nebo na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
+  <p>Máš právo na přístup, opravu, výmaz, omezení zpracování, přenositelnost a námitku proti zpracování založenému na oprávněném zájmu, a právo souhlas kdykoli odvolat. Pro uplatnění napiš na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
   <p>Máš také právo podat stížnost u <b>Úřadu pro ochranu osobních údajů (ÚOOÚ)</b>, Pplk. Sochora 27, 170 00 Praha 7, <a href="https://www.uoou.cz" rel="noopener" target="_blank">uoou.cz</a>.</p>
 
   <h2>7. Změny</h2>

@@ -13,15 +13,15 @@
   <p>Hosting nebo prohlížeč mohou mít vlastní technické chování mimo naši kontrolu; my do odpovědí cookies nepřidáváme.</p>
 
   <h2>localStorage (úložiště v prohlížeči)</h2>
-  <p>Pro funkci <a href="/porovnat">Srovnání produktů</a> a pro zapnutá upozornění ukládáme v tvém prohlížeči tyto klíče:</p>
+  <p>Pro funkci <a href="/porovnat">Srovnání produktů</a> ukládáme v tvém prohlížeči tyto klíče:</p>
   <ul>
     <li><code>lovceny_porovnani</code> – seznam až 3 číselných ID produktů, které sis vybral ke srovnání; <code>lovceny_porovnani_slugy</code> – jejich krátké názvy z adresy (aby byl odkaz na srovnání čitelný).</li>
-    <li><code>lovceny-push</code> – jen pokud zapneš upozornění v prohlížeči: ID produktů, cílová cena a odhlašovací kód, aby šlo upozornění zase vypnout.</li>
+    <li><code>lovceny-push</code> – klíč z doby, kdy šla zapnout upozornění v prohlížeči. Teď je nezapínáme; nový záznam se nezakládá.</li>
     <li><code>lovceny-pwa</code> – kolik relací prohlížeče už Lovceny otevřel a kdy jsi zavřel výzvu „Přidat na plochu“ (30 dní ji pak sami neukážeme). Na server se neposílá.</li>
     <li><code>lovceny-prehled</code> – jen když zapneš Týdenní přehled slev: odhlašovací kód odběru, aby šel přepínačem zase vypnout.</li>
     <li><code>lovceny-black-friday</code> – jen když zapneš Black Friday přehled: odhlašovací kód odběru.</li>
   </ul>
-  <p>Web registruje <b>service worker</b> (<code>/sw.js</code>), aby šel přidat na plochu jako aplikace, fungoval při výpadku sítě (ukáže stránku „Jsi offline“) a doručoval upozornění „cena klesla“. Do mezipaměti (Cache Storage) ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů. <b>Stránky s cenami, hledání ani odpovědi API neukládá</b> – ceny se vždy načítají čerstvé. Nic nesleduje.</p>
+  <p>Web registruje <b>service worker</b> (<code>/sw.js</code>), aby šel přidat na plochu jako aplikace a při výpadku sítě ukázal stránku „Jsi offline“. Upozornění na pokles ceny neposílá. Do mezipaměti (Cache Storage) ukládá jen statické soubory webu (styly, skripty, ikony) a zmenšené obrázky produktů. <b>Stránky s cenami, hledání ani odpovědi API neukládá</b> – ceny se vždy načítají čerstvé. Nic nesleduje.</p>
   <p>Data zůstávají jen v zařízení. Na server se neodesílají automaticky; při otevření <code>/porovnat?p=…</code> si stránku načteš podle URL (tu můžeš i sdílet). Smazáním dat webu v prohlížeči nebo tlačítkem „Zrušit výběr“ výběr vymažeš.</p>
   <p>Toto úložiště je nezbytné pro výběr k porovnání (technicky nutné pro funkci, kterou jsi sám spustil). Nejde o cookie třetí strany ani o sledování napříč weby.</p>
 
@@ -29,6 +29,6 @@
   <p>Návštěvnost počítáme <b>bez cookies</b> a bez ukládání čehokoli do tvého prohlížeče – na serveru, s denně měněným anonymním otiskem, který po 24 hodinách mažeme. Respektujeme Do Not Track i Global Privacy Control. Podrobnosti v <a href="/ochrana-osobnich-udaju">Ochraně osobních údajů</a> (bod 2.5). Proto <b>nepotřebujeme cookie lištu</b>.</p>
 
   <h2>Další informace</h2>
-  <p>Osobní údaje (e-mail u hlídání ceny, AI dotazy) popisuje <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>
+  <p>Osobní údaje popisuje <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>.</p>
 </div></section>
 {% endblock %}

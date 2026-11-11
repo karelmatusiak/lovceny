@@ -35,7 +35,7 @@ CATEGORIES: list[Category] = [
              "Pračky předem plněné, úzké i se sušičkou. Bosch, Samsung, Electrolux, AEG, Whirlpool, Gorenje a další.",
              ("prack", "pracka se susick"), "🫧"),
     Category("lednice", "Lednice a mrazáky", "lednic",
-             "Kombinované chladničky, americké lednice i vestavné. Sledujeme ceny a upozorníme na pokles.",
+             "Kombinované chladničky, americké lednice i vestavné. U každého modelu je historie ceny.",
              ("lednic", "chladnick", "mraznick", "mrazak", "chladici"), "🧊"),
     Category("kavovary", "Kávovary", "kávovarů",
              "Automatické, pákové i kapslové kávovary – DeLonghi, Philips, Krups, Siemens, Nespresso. Poctivé ceny bez placených pozic.",
@@ -561,7 +561,11 @@ def accept_feed_item(
 
     O kategorii nerozhoduje název. Příslušenství, cena pod minimem a známý
     spor adresy (čistič oken ≠ vysavač, displej ≠ sluchátka) položku odmítnou.
+    Gigabyte a Karl Lagerfeld se nezakládají.
     """
+    from .exclusions import is_excluded_brand
+    if is_excluded_brand(name):
+        return None
     if is_accessory_text(name, shop_category):
         return None
     if price is None or price <= 0:

@@ -131,6 +131,10 @@ def listing_outcome(db: Session, product: Product) -> tuple[str, str | None]:
 
 def apply_listing(db: Session, product: Product) -> str:
     from .allegro_narrow import allegro_only, is_known_brand
+    from .exclusions import bury_excluded, is_excluded_brand
+    if is_excluded_brand(product.name or ""):
+        bury_excluded(product)
+        return "hidden"
     if allegro_only(product) and not is_known_brand(product.name or ""):
         product.needs_review = True
         return "hidden"

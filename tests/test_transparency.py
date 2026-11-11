@@ -55,7 +55,8 @@ def test_pages_and_links():
         assert shop.name.replace("'", "&#39;") in h
     assert "Odkaz může být provizní" not in h  # bez příznaku skryté
     p = c.get("/pro-obchody").text
-    assert "LovcenyBot" in p and "robots.txt" in p and "7 dní" in p and "tema=obchod-oprava" in p
+    assert "LovcenyBot" in p and "robots.txt" in p and "7 dní" in p and "mailto:info@lovceny.cz" in p
+    assert "tema=obchod-oprava" not in p
     t = c.get("/podminky").text
     assert "Karel Matusiak" in t and "IČO 30210453" in t and "info@lovceny.cz" in t
     assert "bude doplněn po založení živnosti" not in t
@@ -108,7 +109,7 @@ def test_contact_topic_shop_correction():
     init_db()
     c = TestClient(app)
     h = c.get("/o-nas?tema=obchod-oprava").text
-    assert '<option value="obchod-oprava" selected>Oprava/vyřazení obchodu</option>' in h
+    assert "mailto:info@lovceny.cz" in h and "formulář na webu není" in h
     r = c.post("/kontakt", data={"message": "Prosím vyřaďte náš obchod.", "topic": "obchod-oprava"},
                headers={"X-Forwarded-For": "10.9.9.9"}, follow_redirects=False)
     assert r.status_code == 303 and "odeslano=1" in r.headers["location"]

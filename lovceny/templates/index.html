@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_macros.html" import pcard, badge, shop_img, img_missing %}
-{% block description %}Lovceny hlídá ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy a upozorní tě na zlevnění. Bez placených pozic.{% endblock %}
+{% block description %}Lovceny srovnává ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy. Bez placených pozic.{% endblock %}
 {% block body %}
 {% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">🛍️</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Které slevy jsou opravdu nejnižší? Kontrola 30 dní (§ 12a) u každé.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
 <header class="hero" id="hledat"><div class="wrap hero-layout">
@@ -103,13 +103,13 @@
   <ol class="how-steps">
     <li class="how-step"><span class="how-num" aria-hidden="true">1</span><div><h3>Vlož odkaz nebo název</h3><p>Z e-shopu zkopíruj odkaz na produkt, nebo napiš, co hledáš.</p></div></li>
     <li class="how-step"><span class="how-num" aria-hidden="true">2</span><div><h3>Podívej se na historii</h3><p>Uvidíš ceny v obchodech, graf a verdikt – kupovat, nebo počkat.</p></div></li>
-    <li class="how-step"><span class="how-num" aria-hidden="true">3</span><div><h3>Hlídej zlevnění</h3><p>Nastav cílovou cenu; dáme vědět e-mailem nebo v prohlížeči.</p></div></li>
+    <li class="how-step"><span class="how-num" aria-hidden="true">3</span><div><h3>Otevři nejlevnější nabídku</h3><p>Pořadí je jen podle ceny. Odkaz vede do obchodu, kde je produkt nejlevnější.</p></div></li>
   </ol>
 </div></section>
 
 <section class="home-verify" aria-labelledby="hv-h"><div class="wrap"><div class="card hv-card">
-  <div><div class="eyebrow">Novinka</div><h2 id="hv-h">Ověř slevu z jakéhokoli e&#8209;shopu</h2>
-    <p class="ov-muted">Vlož odkaz na produkt – ukážeme nejnižší cenu za 30 dní a kde je levněji. Výsledek můžeš poslat dál.</p></div>
+  <div><div class="eyebrow">Katalog</div><h2 id="hv-h">Ověř slevu z našeho katalogu</h2>
+    <p class="ov-muted">Vlož odkaz na produkt, který už v katalogu máme. Ukážeme historii a nejnižší cenu za 30 dní. Odkaz, který v katalogu není, načíst neumíme.</p></div>
   <form class="search ov-form" action="/over-slevu" method="get" autocomplete="off">
     <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       <input name="url" type="url" inputmode="url" required maxlength="2000" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu pro ověření slevy"></label>

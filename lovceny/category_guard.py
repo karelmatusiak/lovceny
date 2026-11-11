@@ -131,3 +131,17 @@ def offer_type_conflict(product_name: str, offer_text: str) -> bool:
     if not product_hits or not offer_hits:
         return False
     return product_hits.isdisjoint(offer_hits)
+
+
+def category_against_offer(category_slug: str | None, offer_text: str) -> bool:
+    """True = nabídka pojmenovává jiný druh, než je kategorie produktu.
+
+    Název bez druhového slova (jen kód modelu) kategorii nepopírá.
+    Telefon (Galaxy S25 FE) na televizi (OM55N) ano.
+    """
+    if not category_slug or category_slug not in BY_SLUG:
+        return False
+    hits = type_hits(offer_text or "")
+    if not hits:
+        return False
+    return category_slug not in hits

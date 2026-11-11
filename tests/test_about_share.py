@@ -43,8 +43,9 @@ def test_about_page_content_and_faq_ld(client_db):
     assert r.status_code == 200
     html = r.text
     for s in ("Poctivé ceny", "Žádné placené pozice", "Jak vzniká verdikt", "Heureky a Zboží.cz", "Jak vyděláváme",
-              "affiliate", "nikdy neovlivní", "Časté dotazy", "Napiš nám", 'action="/kontakt"'):
+              "affiliate", "nikdy neovlivní", "Časté dotazy", "Napiš nám", "mailto:info@lovceny.cz"):
         assert s in html, s
+    assert 'action="/kontakt"' not in html
     assert '<link rel="canonical" href="https://lovceny.cz/o-nas">' in html
     faq = next(d for d in _ld(html) if d.get("@type") == "FAQPage")
     assert len(faq["mainEntity"]) >= 6
@@ -75,7 +76,8 @@ def test_contact_form(client_db):
     assert r.status_code == 303 and r.headers["location"] == "/o-nas?odeslano=1#kontakt"
     m = db.query(ContactMessage).one()
     assert (m.topic, m.reply_to, m.name) == ("obchod", "ja@example.cz", "Jana")
-    assert "Díky, zprávu jsme dostali" in client.get("/o-nas?odeslano=1").text
+    page = client.get("/o-nas?odeslano=1").text
+    assert "mailto:info@lovceny.cz" in page and 'action="/kontakt"' not in page
     # krátká zpráva / špatný e-mail → chyba, nic se neuloží
     r = client.post("/kontakt", data={"message": "krátké"}, follow_redirects=False)
     assert "chyba=" in r.headers["location"]
