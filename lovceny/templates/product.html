@@ -95,6 +95,11 @@
   <div><div class="eyebrow">🔔 Hlídání ceny</div><h2>Dáme vědět, až cena klesne</h2>
     <p class="sub">Zadej cílovou cenu{% if push_key %} a vyber, jak ti dáme vědět: e-mailem, nebo oznámením v prohlížeči{% else %} a e-mail{% endif %}. Jakmile cena v kterémkoli obchodě klesne na tvou úroveň, ozveme se. Odhlášení jedním klikem.</p>
     <picture class="watch-art"><source type="image/webp" srcset="{{ static('img/hlidani-720.webp') }}"><img src="{{ static('img/hlidani-720.jpg') }}" width="720" height="480" alt="Ilustrace: oranžový zvoneček upozornění, obálka a graf klesající ceny" loading="lazy" decoding="async"></picture></div>
+  {% if STATIC_SITE %}
+  <div class="card watch-form">
+    <p>Hlídání ceny e-mailem a upozornění v prohlížeči na statickém webu neběží – není tu server, který by odběr uložil. Cenu na téhle stránce přepočítáváme třikrát denně. Když chceš vědět o poklesu, napiš na <a href="mailto:info@lovceny.cz">info@lovceny.cz</a>.</p>
+  </div>
+  {% else %}
   <form class="card watch-form" method="post" action="/produkt/{{ p.id }}/hlidat">
     <div class="row2">
       <div class="field"><label for="tp">Cílová cena</label><div class="suffix"><input id="tp" name="target_price" type="number" step="1" min="1" required value="{{ (v.suggested_target or (display_price.price if display_price else ''))|int if (v.suggested_target or display_price) else '' }}"><span>Kč</span></div></div>
@@ -122,6 +127,7 @@
     </div>
     {% endif %}
   </form>
+  {% endif %}
 </div></div></section>
 {% endblock %}
 {% block scripts %}<script src="{{ static('share.js') }}" defer></script>{% if push_key %}<script src="{{ static('push.js') }}" defer></script>{% endif %}{% endblock %}

@@ -5,6 +5,8 @@ __pycache__/
 .env
 .pytest_cache/
 health.json
+dist/
+build-report.json
 vapid-keys.txt
 # stažené Heureka feedy (lokálně, velké)
 data/feeds/

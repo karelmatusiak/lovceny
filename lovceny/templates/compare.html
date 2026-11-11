@@ -12,6 +12,7 @@
     {% else %}Srovnání je prázdné. U produktů klikni na <b>⚖️ Přidat do srovnání</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
     <a class="btn btn-ghost" href="/kategorie">Vybrat produkty →</a>
   </div>
+  {% if STATIC_SITE %}<div id="cmp-static"></div>{% endif %}
   {% else %}
   <div class="cmp-actions">
     <p class="sub cmp-share">Odkaz na toto srovnání můžeš poslat dál – otevře se stejně.</p>

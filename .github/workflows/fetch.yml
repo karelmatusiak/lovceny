@@ -17,6 +17,8 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      ran: ${{ steps.download.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -78,6 +80,7 @@ jobs:
             tests/test_dognet.py \
             tests/test_ehub.py
       - name: Stáhnout ceny
+        id: download
         if: steps.gate.outputs.skip != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -116,3 +119,8 @@ jobs:
             exit 0
           fi
           python shop_health_issues.py health.json
+  site:
+    needs: fetch
+    if: always() && needs.fetch.outputs.ran == 'true'
+    uses: ./.github/workflows/static.yml
+    secrets: inherit
