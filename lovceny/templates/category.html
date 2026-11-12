@@ -17,7 +17,7 @@
   </details>
   {% endif %}
   {% if landings %}
-  <nav class="landing-links" aria-label="Výběry v kategorii">{% for item in landings %}<a href="{{ item.path }}">{{ item.h1 }}</a>{% endfor %}</nav>
+  <nav class="landing-links cat-range" aria-label="Výběry v kategorii">{% for item in landings %}<a href="{{ item.path }}">{{ item.h1 }}</a>{% endfor %}</nav>
   {% endif %}
   <nav class="cat-tabs" aria-label="Pohled na kategorii">
     <a href="/kategorie/{{ c.slug }}{{ filter_qs }}"{% if not view %} aria-current="page"{% endif %}>Vše</a>
@@ -61,7 +61,7 @@
   {% if rows %}
   <p class="cat-count">Zobrazeno {{ range_from }}–{{ range_to }} z {{ cz_count(total, 'produkt', 'produkty', 'produktů') }} · nejdřív s fotkou, pak {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
   {% include "_pager.html" %}
-  <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v) }}{% endfor %}</div>
+  <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v, true) }}{% endfor %}</div>
   {% include "_pager.html" %}
   {% else %}
   <div class="card chart-empty cat-empty">

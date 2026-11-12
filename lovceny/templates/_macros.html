@@ -20,31 +20,44 @@
 {% macro cmp_button(p, cls="btn-cmp-quiet") -%}
 <button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false"><span aria-hidden="true">⚖️</span> <span class="cmp-txt">Přidat do srovnání</span></button>
 {%- endmacro %}
+{% macro cmp_icon(p) -%}
+<button type="button" class="btn-cmp-icon" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false" aria-label="Přidat do srovnání"><span aria-hidden="true">⚖️</span></button>
+{%- endmacro %}
 {% macro img_missing(hidden=false) -%}
 <span class="img-missing"{% if hidden %} hidden{% endif %} role="img" aria-label="Fotka produktu chybí"><svg viewBox="0 0 48 48" width="36" height="36" aria-hidden="true" focusable="false"><rect x="7" y="11" width="34" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="20" r="2.2" fill="currentColor"/><path d="M7 31.5 16.5 23l7 6.2 5.2-4.2L41 33" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
 {%- endmacro %}
-{% macro pcard(p, best, v) -%}
+{% macro pcard(p, best, v, compact=false) -%}
 {%- set shop_name = (get_shop(best.shop).name if best and get_shop(best.shop) else (best.shop if best else '')) -%}
+{%- set oos = best and best.in_stock is false -%}
 <div class="card pcard">
 <a class="pcard-link" href="/produkt/{{ p.id }}-{{ pslug(p) }}">
   <div class="p-head">
     <div class="p-img p-img-lg">{% if p.image_url %}{{ shop_img(p.image_url, 120, alt="") }}{% else %}{{ img_missing() }}{% endif %}</div>
     <div class="p-meta"><div class="p-name sm" title="{{ p.name }}">{% set label = card_label(p.name) %}{{ label }}{% if label != p.name %}<span class="sr-only">. Celý název: {{ p.name }}</span>{% endif %}</div><div class="p-cat">{% if p.category and shop_name %}{{ p.category }} · {{ shop_name }}{% elif p.category %}{{ p.category }}{% elif shop_name %}{{ shop_name }}{% endif %}</div></div>
   </div>
-  <div class="pc-row">{{ badge(v) }}
+  <div class="pc-row">{% if not compact %}{{ badge(v) }}{% endif %}
     <div class="pc-prices">
       {%- set ns = namespace(n=visible_offer_count(p.offers)) -%}
-      <b class="pc-price">{% if best %}{% if ns.n > 1 %}<span class="pc-from">od </span>{% endif %}{{ best.price|czk }}{% else %}<span class="pc-price-quiet">cena zatím chybí</span>{% endif %}</b>
+      <span class="pc-price-line"><b class="pc-price">{% if best %}{% if ns.n > 1 %}<span class="pc-from">od </span>{% endif %}{{ best.price|czk }}{% else %}<span class="pc-price-quiet">cena zatím chybí</span>{% endif %}</b>
+      {% if compact %}
+        {% if oos %}<span class="pc-status pc-status-oos">Není skladem<span class="sr-only">. Momentálně není skladem</span></span>
+        {% elif v.code == 'buy' %}<span class="pc-status pc-status-buy">✓ U minima</span>
+        {% elif v.code == 'wait' %}<span class="pc-status pc-status-wait">Počkej</span>
+        {% elif v.code == 'fake' %}<span class="pc-status pc-status-fake">30 dní levněji</span>
+        {% elif v.code == 'none' %}<span class="pc-status pc-status-none">Sbíráme data</span>
+        {% endif %}
+      {% endif %}</span>
       {% if ns.n > 1 %}<span class="pc-shops">{{ ns.n }} obchodů</span>{% elif shop_name %}<span class="pc-shop">{{ shop_name }}</span>{% endif %}
-      {% if best and best.in_stock is false %}<span class="pc-oos">Momentálně není skladem</span>{% endif %}
-      {% if v.min90 and best and best.price and best.in_stock is not false and v.min90 < best.price %}<span class="pc-low">nejníž {{ v.min90|czk }}</span>{% elif v.min90 and best and best.in_stock is not false %}<span class="pc-low">u minima</span>{% endif %}
+      {% if oos and not compact %}<span class="pc-oos">Momentálně není skladem</span>{% endif %}
+      {% if not compact and v.min90 and best and best.price and best.in_stock is not false and v.min90 < best.price %}<span class="pc-low">nejníž {{ v.min90|czk }}</span>{% elif not compact and v.min90 and best and best.in_stock is not false %}<span class="pc-low">u minima</span>{% endif %}
     </div>
   </div>
 </a>
+{% if compact %}{{ cmp_icon(p) }}{% endif %}
 <div class="pcard-act">
-{% if v.code == 'fake' %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
+{% if v.code == 'fake' and not compact %}<a class="verdict-how pc-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
 <div class="pcard-buttons">
-{{ cmp_button(p) }}
+{% if not compact %}{{ cmp_button(p) }}{% endif %}
 {% if best and best.in_stock is not false %}{% set s = get_shop(best.shop) %}
 <a class="btn btn-shop-sm" href="{{ go_href(best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
 {% endif %}
