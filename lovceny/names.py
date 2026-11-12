@@ -942,6 +942,63 @@ def _card_label_core(name: str) -> str:
     return _join_card(head + tail) or prose
 
 
+# Jednotky a zkratky, které nemají dostat Title Case („mah“ → „Mah“).
+_DISPLAY_UNIT = frozenset({
+    "mah", "rpm", "fps", "mpx", "mpix", "kwh", "wh", "nit", "nits", "hz", "pa", "db",
+})
+# Běžná česká slova bez diakritiky. Řada typu Omen/Surface se zvětší, „kryt“ a „bez“ ne.
+_NO_TITLE = frozenset({
+    "bez", "fotky", "fotka", "foto", "kryt", "kryty", "obal", "obaly", "pouzdro",
+    "kabel", "kabely", "sluchatka", "telefon", "telefony", "notebook", "notebooky",
+    "televize", "televizor", "vysavac", "kavovar", "pracka", "lednice", "konzole",
+    "hodinky", "cerny", "cerna", "cerne", "bily", "bila", "bile", "sedy", "seda",
+    "sede", "modry", "zeleny", "zlaty", "ruzovy", "stribrny", "novy", "nova", "nove",
+    "originalni", "silikonovy", "kovovy", "plastovy", "edice", "barva", "barvy",
+    "nebo", "jen", "vice", "mene", "jako", "jsou", "tak", "uz", "jeste",
+})
+_DISPLAY_ACRONYM = {
+    "ai": "AI", "tv": "TV", "led": "LED", "oled": "OLED", "qled": "QLED",
+    "ssd": "SSD", "hdd": "HDD", "ram": "RAM", "cpu": "CPU", "gpu": "GPU",
+    "nfc": "NFC", "gps": "GPS", "hdr": "HDR", "uhd": "UHD", "fhd": "FHD",
+    "ips": "IPS", "os": "OS", "usb": "USB", "bt": "BT", "anc": "ANC",
+    "enc": "ENC", "gb": "GB", "tb": "TB", "wifi": "Wi-Fi", "wi-fi": "Wi-Fi",
+}
+
+
+def _normalize_display_token(token: str) -> str:
+    """Značka ze seznamu, kód modelu velkými, ostatní malá latinská slova s velkým začátkem.
+
+    Čeština s diakritikou a už napsaná velikost písmen zůstávají. Uložený název se nemění.
+    """
+    match = re.match(r"^([(\[\"']*)(.*?)([)\]\"',.;:]*)$", token)
+    if not match or not match.group(2):
+        return token
+    pre, core, post = match.groups()
+    if ("/" in core or "." in core) and re.search(r"\d", core) and re.search(r"[A-Za-z]", core):
+        return pre + core.upper() + post
+    brand = _BRAND_CANON.get(_token_fold(core))
+    if brand and _is_card_brand(core):
+        return pre + brand + post
+    if _is_model_code(core):
+        return pre + core.upper() + post
+    cap = re.fullmatch(r"(\d+)\s*(gb|tb)", core, re.I)
+    if cap:
+        return pre + cap.group(1) + cap.group(2).upper() + post
+    ac = _DISPLAY_ACRONYM.get(core.lower())
+    if ac and core.isalpha() and core.islower():
+        return pre + ac + post
+    if (re.fullmatch(r"[a-z]{3,}", core) and not _is_card_stop(core)
+            and core not in _DISPLAY_UNIT and core not in _NO_TITLE):
+        return pre + core[:1].upper() + core[1:] + post
+    return token
+
+
+def normalize_display_title(text: str) -> str:
+    """Viditelný zápis. ``samsung qe85qn900f`` → ``Samsung QE85QN900F``, ``Hp`` → ``HP``."""
+    tokens = [_normalize_display_token(t) for t in _split_card_tokens(text or "")]
+    return _join_card(tokens)
+
+
 def card_label(name: str) -> str:
     """Viditelný název na kartě. Původní `name` se nemění.
 
@@ -949,9 +1006,11 @@ def card_label(name: str) -> str:
     pak ``polish_feed_display``: předpony typu Smartphone / Televizor / Bluetooth
     sluchátka, marketing „originální … nové by Harman“, druhé stejné značky a
     úhlopříčka zapsaná jako ``55\\" LED``.
+    Nakonec jen zápis: kanonická značka ze seznamu a kódy modelu velkými písmeny.
     """
     core = _card_label_core(name)
-    return polish_feed_display(core) or core
+    polished = polish_feed_display(core) or core
+    return normalize_display_title(polished) or polished
 
 
 def canonical_slug(name: str, stored: str | None = None) -> str:

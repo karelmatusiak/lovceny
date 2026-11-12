@@ -86,6 +86,28 @@ def allowed_hosts() -> tuple[str, ...]:
     return tuple(sorted(hosts | set(EXTRA_IMAGE_HOSTS)))
 
 
+_PLACEHOLDER_IMAGE = re.compile(
+    r"(placeholder|no[-_]?image|noimage|spacer|woocommerce-placeholder|"
+    r"/pixel\.|blank\.(?:gif|png|svg|jpe?g)|1x1|data:image)",
+    re.I,
+)
+
+
+def has_working_image(url: str | None) -> bool:
+    """Fotka, kterou karta může ukázat. Prázdná adresa a známý placeholder ne.
+
+    Nefetchneme URL: 404 se na kartě schová přes onerror, ale do výběru na
+    úvod a na začátek kategorie taková adresa nepatří, když je prázdná nebo
+    je to zástupný obrázek obchodu.
+    """
+    u = (url or "").strip()
+    if not u or u.startswith("data:"):
+        return False
+    if not (u.lower().startswith(("http://", "https://")) or u.startswith("/")):
+        return False
+    return _PLACEHOLDER_IMAGE.search(u) is None
+
+
 def is_allowed(url: str) -> bool:
     try:
         p = urlparse(url)

@@ -271,7 +271,8 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "Gigabyte GAMING A16 PRO notebook 16GB" not in names
     assert "Nejistý iPhone 16e" not in names
     assert "Skrytý iPhone 16" not in names
-    kryt = next(row for row in index if row["n"] == accessory_name)
+    from lovceny.names import card_label
+    kryt = next(row for row in index if row["n"] == card_label(accessory_name))
     assert kryt["a"] == 1 and kryt["h"].startswith("/go/") and "nofollow sponsored" in kryt["r"]
     urls = json.loads((out / "data" / "url.json").read_text())
     assert urls[norm_offer_url("https://www.alza.cz/samsung-galaxy-a55")] == f"/produkt/{good.id}-{good.slug}"

@@ -70,7 +70,8 @@ def test_404_html_for_browser_json_for_api():
 def test_home_hides_products_without_price():
     init_db()
     db = SessionLocal()
-    priced = Product(name="S cenou redesign", slug="s-cenou-redesign")
+    priced = Product(name="S cenou redesign", slug="s-cenou-redesign",
+                     image_url="https://img.example/redesign.jpg")
     bare = Product(name="Bez ceny redesign", slug="bez-ceny-redesign")
     db.add_all([priced, bare])
     db.flush()

@@ -378,16 +378,20 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
 def home(request: Request, db=Depends(get_db)):
     from .offer_trust import use_cutoffs
     use_cutoffs(db)
-    cards = priced_product_cards(db, limit=6, order="new")
-    deals = real_deals(db, top=3)["buys"]
     from . import blackfriday as bfmod
-    from .hero import hero_showcase
+    from .hero import home_board
+    from .images import has_working_image
+    from .popular import popular_picks
+    featured, extras, chips = home_board(db)
+    deals = [r for r in real_deals(db, top=12)["buys"] if has_working_image(r.product.image_url)][:3]
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     cat_counts = listing_category_counts(db)
     return tpl.TemplateResponse(request, "index.html", {
-        "cards": cards, "deals": deals, "bf": bf,
+        "deals": deals, "bf": bf,
         "thin_history": price_history_thin(db),
-        "hero_picks": hero_showcase(db),
+        "home_picks": [(h, False) for h in featured] + [(h, True) for h in extras],
+        "pick_chips": chips,
+        "popular": popular_picks(db, limit=8),
         "cat_counts": cat_counts,
         "landings": _home_landings(db),
         "ld": [seo.website_ld(), seo.organization_ld()],
@@ -988,8 +992,10 @@ def _cat_rows(db, c):
             continue
         rows.append((p, display, v))
         payload.append((p.id, buyable.id if buyable else None, v))
+    from .images import has_working_image
     rows = sorted(rows, key=lambda r: (
-        r[1].in_stock is False,  # OOS dolů
+        r[1].in_stock is False,  # OOS dolů, nepropagujeme
+        not has_working_image(r[0].image_url),  # bez fotky až za produkty s fotkou
         float(r[1].price) if r[1] else 0,
         r[0].id,  # stejná cena nesmí mezi stránkami přeskočit ani se opakovat
     ))
@@ -1020,7 +1026,8 @@ def _ve_sleve_rows(rows):
         if pct < 1:
             continue
         scored.append(((p, best, v), pct))
-    scored.sort(key=lambda x: (-x[1], x[0][0].id))
+    from .images import has_working_image
+    scored.sort(key=lambda x: (not has_working_image(x[0][0].image_url), -x[1], x[0][0].id))
     return [r for r, _ in scored]
 
 
@@ -1074,8 +1081,8 @@ def _pager_numbers(page: int, pages: int) -> list[int | None]:
 
 
 CAT_VIEWS = {
-    "": ("{name} – ceny, historie a verdikt", "Porovnání cen {gen} z českých e-shopů s historií ceny a verdiktem Kupuj/Počkej. Bez placených pozic, řazeno jen podle ceny."),
-    "nejlevnejsi": ("Nejlevnější {name_l} – aktuální ceny", "Nejlevnější {name_l} v českých e-shopech právě teď. Žebříček podle aktuální ceny, s historií a srovnáním slev s nejnižší cenou za 30 dní."),
+    "": ("{name} – ceny, historie a verdikt", "Porovnání cen {gen} z českých e-shopů s historií ceny a verdiktem Kupuj/Počkej. Bez placených pozic, nejdřív produkty s fotkou, pak podle ceny."),
+    "nejlevnejsi": ("Nejlevnější {name_l} – aktuální ceny", "Nejlevnější {name_l} v českých e-shopech právě teď. Nejdřív produkty s fotkou, v rámci nich podle aktuální ceny, s historií a srovnáním slev s nejnižší cenou za 30 dní."),
     "ve-sleve": ("{name} ve slevě – jen skutečné slevy", "{name} se skutečnou slevou: cena u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, nezařazujeme."),
 }
 

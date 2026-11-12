@@ -48,7 +48,7 @@ def test_other_categories_and_missing_brand():
     assert card_label("65\" TCL 65T69C titanová").startswith("TCL 65T69C")
     assert "titanová" in card_label("65\" TCL 65T69C titanová")
     notebook = "Nový Model Notebook Hp 17-cn Intel i5-13 Ssd 512GB Podsvícená klávesnice"
-    assert card_label(notebook).startswith("Hp 17-cn")
+    assert card_label(notebook).startswith("HP 17-CN")
     assert "512GB" in card_label(notebook)
     assert "Nový Model" not in card_label(notebook)
     generic_watch = "Sportovní Hodinky Chytré Hodinky S Voláním Pánské Dámské Polské Menu Černé"
@@ -62,7 +62,7 @@ def test_other_categories_and_missing_brand():
 
 
 def test_does_not_invent_or_retitle_case():
-    assert card_label("Dkny Bluetooth sluchátka do uší černá/černá Checkered Pattern").startswith("Dkny")
+    assert card_label("Dkny Bluetooth sluchátka do uší černá/černá Checkered Pattern").startswith("DKNY")
     assert "černá/černá" not in card_label("Dkny Bluetooth sluchátka do uší černá/černá Checkered Pattern")
     assert "Checkered Pattern" in card_label("Dkny Bluetooth sluchátka do uší černá/černá Checkered Pattern")
     # bez značky i kódu se nic nepředstírá a čeština se nezmění na title case
@@ -113,6 +113,17 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     assert ld["url"].endswith(f"/produkt/{jbl.id}-{canonical_slug(jbl.name, jbl.slug)}")
     assert canonical_slug(jbl.name, jbl.slug) != jbl.slug
     assert plain.name == "JBL Tune 500 černá"
+
+
+def test_display_title_brand_case_and_model_codes():
+    """Zápis na kartě. Uložený název se nemění – card_label jen vrací řetězec."""
+    raw_tv = 'samsung qe85qn900f 85"'
+    raw_pc = "Hp omen max/45l"
+    assert card_label(raw_tv) == 'Samsung QE85QN900F 85"'
+    assert card_label(raw_pc) == "HP Omen MAX/45L"
+    assert card_label(raw_tv) != raw_tv and card_label(raw_pc) != raw_pc
+    # čeština s diakritikou nezíská Title Case
+    assert card_label("pákový tlakový kávovar Srebny 20 Bar").startswith("pákový")
 
 
 def test_category_word_does_not_leave_a_space_before_comma():
