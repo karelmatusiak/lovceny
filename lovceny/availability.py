@@ -73,6 +73,22 @@ def parse_schema_availability(avail: str | None) -> bool | None:
     return None
 
 
+def on_order_not_stock(text: str | None) -> bool:
+    """„Na objednávku“ s dodáním v týdnech není skladem.
+
+    DronPro tak píše „Na objednávku – odešleme za 1–4 týdny“ a zároveň v JSON-LD
+    nechá InStock. Krátká objednávka do pár dnů (jiné obchody) skladem zůstává.
+    """
+    if not text:
+        return False
+    import unicodedata
+    raw = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    idx = raw.find("na objednavku")
+    if idx < 0:
+        return False
+    return bool(re.search(r"tydn|mesic", raw[idx:idx + 80]))
+
+
 def parse_html_availability(html: str) -> bool | None:
     """Hrubá detekce dostupnosti z viditelného textu stránky."""
     if not html:
@@ -81,6 +97,10 @@ def parse_html_availability(html: str) -> bool | None:
     # Ořez na rozumnou délku – stačí body-ish část
     if len(low) > 200_000:
         low = low[:200_000]
+    if on_order_not_stock(low):
+        return False
+    if "dpp-stock__label--objednavka" in low:
+        return False
     for t in _OOS_TEXT:
         if t in low:
             return False
@@ -104,11 +124,37 @@ def buyable_offers(offers) -> list:
     return [o for o in offers if offer_is_buyable(o)]
 
 
-def priced_offers(offers) -> list:
+def offer_is_suppressed(offer) -> bool:
+    """Nabídka, kterou na webu neukazujeme. Historie cen v databázi zůstává.
+
+    Schované: withheld, captcha Mironetu, použité/repasované, příslušenství
+    přilepené k hlavnímu produktu a kód modelu s jinými číslicemi
+    (ECAM 220.30 ≠ 220.80). Stejné EAN jiný kód nenechá.
+    """
+    if getattr(offer, "withheld", False):
+        return True
     from .offer_trust import offer_is_captcha_hidden
+    if offer_is_captcha_hidden(offer):
+        return True
+    from .categories import is_accessory_text, is_non_new
+    from .matching import label_from_url, model_codes_conflict
+    label = label_from_url(getattr(offer, "url", "") or "")
+    shop_category = getattr(offer, "shop_category", None)
+    if is_non_new(label, shop_category=shop_category):
+        return True
+    product = getattr(offer, "product", None)
+    product_name = getattr(product, "name", "") or ""
+    if is_accessory_text(label) and not is_accessory_text(product_name):
+        return True
+    if product is not None and product_name:
+        if model_codes_conflict(product_name, getattr(offer, "url", "") or "") or model_codes_conflict(product_name, label):
+            return True
+    return False
+
+
+def priced_offers(offers) -> list:
     return [o for o in offers
-            if getattr(o, "price", None) is not None and not offer_is_captcha_hidden(o)
-            and not getattr(o, "withheld", False)]
+            if getattr(o, "price", None) is not None and not offer_is_suppressed(o)]
 
 
 def best_buyable_offer(offers, cutoffs=None):
@@ -127,17 +173,14 @@ def last_known_offer(offers):
 
 
 def sort_offers_for_display(offers, cutoffs=None) -> list:
-    """Ověřené koupitelné napřed, neověřené za nimi, není-skladem na konci."""
-    from .offer_trust import offer_is_promoted, unverified_note
+    """Jen podle ceny. Ověření a sklad mění tlačítko Koupit, ne pořadí.
+
+    `cutoffs` zůstává v podpisu kvůli volajícím. Stránka slibuje řazení výhradně podle ceny.
+    """
     priced = priced_offers(offers)
+    return sorted(priced, key=lambda o: (float(o.price), int(getattr(o, "id", 0) or 0)))
 
-    def _key(o):
-        if offer_is_promoted(o, cutoffs):
-            group = 0
-        elif unverified_note(o, cutoffs):
-            group = 1
-        else:
-            group = 2
-        return (group, float(o.price))
 
-    return sorted(priced, key=_key)
+def visible_offer_count(offers) -> int:
+    """Počet nabídek, které stránka produktu opravdu vypíše."""
+    return len(priced_offers(offers))

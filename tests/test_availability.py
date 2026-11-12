@@ -36,6 +36,8 @@ def test_parse_schema_and_html():
     assert parse_html_availability("Stav: Není skladem · dodání neznámé") is False
     assert parse_html_availability("Vyprodáno do vyprodání zásob") is False
     assert parse_html_availability("Na objednávku – dodání do 5 dnů") is True
+    assert parse_html_availability("Na objednávku – odešleme za 1–4 týdny") is False
+    assert parse_html_availability('<strong class="dpp-stock__label--objednavka">Na objednávku</strong>') is False
     assert parse_html_availability("Skladem u dodavatele") is True
 
 
@@ -51,7 +53,7 @@ def test_offer_is_buyable_and_best():
     assert best_buyable_offer([cheap_oos, mid, unknown, no_price]) is unknown
     assert last_known_offer([cheap_oos, mid, unknown]) is cheap_oos
     ordered = sort_offers_for_display([cheap_oos, mid, unknown])
-    assert ordered == [unknown, mid, cheap_oos]
+    assert [o.price for o in ordered] == [100, 150, 200]
 
 
 def test_product_page_hides_cta_when_only_oos(client_db):
@@ -85,7 +87,8 @@ def test_product_page_cta_uses_buyable_not_cheaper_oos(client_db):
     # 12 000 Kč v CZ formátu
     assert "12" in html and "000" in html
     assert "offer-oos" in html
-    assert html.index("offer-oos") > html.index("offer-best")
+    # Levnější nabídka, která není skladem, je ve výpisu nad dražší skladem. Koupit zůstává u skladu.
+    assert html.index("offer-oos") < html.index("offer-best")
 
 
 def test_deals_skip_all_oos(client_db, monkeypatch):

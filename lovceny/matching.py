@@ -257,6 +257,8 @@ def titles_conflict(a: str, b: str) -> bool:
     ga, gb = _generations(ca), _generations(cb)
     if ga and gb and ga != gb:
         return True
+    if model_codes_conflict(a, b):
+        return True
     ta, tb = _bare_model_tokens(ca), _bare_model_tokens(cb)
     if ta and tb and ta.isdisjoint(tb):
         return True
@@ -278,6 +280,43 @@ def _dyson_versions(canon: str) -> set[str]:
     return set(re.findall(r"\bv(\d{1,2})\b", canon))
 
 
+def _code_text(text: str) -> str:
+    """Nechá tečky a spojovníky v kódu modelu (ECAM 220.30.SB, ecam-220-30-sb)."""
+    s = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
+    s = s.replace("_", " ")
+    s = re.sub(r"(?<=\d)\s*-\s*(?=\d)", ".", s)
+    s = re.sub(r"(?<=[a-z])\s*-\s*(?=\d)", "", s)
+    s = re.sub(r"(?<=\d)\s*-\s*(?=[a-z])", ".", s)
+    s = re.sub(r"[^a-z0-9. ]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+_DOTTED_CODE_RE = re.compile(r"\b(?:[a-z]{2,12})?\s*(\d{2,4}(?:\.\d{1,4})+(?:\.[a-z0-9]{1,6})*)\b")
+
+
+def model_code_cores(text: str) -> set[tuple[int, ...]]:
+    """Číselné jádro kódu s tečkou (220.30 ≠ 220.80). Samotné „15“ nebo „128gb“ ne."""
+    out: set[tuple[int, ...]] = set()
+    for match in _DOTTED_CODE_RE.finditer(_code_text(text)):
+        nums: list[int] = []
+        for part in match.group(1).split("."):
+            if part.isdigit():
+                nums.append(int(part))
+            else:
+                break
+        if len(nums) >= 2:
+            out.add(tuple(nums))
+    return out
+
+
+def model_codes_conflict(a: str, b: str) -> bool:
+    """Obě strany mají kód modelu a číslice se neshodují. Stejné EAN řeší volající."""
+    left, right = model_code_cores(a), model_code_cores(b)
+    if not left or not right:
+        return False
+    return left.isdisjoint(right)
+
+
 def url_model_conflict(product_name: str, offer_text: str) -> bool:
     """True = adresa nebo krátký název nabídky přidává jiný model.
 
@@ -285,6 +324,8 @@ def url_model_conflict(product_name: str, offer_text: str) -> bool:
     konflikt není. Adresa, která přidá FE/Origin/jiný kód, ano.
     """
     from .shops.feed import _variants, canonicalize_name
+    if model_codes_conflict(product_name or "", offer_text or ""):
+        return True
     left = canonicalize_name(product_name or "")
     right = canonicalize_name(offer_text or "")
     if not left or not right:

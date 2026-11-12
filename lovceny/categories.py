@@ -451,12 +451,56 @@ def offer_title_from_url(url: str) -> str:
     return slug.replace("-", " ").replace("_", " ")
 
 
+# DronPro a podobné feedy dávají gripy, objektivy a sady do „Digitální kamery“.
+# „bez objektivu“ u těla foťáku příslušenství není. „baterie“ jen jako celé slovo
+# (ne „s baterií“ v názvu přístroje).
+_CAMERA_ACCESSORY_RX = re.compile(
+    r"\brukoj"
+    r"|\bmakro\s+objektiv\b|\bobjektiv\s+(pro|na|fov)\b"
+    r"|\bnabijeci\s+stanice\b"
+    r"|\bpotapecsk\w*\s+sada\b|\bsada\s+na\s+potapen\w*\b|\bpotapecsk\w*\s+klec\b"
+    r"|\bdrzak\b"
+    r"|\bfiltr\s+nd\b|\bnd\d*\s+filtr\b|\bfiltry\b"
+    r"|\bbaterie\b",
+)
+# Stanice / dock / base je příslušenství, pokud to není samotný vysavač
+# („se stanicí“, „with station“). „Autoempty Station“ a vysypávací stanice jsou stanice.
+_VACUUM_UNIT_RX = re.compile(r"\b(vysavac\w*|vacuum|roborock|roomba)\b")
+_STATION_WORD_RX = re.compile(r"\b(stanice|stanici|station|dock|docking|base)\b")
+_EMPTY_STATION_RX = re.compile(r"\b(vysypavac\w*|odsavac\w*|autoempty|auto\s*empty|emptying)\b")
+_STATION_FEATURE_RX = re.compile(
+    r"\b(se|s|vcetne|with)\s+(\w+\s+){0,3}(stanic\w*|station|dock|base)\b"
+)
+
+
+def is_station_accessory(name: str) -> bool:
+    """Vysypávací stanice, dock a base. Vysavač, který stanici jen obsahuje, ne."""
+    n = _fold(name)
+    has_station = _STATION_WORD_RX.search(n) is not None
+    has_empty = _EMPTY_STATION_RX.search(n) is not None
+    if not has_station and not has_empty:
+        return False
+    if _VACUUM_UNIT_RX.search(n) and _STATION_FEATURE_RX.search(n):
+        return False
+    if re.search(r"\b(stanice|station|dock|base|vysypavac\w*|odsavac\w*)\b.{0,40}\b(pro|k|ke|na|for)\b", n):
+        return True
+    if re.match(r"\s*(stanice|dock|docking|base|vysypavac|odsavac|nabijeci stanice|autoempty)\b", n):
+        return True
+    if has_empty and has_station:
+        return True
+    if has_station and not _VACUUM_UNIT_RX.search(n):
+        return True
+    return False
+
+
 def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     """True = příslušenství / náhradní díl / služba – ne hlavní produkt."""
     n = _fold(name)
     if standalone_accessory_product(name, shop_category):
         return True
-    if _ACCESSORY_NAME_RX.search(n):
+    if _ACCESSORY_NAME_RX.search(n) or _CAMERA_ACCESSORY_RX.search(n):
+        return True
+    if is_station_accessory(name):
         return True
     if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
         return True
@@ -750,6 +794,8 @@ def classify_feed_item(
     from .exclusions import is_excluded_brand
     if is_excluded_brand(name):
         return None, "excluded"
+    if is_non_new(name, shop_category=shop_category):
+        return None, "used"
     parts = _path_segments(shop_category)
     if shop == "xupe":
         if _leaf_name_accessory(name, parts):
@@ -889,9 +935,60 @@ _JBL_HEADPHONE_TEXT_RX = re.compile(
 )
 
 
+# Ne-nové zboží. Prázdný stav neznamená použité. „Premium“ samo o sobě ne
+# (řada sluchátek), jen jako stupeň „Stav produktu“.
+_NON_NEW_CONDITION = frozenset({
+    "used", "refurbished", "damaged", "open_box", "open box",
+    "bazar", "pouzity", "pouzite", "repasovany", "repasovane",
+    "rozbaleny", "rozbalene", "zanovni",
+})
+_NON_NEW_GRADE = frozenset({
+    "vyborny", "velmi dobry", "dobry", "zanovni", "premium",
+    "bazar", "pouzity", "pouzite", "repasovany", "rozbaleny",
+})
+_NEW_GRADE = frozenset({"novy", "nove", "nova", "new"})
+_NON_NEW_TEXT_RX = re.compile(
+    r"\b(pouzit\w*|bazar\w*|rozbalen\w*|repasovan\w*|zanovn\w*)\b"
+    r"|\bstav\s+produktu\b"
+    r"|\bvyborny(\s+stav)?\b"
+    r"|\bvelmi\s+dobry(\s+stav)?\b"
+    r"|\bdobry\s+stav\b"
+)
+
+
+def _grade_fold(value: str | None) -> str:
+    raw = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", raw).strip()
+
+
+def is_non_new(
+    name: str | None = None,
+    condition: str | None = None,
+    shop_category: str | None = None,
+    item_type: str | None = None,
+) -> bool:
+    """Použité, bazar, rozbalené nebo repasované. Nové a prázdný stav ne.
+
+    Bereme g:condition, Heureka ITEM_TYPE, stupeň stavu (Výborný / Velmi dobrý /
+    Dobrý stav) a slova v názvu nebo v cestě kategorie. Nejisté necháme být.
+    """
+    for raw in (condition, item_type):
+        token = _grade_fold(raw).replace("-", " ")
+        if not token:
+            continue
+        if token in _NEW_GRADE or token == "new":
+            continue
+        if token in _NON_NEW_CONDITION or token in _NON_NEW_GRADE:
+            return True
+        if any(part in _NON_NEW_CONDITION or part in _NON_NEW_GRADE for part in token.split()):
+            return True
+    blob = _fold(f"{name or ''} {shop_category or ''}")
+    return _NON_NEW_TEXT_RX.search(blob) is not None
+
+
 def jbl_is_bazar(name: str, condition: str | None = None) -> bool:
     """Bazar / used z JBL feedu (g:condition nebo „Bazar“ v názvu)."""
-    if (condition or "").strip().lower() == "used":
+    if is_non_new(name, condition=condition):
         return True
     return _JBL_BAZAR_RX.search(_fold(name)) is not None
 

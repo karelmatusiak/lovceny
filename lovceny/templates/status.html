@@ -11,7 +11,7 @@
   {% else %}
   <div class="st-list">
   {% for r in rows %}{% set h = r.h %}{% set l = r.last %}
-    <article class="card st-card">
+    <article class="card st-card" id="obchod-{{ r.shop.slug }}">
       <div class="st-head">
         <h2 class="h3"><span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}</h2>
         {% if not h %}<span class="st st-wait">bez sledovaných nabídek</span>

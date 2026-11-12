@@ -365,7 +365,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         call("/", home, request_for("/"), db=db)
         call("/slevy", deals_page, request_for("/slevy"), db=db)
         call("/kategorie", categories_index, request_for("/kategorie"), db=db)
-        call("/obchody", shops, request_for("/obchody"))
+        call("/obchody", shops, request_for("/obchody"), db=db)
         call("/o-nas", about, request_for("/o-nas"))
         call("/ochrana-osobnich-udaju", privacy, request_for("/ochrana-osobnich-udaju"))
         call("/cookies", cookies, request_for("/cookies"))
