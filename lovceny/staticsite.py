@@ -35,6 +35,10 @@ log = logging.getLogger("lovceny.staticsite")
 # Stejné limity jako Cloudflare Pages _redirects (statické / dynamické).
 REDIRECT_STATIC_LIMIT = 2000
 REDIRECT_DYNAMIC_LIMIT = 100
+# HTML (produkt, kategorie, homepage, slevy, …) se má po nasazení rychle vyměnit.
+# Dlouhá cache jen u /static/*, kam odkazy dávají ?v=<hash obsahu>.
+HTML_CACHE_CONTROL = "public, max-age=0, s-maxage=300, must-revalidate"
+STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 _STRANA_TMPL = r"((?:{origin})?/kategorie/[a-z0-9-]+(?:/(?:nejlevnejsi|ve-sleve))?)\?strana=(\d+)"
 _IMG_PROXY = re.compile(r"/img/\d+\.webp\?u=([^\"'\s>]+)")
@@ -154,6 +158,10 @@ def security_headers() -> str:
         "  Referrer-Policy: strict-origin-when-cross-origin",
         "  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
         f"  Content-Security-Policy: {csp}",
+        f"  Cache-Control: {HTML_CACHE_CONTROL}",
+        "",
+        "/static/*",
+        f"  Cache-Control: {STATIC_CACHE_CONTROL}",
         "",
         "/go/*",
         "  X-Robots-Tag: noindex, nofollow",
@@ -167,12 +175,8 @@ def security_headers() -> str:
 
 
 def _redirect_target(db, product) -> str:
-    from .main import _merged_target
-    target = _merged_target(db, product)
-    if target is not None and target.catalog_hidden is not True:
-        return product_path(target)
-    cat = BY_SLUG.get(product.category_slug or "")
-    return f"/kategorie/{cat.slug}" if cat else "/"
+    from .main import _catalog_redirect
+    return _catalog_redirect(db, product)
 
 
 class _Redirects:
@@ -190,8 +194,17 @@ class _Redirects:
 
     def add_retired(self, product, dest: str) -> None:
         self.gone[str(product.id)] = dest
-        slug = (product.slug or "").strip("-")
-        if slug:
+        slugs: list[str] = []
+        stored = (product.slug or "").strip("-")
+        if stored:
+            slugs.append(stored)
+        path = product_path(product)
+        prefix = f"/produkt/{product.id}-"
+        if path.startswith(prefix):
+            public = path[len(prefix):]
+            if public and public not in slugs:
+                slugs.append(public)
+        for slug in slugs:
             self.gone[f"{product.id}-{slug}"] = dest
 
     def add_former_slug(self, product_id: int, old_slug: str, dest: str) -> None:
@@ -217,6 +230,9 @@ def write_redirects(root: Path, book: _Redirects, *, static_limit: int) -> str:
     fixed_static = [row for row in book.static if not row[0].startswith("/produkt/")]
     product_static: list[tuple[str, str, int]] = []
     for key, dest in sorted(book.gone.items(), key=lambda item: item[0]):
+        # Soubor, který build právě zapsal, nesmí přebít přesměrování.
+        if (root / "produkt" / f"{key}.html").is_file():
+            continue
         product_static.append((f"/produkt/{key}", dest, 301))
     for pid, dest in sorted(book.live.items(), key=lambda item: int(item[0])):
         product_static.append((f"/produkt/{pid}", dest, 301))
@@ -245,21 +261,22 @@ def _write_product_function(root: Path, book: _Redirects) -> None:
         "live": book.live,
     }
     fn.write_text(
-        "/* Vygenerováno build_static.py. 301 vyřazených a holých /produkt/ID, když _redirects nestačí. */\n"
+        "/* Vygenerováno build_static.py. 301 vyřazených a holých /produkt/ID, když _redirects nestačí.\n"
+        "   Existující HTML se vrací dřív než mapa, ať živá stránka nikdy nepřesměruje. */\n"
         "export async function onRequest(context) {\n"
         f"  const map = {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))};\n"
         "  const url = new URL(context.request.url);\n"
         "  let path = url.pathname.replace(/\\/+$/, \"\") || \"/\";\n"
         "  const m = path.match(/^\\/produkt\\/(\\d+)(?:-([a-z0-9-]*))?$/);\n"
         "  if (!m) return context.env.ASSETS.fetch(context.request);\n"
+        "  const asset = await fetchAsset(context, path);\n"
+        "  if (asset && asset.status !== 404) return asset;\n"
         "  const id = m[1];\n"
         "  const key = m[2] ? id + \"-\" + m[2] : id;\n"
         "  const target = map.gone[key] || map.gone[id];\n"
-        "  if (target && target.startsWith(\"/\") && !target.startsWith(\"//\")) {\n"
+        "  if (target && target.startsWith(\"/\") && !target.startsWith(\"//\") && target !== path) {\n"
         "    return Response.redirect(new URL(target, url.origin), 301);\n"
         "  }\n"
-        "  const asset = await fetchAsset(context, path);\n"
-        "  if (asset.status !== 404) return asset;\n"
         "  const live = map.live[id];\n"
         "  if (live && live.startsWith(\"/\") && !live.startsWith(\"//\") && live !== path) {\n"
         "    return Response.redirect(new URL(live, url.origin), 301);\n"
@@ -406,6 +423,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 book.add_retired(item, _redirect_target(db, item))
                 continue
             if item.catalog_hidden or is_non_new(item.name or "", shop_category=item.category):
+                book.add_retired(item, _redirect_target(db, item))
                 continue
             if item.retired_at is not None:
                 book.add_retired(item, _redirect_target(db, item))
@@ -418,6 +436,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 response = product(req, item.id, public_slug, db=db)
             except HTTPException as exc:
                 if exc.status_code == 404:
+                    book.add_retired(item, _redirect_target(db, item))
                     continue
                 raise
             if _status(response) in (301, 302, 303, 307, 308):
@@ -514,6 +533,13 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 "(domain-level redirects nejsou podporované) ani do _headers. "
                 "V Cloudflare nastav Bulk Redirect nebo Redirect Rule: hostname www.lovceny.cz, "
                 "cíl https://lovceny.cz, stav 301, zachovat cestu a query.",
+                "Stará HTML v edge cache zóny lovceny.cz (Age roste, s-maxage=604800) nové _headers samo nesmaže. "
+                "Po nasazení projektu Pages lovceny vyčisti jen zónu lovceny.cz: Purge Cache podle URL "
+                "https://lovceny.cz/produkt/1506-apple-iphone-15-256gb-black-stav-produktu-zanovni a "
+                "https://lovceny.cz/produkt/1507-apple-iphone-15-256gb-blue-stav-produktu-vyborny, "
+                "a když Age zůstane, Purge Everything jen na té zóně. "
+                "https://lovceny.pages.dev ty URL nekešuje a má ukázat 301 hned. "
+                "Jinou zónu ani jiný Pages projekt nečistit.",
             ],
             "not_published": LOST_WITHOUT_SERVER,
         }

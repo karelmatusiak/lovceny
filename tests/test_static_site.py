@@ -12,7 +12,7 @@ from lovceny.main import app, tpl
 from lovceny.models import Offer, PricePoint, Product
 from lovceny.seo import robots_txt, sitemap_xml
 from lovceny.names import canonical_slug
-from lovceny.staticsite import _Redirects, build, norm_offer_url, output_path, rewrite_img_proxy, rewrite_pagination, security_headers, write_redirects
+from lovceny.staticsite import HTML_CACHE_CONTROL, STATIC_CACHE_CONTROL, _Redirects, build, norm_offer_url, output_path, rewrite_img_proxy, rewrite_pagination, security_headers, write_redirects
 from lovceny.web import public_url
 from lovceny.util import slugify
 
@@ -68,8 +68,24 @@ def test_redirect_overflow_uses_a_pages_function(tmp_path):
     assert "/produkt/0 " not in text
     script = (tmp_path / "functions" / "produkt" / "[[path]].js").read_text()
     assert '"0":"/kategorie/telefony"' in script or '"0": "/kategorie/telefony"' in script
+    assert script.index("fetchAsset(context, path)") < script.index("map.gone")
     routes = json.loads((tmp_path / "_routes.json").read_text())
     assert routes["include"] == ["/produkt/*"]
+
+
+def test_existing_product_file_is_not_redirected(tmp_path):
+    book = _Redirects()
+    (tmp_path / "produkt").mkdir()
+    (tmp_path / "produkt" / "7-zivy.html").write_text("<html></html>", encoding="utf-8")
+    book.gone["7-zivy"] = "/kategorie/telefony"
+    book.gone["7"] = "/kategorie/telefony"
+    book.gone["8-skryty"] = "/kategorie/telefony"
+    mode = write_redirects(tmp_path, book, static_limit=20)
+    assert mode == "file"
+    text = (tmp_path / "_redirects").read_text()
+    assert "/produkt/7-zivy " not in text
+    assert "/produkt/7 /kategorie/telefony 301" in text
+    assert "/produkt/8-skryty /kategorie/telefony 301" in text
 
 
 def _offer(product, shop, url, price, *, stock=True, when=None, days=8):
@@ -130,6 +146,19 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
         name="Skrytý iPhone 16", slug="skryty-iphone-16",
         category_slug="telefony", category="Mobilní telefony", catalog_hidden=True,
     )
+    used = Product(
+        name="Apple iPhone 15 256GB Black Stav produktu: Zánovní",
+        slug="apple-iphone-15-256gb-black-stav-produktu-zanovni",
+        category_slug="telefony", category="Mobilní telefony",
+    )
+    used_blue = Product(
+        name="Apple iPhone 15 256GB Blue Stav produktu: Výborný",
+        slug="apple-iphone-15-256gb-blue-stav-produktu-vyborny",
+        category_slug="telefony", category="Mobilní telefony", catalog_hidden=True,
+    )
+    no_category = Product(
+        name="Skryté bez kategorie", slug="skryte-bez-kategorie", catalog_hidden=True,
+    )
     review = Product(
         name="Nejistý iPhone 16e", slug="nejisty-iphone-16e",
         category_slug="telefony", category="Mobilní telefony", needs_review=True,
@@ -143,7 +172,10 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
         name=dirty_name, slug=slugify(dirty_name),
         category_slug="televize", category="Televize",
     )
-    db.add_all([good, thin, oos, stale, accessory, laptop, gpu, perfume, hidden, review, merged, dirty])
+    db.add_all([
+        good, thin, oos, stale, accessory, laptop, gpu, perfume, hidden, review, merged, dirty,
+        used, used_blue, no_category,
+    ])
     db.flush()
     merged.redirect_product_id = good.id
     db.add_all([
@@ -245,7 +277,9 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert urls[norm_offer_url("https://www.alza.cz/samsung-galaxy-a55")] == f"/produkt/{good.id}-{good.slug}"
 
     assert not (out / "admin").exists()
-    assert not (out / "produkt" / f"{hidden.id}-{hidden.slug}").exists()
+    assert not (out / "produkt" / f"{hidden.id}-{hidden.slug}.html").exists()
+    assert not (out / "produkt" / f"{used.id}-{used.slug}.html").exists()
+    assert not (out / "produkt" / f"{used_blue.id}-{used_blue.slug}.html").exists()
     assert not (out / "produkt" / f"{perfume.id}-{perfume.slug}").exists()
     review_html = (out / "produkt" / f"{review.id}-{review.slug}.html").read_text()
     assert "noindex" in review_html and "btn-buy" not in review_html
@@ -299,6 +333,14 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert f"/produkt/{good.id} /produkt/{good.id}-{good.slug} 301" in redirects
 
     assert f"/produkt/{merged.id}-{merged.slug} /produkt/{good.id}-{good.slug} 301" in redirects
+    for gone in (hidden, used, used_blue):
+        assert f"/produkt/{gone.id}-{gone.slug} /kategorie/telefony 301" in redirects
+        assert f"/produkt/{gone.id} /kategorie/telefony 301" in redirects
+    assert f"/produkt/{no_category.id}-{no_category.slug} / 301" in redirects
+    assert f"/produkt/{no_category.id} / 301" in redirects
+    assert not any(
+        line.startswith(f"/produkt/{good.id}-{good.slug} ") for line in redirects.splitlines()
+    )
     dirty_public = canonical_slug(dirty.name, dirty.slug)
     assert dirty_public != dirty.slug
     assert f"/produkt/{dirty.id}-{dirty.slug} /produkt/{dirty.id}-{dirty_public} 301" in redirects
@@ -311,6 +353,9 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "/pes/* /bez-serveru 301" in redirects
     headers = (out / "_headers").read_text()
     assert headers == security_headers()
+    assert f"Cache-Control: {HTML_CACHE_CONTROL}" in headers
+    assert f"Cache-Control: {STATIC_CACHE_CONTROL}" in headers
+    assert headers.index("/*") < headers.index("/static/*") < headers.index("/go/*")
     assert "Strict-Transport-Security:" in headers
     assert "X-Content-Type-Options: nosniff" in headers
     assert "Referrer-Policy:" in headers

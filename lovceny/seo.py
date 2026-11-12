@@ -251,7 +251,7 @@ def sitemap_xml(db) -> str:
             urls.append((f"{base}/kategorie/{c.slug}/ve-sleve", None))
     cutoffs = use_cutoffs(db)
     products = db.execute(
-        select(Product.id, Product.slug, Product.created_at, Product.name)
+        select(Product.id, Product.slug, Product.created_at, Product.name, Product.category)
         .where(
             Product.retired_at.is_(None),
             Product.catalog_hidden.is_(False),
@@ -264,13 +264,14 @@ def sitemap_xml(db) -> str:
     if products:
         for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
             offers_by[offer.product_id].append(offer)
+    from .categories import is_non_new
     from .exclusions import is_excluded_brand
     from .landings import published_paths
     from .names import canonical_slug
     for path in published_paths(db):
         urls.append((base + path, None))
-    for pid, slug, created, name in products:
-        if is_excluded_brand(name or ""):
+    for pid, slug, created, name, category in products:
+        if is_excluded_brand(name or "") or is_non_new(name or "", shop_category=category):
             continue
         holder = type("P", (), {"name": name})()
         if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):
