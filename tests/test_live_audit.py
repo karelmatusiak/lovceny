@@ -155,7 +155,9 @@ def test_accessory_product_is_hidden_and_station_offer_detached(client_db):
     assert stats["products_hidden_accessory"] >= 1
     assert stats["offers_withheld_accessory"] == 1
     assert station.withheld is True
-    assert c.get(f"/produkt/{grip.id}", follow_redirects=False).status_code == 404
+    gone = c.get(f"/produkt/{grip.id}", follow_redirects=False)
+    assert gone.status_code == 301
+    assert gone.headers["location"] == "/kategorie/fotoaparaty"
     page = c.get(f"/produkt/{vacuum.id}").text
     assert "Softcom" not in page
 
@@ -213,7 +215,9 @@ def test_price_fetch_does_not_republish_a_used_phone(client_db):
     assert apply_listing(db, phone) == "hidden"
     assert phone.catalog_hidden is True
     assert phone.needs_review is False
-    assert c.get(f"/produkt/{phone.id}", follow_redirects=False).status_code == 404
+    gone = c.get(f"/produkt/{phone.id}-{phone.slug}", follow_redirects=False)
+    assert gone.status_code == 301
+    assert gone.headers["location"] == "/kategorie/telefony"
 
 
 def test_feed_item_roundtrip_types():

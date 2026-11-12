@@ -226,6 +226,17 @@ def _merged_target(db, p: Product):
     return None
 
 
+def _catalog_redirect(db, p: Product) -> str:
+    """Kam poslat vyřazenou, skrytou nebo použitou adresu. Živý produkt sem nepatří."""
+    from .categories import is_non_new
+    target = _merged_target(db, p)
+    if target is not None and target.catalog_hidden is not True:
+        if not is_non_new(target.name or "", shop_category=target.category):
+            return f"/produkt/{target.id}-{pslug(target)}"
+    cat = BY_SLUG.get(p.category_slug or "")
+    return f"/kategorie/{cat.slug}" if cat else "/"
+
+
 def product_summary(p: Product):
     """Nejlepší *koupitelná* nabídka (ne „Není skladem“) + verdikt.
 
@@ -575,19 +586,15 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         raise HTTPException(404)
     from .exclusions import is_excluded_brand
     if is_excluded_brand(p.name or ""):
-        cat = BY_SLUG.get(p.category_slug or "")
-        target = f"/kategorie/{cat.slug}" if cat else "/"
-        return RedirectResponse(target, status_code=301)
-    if p.catalog_hidden:
-        raise HTTPException(404)
-    # Soft-retired: 301 na kategorii (nebo /), ať staré URL nepřijdou o SEO/uživatele.
-    if p.retired_at is not None:
-        target_prod = _merged_target(db, p)
-        if target_prod is not None:
-            return RedirectResponse(f"/produkt/{target_prod.id}-{pslug(target_prod)}", status_code=301)
-        cat = BY_SLUG.get(p.category_slug or "")
-        target = f"/kategorie/{cat.slug}" if cat else "/"
-        return RedirectResponse(target, status_code=301)
+        return RedirectResponse(_catalog_redirect(db, p), status_code=301)
+    from .categories import is_non_new
+    # Skryté, použité a vyřazené adresy patří na kategorii, ne na 404.
+    if (
+        p.catalog_hidden
+        or p.retired_at is not None
+        or is_non_new(p.name or "", shop_category=p.category)
+    ):
+        return RedirectResponse(_catalog_redirect(db, p), status_code=301)
     # Aktivní: špatný nebo starý feedový slug → kanonická URL.
     canon_slug = pslug(p)
     if slug and slug != canon_slug:

@@ -121,7 +121,8 @@ def test_unmapped_stays_hidden_until_approve_or_reject():
     prod = db.query(Product).filter(Product.name == item.name).one()
     assert prod.catalog_hidden and prod.category_slug is None
     client = TestClient(app)
-    assert client.get(f"/produkt/{prod.id}").status_code == 404
+    hidden = client.get(f"/produkt/{prod.id}", follow_redirects=False)
+    assert hidden.status_code == 301 and hidden.headers["location"] == "/"
     decision = db.query(TriageDecision).filter_by(product_id=prod.id, status="auto").one()
     import os
     os.environ["ADMIN_TOKEN"] = TOKEN
