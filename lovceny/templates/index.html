@@ -164,6 +164,16 @@
 {% block scripts %}
 <script>
 (function () {
+  document.querySelectorAll(".hero-pick").forEach(function (card) {
+    var img = card.querySelector("img");
+    if (!img) return;
+    function broken() {
+      card.setAttribute("data-broken", "1");
+      card.hidden = true;
+    }
+    img.addEventListener("error", broken);
+    if (img.complete && img.naturalWidth === 0) broken();
+  });
   var row = document.getElementById("home-picks");
   if (!row) return;
   var chips = document.querySelectorAll(".pick-chips [data-pick]");
@@ -172,6 +182,7 @@
       b.setAttribute("aria-pressed", b.getAttribute("data-pick") === slug ? "true" : "false");
     });
     row.querySelectorAll(".hero-pick").forEach(function (card) {
+      if (card.getAttribute("data-broken") === "1") { card.hidden = true; return; }
       var extra = card.hasAttribute("data-extra");
       var cat = card.getAttribute("data-cat") || "";
       card.hidden = slug === "all" ? extra : cat !== slug;
