@@ -97,6 +97,15 @@ jobs:
           ALLEGRO_FEED_URL: ${{ secrets.ALLEGRO_FEED_URL }}
           POCITACE24_FEED_URL: ${{ secrets.POCITACE24_FEED_URL }}
           JBL_FEED_URL: ${{ secrets.JBL_FEED_URL }}
+          TESLA_FEED_URL: ${{ secrets.TESLA_FEED_URL }}
+          XUPE_FEED_URL: ${{ secrets.XUPE_FEED_URL }}
+          TERA_FEED_URL: ${{ secrets.TERA_FEED_URL }}
+          AMAZESTORE_FEED_URL: ${{ secrets.AMAZESTORE_FEED_URL }}
+          MISURA_FEED_URL: ${{ secrets.MISURA_FEED_URL }}
+          BSCOM_FEED_URL: ${{ secrets.BSCOM_FEED_URL }}
+          DRONPRO_FEED_URL: ${{ secrets.DRONPRO_FEED_URL }}
+          IPHONEMARKET_FEED_URL: ${{ secrets.IPHONEMARKET_FEED_URL }}
+          PROMOBILY_FEED_URL: ${{ secrets.PROMOBILY_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
           DOGNET_CHID: ${{ secrets.DOGNET_CHID }}
           # Upozornění „cena klesla“ odchází odsud (po každém stažení). Bez secretů → jen log.

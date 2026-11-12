@@ -450,7 +450,7 @@ def parse_xml(data: bytes | str) -> list[FeedItem]:
     return out
 
 
-def parse_xml_stream(source) -> list[FeedItem]:
+def parse_xml_stream(source, keep=None) -> list[FeedItem]:
     """Streamovaný Heureka XML: source = cesta, file-like nebo bytes.
     Po každém SHOPITEM uvolní element (iterparse) – vhodné pro velké feedy."""
     if isinstance(source, (bytes, bytearray)):
@@ -461,9 +461,9 @@ def parse_xml_stream(source) -> list[FeedItem]:
             continue
         row = {c.tag.split("}")[-1]: (c.text or "") for c in el}
         it = _from_row(row)
-        if it:
-            out.append(it)
         el.clear()
+        if it and (keep is None or keep(it)):
+            out.append(it)
     return out
 
 
@@ -506,12 +506,13 @@ def _in_stock_from_text(value: str | None, *, missing: bool | None = None) -> bo
 
 
 def normalize_category(text: str | None) -> str | None:
-    """Sjednotí „A > B“ / HTML entity na cestu se „|“ (whitelist kategorií)."""
+    """Sjednotí „A > B“ / „A -> B“ / HTML entity na cestu se „|“ (whitelist kategorií)."""
     if not text:
         return None
     s = html.unescape(html.unescape(str(text))).strip()
     if not s:
         return None
+    s = s.replace("->", ">")
     s = s.replace(">", "|")
     s = re.sub(r"\s*\|\s*", " | ", s)
     s = re.sub(r"\s+", " ", s).strip(" |")
@@ -565,6 +566,8 @@ def _detect_format(head: bytes) -> str:
         return "feedoptimise"
     if b"base.google.com/ns/1.0" in h or (b"<rss" in h and b"<channel" in h):
         return "google"
+    if b"<products" in h and (b"<producturl>" in h or b"<eancode>" in h):
+        return "xupe"
     if b"<shopitem" in h or b"<shop>" in h:
         return "heureka"
     if h.lstrip().startswith(b"<"):
@@ -588,11 +591,12 @@ def _html_text(value: str | None) -> str | None:
     return text or None
 
 
-def parse_google_xml(source) -> list[FeedItem]:
+def parse_google_xml(source, keep=None, *, include_description: bool = True) -> list[FeedItem]:
     """Google Shopping RSS (g:id, title, link, g:price, g:availability, …).
 
     Používáme ho jen jako katalog pro srovnávač. Ne pro Google Shopping / CSS / placenou reklamu.
     4Home má g:product_type. JBL.cz ho neposílá – popis a g:condition si necháme na třídění.
+    keep(item) -> bool zahodí položku dřív, než se uloží (velké feedy).
     """
     out: list[FeedItem] = []
     for _event, el in ET.iterparse(_as_stream(source), events=("end",)):
@@ -624,11 +628,13 @@ def parse_google_xml(source) -> list[FeedItem]:
                 cat = node.text
                 break
         avail = direct["availability"].text if "availability" in direct else None
-        desc = _html_text(direct["description"].text if "description" in direct else None)
+        desc = None
+        if include_description:
+            desc = _html_text(direct["description"].text if "description" in direct else None)
         cond_node = direct.get("condition")
         condition = (cond_node.text or "").strip().lower() if cond_node is not None and cond_node.text else None
         clean = _clean_product_url(link)
-        out.append(FeedItem(
+        item = FeedItem(
             item_id=item_id or None,
             name=title or clean,
             url=clean,
@@ -640,8 +646,44 @@ def parse_google_xml(source) -> list[FeedItem]:
             in_stock=_in_stock_from_text(avail, missing=None),
             description=desc,
             condition=condition or None,
-        ))
+        )
         el.clear()
+        if keep is None or keep(item):
+            out.append(item)
+    return out
+
+
+def parse_xupe_xml(source, keep=None) -> list[FeedItem]:
+    """Xupe custom XML (product / Price s DPH / ProductUrl / Category se „->“).
+
+    ProductUrl je klik feedu, který obchod přesměruje na kartu produktu.
+    DeliveryTime je ve dnech, stejně jako Heureka DELIVERY_DATE.
+    """
+    out: list[FeedItem] = []
+    for _event, el in ET.iterparse(_as_stream(source), events=("end",)):
+        if _local(el.tag) != "product":
+            continue
+        fields = {}
+        for c in list(el):
+            fields.setdefault(_local(c.tag), (c.text or "").strip())
+        url = fields.get("producturl") or ""
+        price = _money(fields.get("price"))
+        el.clear()
+        if not url or price is None:
+            continue
+        name = fields.get("name") or ""
+        item = FeedItem(
+            item_id=fields.get("identifier") or None,
+            name=name or url,
+            url=strip_tracking(url),
+            price=price,
+            ean=_clean_ean(fields.get("eancode")),
+            image=_feed_image(fields.get("imageurl")),
+            category=normalize_category(fields.get("category")),
+            in_stock=parse_delivery_date(fields.get("deliverytime")),
+        )
+        if keep is None or keep(item):
+            out.append(item)
     return out
 
 
@@ -770,7 +812,11 @@ def parse_tradedoubler(data: bytes | str) -> tuple[list[FeedItem], int | None]:
 
 # Idle mezi kusy, a celý soubor. Visící spojení se přeskočí, pomalý obchod neblokuje ostatní.
 FEED_READ_TIMEOUT_S = 25
-FEED_TOTAL_S = 180
+FEED_TOTAL_S = 300
+# ProMobily Heureka má stovky MB kvůli popisům. Stream se neukládá celé, strop jen ať neskončí v nekonečnu.
+FEED_MAX_BYTES = 450 * 1024 * 1024
+# Počty z posledního load_shop (doplněk k logu): ok / accessory / uncategorized / …
+FILTER_STATS: dict[str, dict[str, int]] = {}
 
 
 def _http_get(url: str) -> bytes:
@@ -927,21 +973,100 @@ def _load_tradedoubler_multi(url: str, queries: list[str], *, per_query: int, to
     return out
 
 
+class _ChunkReader:
+    """Spojí už přečtenou hlavičku se zbytkem iterátoru. read() pro iterparse, bez celého souboru v paměti."""
+
+    def __init__(self, head: bytes, chunks, deadline: float, max_bytes: int):
+        self.buf = head
+        self.chunks = iter(chunks)
+        self.deadline = deadline
+        self.max_bytes = max_bytes
+        self.total = len(head)
+        self.eof = False
+
+    def _count(self, chunk: bytes) -> None:
+        self.total += len(chunk)
+        if self.total > self.max_bytes:
+            raise RuntimeError(f"feed příliš velký ({self.total} B)")
+
+    def read(self, n: int = -1) -> bytes:
+        if time.monotonic() > self.deadline:
+            raise RuntimeError("feed přesáhl časový limit")
+        if n is None or n < 0:
+            parts = [self.buf]
+            self.buf = b""
+            if not self.eof:
+                for chunk in self.chunks:
+                    self._count(chunk)
+                    parts.append(chunk)
+                self.eof = True
+            return b"".join(parts)
+        while len(self.buf) < n and not self.eof:
+            try:
+                chunk = next(self.chunks)
+            except StopIteration:
+                self.eof = True
+                break
+            self._count(chunk)
+            self.buf += chunk
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+
+def _parse_stream(source, kind: str, keep=None) -> list[FeedItem]:
+    if kind == "google":
+        return parse_google_xml(source, keep=keep, include_description=keep is None)
+    if kind == "xupe":
+        return parse_xupe_xml(source, keep=keep)
+    if kind == "feedoptimise":
+        return parse_feedoptimise_xml(source)
+    if kind == "tradedoubler":
+        raw = source.read() if hasattr(source, "read") else source
+        return parse_tradedoubler(raw)[0]
+    if kind == "csv":
+        raw = source.read() if hasattr(source, "read") else source
+        text = raw.decode("utf-8-sig") if isinstance(raw, (bytes, bytearray)) else raw
+        return parse_csv(text)
+    return parse_xml_stream(source, keep=keep)
+
+
+def _parse_http(url: str, keep=None, *, total_s: float | None = None) -> list[FeedItem]:
+    """Stáhne feed po kusech a parsuje ho streamem. Celé XML se neskládá do jednoho bytes."""
+    deadline = time.monotonic() + (FEED_TOTAL_S if total_s is None else total_s)
+    timeout = httpx.Timeout(FEED_READ_TIMEOUT_S, connect=10.0)
+    headers = {"User-Agent": "LovcenyBot/0.1 (+https://lovceny.cz/pro-obchody)"}
+    try:
+        with httpx.stream("GET", url, timeout=timeout, follow_redirects=True, headers=headers) as resp:
+            resp.raise_for_status()
+            chunks = resp.iter_bytes()
+            head = b""
+            for chunk in chunks:
+                if time.monotonic() > deadline:
+                    raise RuntimeError("feed přesáhl časový limit")
+                head += chunk
+                if len(head) >= 8192:
+                    break
+            head = _strip_bom(head)
+            if not head.lstrip().startswith(b"<"):
+                rest = _ChunkReader(b"", chunks, deadline, FEED_MAX_BYTES)
+                raw = head + rest.read()
+                return parse_csv(raw.decode("utf-8-sig"))
+            kind = _detect_format(head[:8000])
+            reader = _ChunkReader(head, chunks, deadline, FEED_MAX_BYTES)
+            return _parse_stream(reader, kind, keep=keep)
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"stažení feedu selhalo: {e}") from e
+
+
 def parse_bytes(raw: bytes) -> list[FeedItem]:
-    """Rozpozná Heureka / Google RSS / FeedOptimise / TradeDoubler / CSV."""
+    """Rozpozná Heureka / Google RSS / Xupe / FeedOptimise / TradeDoubler / CSV."""
     raw = _strip_bom(raw)
     if not raw.lstrip().startswith(b"<"):
         return parse_csv(raw.decode("utf-8-sig"))
     kind = _detect_format(raw[:8000])
-    if kind == "google":
-        return parse_google_xml(raw)
-    if kind == "feedoptimise":
-        return parse_feedoptimise_xml(raw)
-    if kind == "tradedoubler":
-        return parse_tradedoubler(raw)[0]
     if kind == "csv":
         return parse_csv(raw.decode("utf-8-sig"))
-    return parse_xml_stream(io.BytesIO(raw))
+    return _parse_stream(io.BytesIO(raw), kind)
 
 
 def load(source: str) -> list[FeedItem]:
@@ -960,8 +1085,27 @@ def _td_queries(shop) -> list[str]:
     return [str(q).strip() for q in raw if str(q).strip()]
 
 
+def _catalog_keep(slug: str):
+    """Nechá jen položky, které pravidlo zařadí. Počty filtrů jdou do FILTER_STATS."""
+    from ..categories import classify_feed_item
+    stats = {"ok": 0, "accessory": 0, "uncategorized": 0, "excluded": 0, "price": 0, "conflict": 0}
+    FILTER_STATS[slug] = stats
+
+    def keep(item: FeedItem) -> bool:
+        _slug, reason = classify_feed_item(slug, item.name, item.category, item.price, item.url)
+        stats[reason] = stats.get(reason, 0) + 1
+        return reason == "ok"
+
+    return keep
+
+
 def _load_shop_source(shop, src: str) -> list[FeedItem]:
-    """Jedna URL feedu. Allegro (td_queries) neprochází celý katalog, jen krátké dotazy."""
+    """Jedna URL feedu. Allegro (td_queries) neprochází celý katalog, jen krátké dotazy.
+
+    Nové velké feedy (Xupe, Bscom, ProMobily) se parsují streamem a příslušenství
+    ani nezařazené listy se do paměti neukládají.
+    """
+    from ..categories import CATALOG_RULE_SHOPS
     queries = _td_queries(shop)
     if queries and _is_td_paged(src):
         extra = getattr(shop, "extra", None) or {}
@@ -971,7 +1115,14 @@ def _load_shop_source(shop, src: str) -> list[FeedItem]:
         if re.search(r";q=", src, re.I):
             return _load_tradedoubler_paged(src, max_pages=min(per, TD_MAX_PAGES), gap=_TD_MIN_GAP_S)
         return _load_tradedoubler_multi(src, queries, per_query=per, total_cap=total)
-    return load(src)
+    slug = getattr(shop, "slug", None)
+    if slug in CATALOG_RULE_SHOPS and str(src).startswith(("http://", "https://")):
+        return _parse_http(src, keep=_catalog_keep(slug))
+    items = load(src)
+    if slug in CATALOG_RULE_SHOPS:
+        keep = _catalog_keep(slug)
+        items = [it for it in items if keep(it)]
+    return items
 
 
 def load_shop(shop) -> list[FeedItem]:
@@ -991,5 +1142,8 @@ def load_shop(shop) -> list[FeedItem]:
         if getattr(shop, "slug", None) == "jbl":
             from ..categories import annotate_jbl_items
             return annotate_jbl_items(items)
+        stats = FILTER_STATS.get(getattr(shop, "slug", "") or "")
+        if stats:
+            log.info("filtr %s: %s", shop.slug, stats)
         return items
     raise RuntimeError(errors[-1] if errors else "feed selhal")
