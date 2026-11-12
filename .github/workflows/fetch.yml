@@ -26,8 +26,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Přeskočit, pokud už nedávno doběhlo
         id: gate
-        # Ruční Run workflow vždy stáhne. Cron a externí budík ne, když úspěch není starší než 3 h.
-        if: github.event_name != 'workflow_dispatch'
+        # Ruční Run workflow a budík s client_payload.force=true vždy stáhnou.
+        # Cron a běžný externí budík ne, když úspěch není starší než 3 h.
+        if: github.event_name != 'workflow_dispatch' && github.event.client_payload.force != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
