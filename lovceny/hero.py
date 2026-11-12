@@ -18,7 +18,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from .models import Product, Offer, Watch, PricePoint
-from .verdict import compute, MIN_DAYS, Verdict
+from .verdict import compute, history_drop, MIN_DAYS, Verdict
 from .deals import _points_for, include_demo
 from .availability import best_buyable_offer, offer_is_buyable
 from .categories import BY_SLUG, is_accessory_text
@@ -50,10 +50,48 @@ class HeroPick:
     score: float = 0.0
     category_slug: str = ""
     category_name: str = ""
+    n_shops: int = 0
+    usual: float | None = None  # naměřený medián, jen když je dnešek pod ním
+    discount_pct: int | None = None
 
 
 def clear_cache() -> None:
     _cache.clear()
+
+
+def compared_shops(offers) -> int:
+    """Kolik obchodů stránka produktu opravdu srovná. Skrytá nabídka se nepočítá."""
+    from .availability import offer_is_suppressed
+    shops = set()
+    for offer in offers or ():
+        if getattr(offer, "price", None) is None or offer_is_suppressed(offer):
+            continue
+        shop = getattr(offer, "shop", None) or ""
+        if shop:
+            shops.add(shop)
+    return len(shops)
+
+
+def measured_discount(cur: float, v: Verdict, points, hist_n: int) -> tuple[float | None, int | None]:
+    """Obvyklá cena a celá procenta, jen z naměřeného mediánu.
+
+    Nejdřív medián 90 dní (stejná obvyklá cena jako na /slevy). Když na něj
+    ještě není dost dní, medián 30 dní před dneškem. Procenta z maxima ani
+    z „původní ceny“ obchodu sem nepatří.
+    """
+    if cur <= 0:
+        return None, None
+    if hist_n >= MIN_DAYS and v.median90 and float(v.median90) > cur:
+        pct = round((1 - cur / float(v.median90)) * 100)
+        if pct >= 1:
+            return float(v.median90), pct
+        return None, None
+    drop = history_drop(points, cur)
+    if drop and drop.median30 > cur:
+        pct = round(drop.drop_pct)
+        if pct >= 1:
+            return float(drop.median30), pct
+    return None, None
 
 
 def _badge_for(cur: float, v: Verdict, hist_n: int) -> str | None:
@@ -209,7 +247,8 @@ def _light_rows(db) -> list[_Light]:
     for pid, name, shop_cat, slug, image, n_shops, cur, n_pts, avg in rows:
         if is_excluded_brand(name or ""):
             continue
-        if not (image or "").strip() or cur is None:
+        from .images import has_working_image
+        if not has_working_image(image) or cur is None:
             continue
         bucket = _bucket(slug, name or "", shop_cat)
         if bucket is None:
@@ -270,7 +309,8 @@ def _score_products(db, lights: list[_Light]) -> list[HeroPick]:
         meta = by_id.get(p.id)
         if meta is None:
             continue
-        if not (p.image_url or "").strip():
+        from .images import has_working_image
+        if not has_working_image(p.image_url):
             continue
         from .categories import BY_SLUG
         from .category_guard import guarded_category
@@ -314,13 +354,15 @@ def _score_products(db, lights: list[_Light]) -> list[HeroPick]:
         )
         badge = None if unreliable else _badge_for(cur, v, hist_n)
         score = _score(cur, v, hist_n, watches.get(p.id, 0), known=known)
-        n_shops = len({o.shop for o in p.offers if offer_is_buyable(o) and o.price is not None})
+        n_shops = compared_shops(p.offers)
         if n_shops >= 2:
             score += 18.0
+        usual, discount_pct = (None, None) if unreliable else measured_discount(cur, v, pts, hist_n)
         slug = "" if bucket == "_ostatni" else bucket
         out.append(HeroPick(
             p, best, v, badge, score,
             category_slug=slug, category_name=_label(bucket),
+            n_shops=n_shops, usual=usual, discount_pct=discount_pct,
         ))
     return out
 
@@ -373,7 +415,8 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
         picks: list[HeroPick] = []
         for c in cached:
             p = by_id.get(c["id"])
-            if not p or not (p.image_url or "").strip():
+            from .images import has_working_image
+            if not p or not has_working_image(p.image_url):
                 continue
             from .category_guard import guarded_category, offer_type_conflict, storage_conflict
             from .categories import BY_SLUG as _by_slug
@@ -394,10 +437,17 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
             pts, _ = _points_for(p, include_demo())
             v = compute(pts, float(best.price),
                         float(best.original_price) if best.original_price else None)
+            days = {pt.captured_at.date() for pt in pts if getattr(pt, "captured_at", None)}
+            hist_n = len(days) if days else len(pts)
+            cur = float(best.price)
+            usual, discount_pct = (None, None)
+            if c.get("badge") is not None:
+                usual, discount_pct = measured_discount(cur, v, pts, hist_n)
             slug = "" if bucket == "_ostatni" else bucket
             picks.append(HeroPick(
                 p, best, v, c["badge"], c["score"],
                 category_slug=slug, category_name=_label(bucket),
+                n_shops=compared_shops(p.offers), usual=usual, discount_pct=discount_pct,
             ))
             if len(picks) >= limit:
                 break
@@ -409,3 +459,75 @@ def hero_showcase(db, *, limit: int = HERO_LIMIT) -> list[HeroPick]:
     payload = [{"id": h.product.id, "badge": h.badge, "score": h.score} for h in chosen]
     _cache[cache_key] = (now, payload)
     return chosen
+
+
+# Krátké názvy čipů na úvodu. Plný název kategorie zůstává na /kategorie.
+CHIP_LABELS = {
+    "telefony": "Telefony",
+    "notebooky": "Notebooky",
+    "televize": "Televize",
+    "sluchatka": "Sluchátka",
+    "konzole": "Konzole",
+    "kavovary": "Kávovary",
+    "vysavace": "Vysavače",
+    "pracky": "Pračky",
+    "lednice": "Lednice",
+    "chytre-hodinky": "Hodinky",
+    "fotoaparaty": "Foto",
+    "chytra-domacnost": "Domácnost",
+    "pocitace": "Počítače",
+}
+
+
+def _score_ids(db, ids: list[int]) -> dict[int, HeroPick]:
+    if not ids:
+        return {}
+    lights = [
+        _Light(id=i, name="", shop_category=None, category_slug=None,
+               n_shops=0, cur=0.0, n_pts=0, avg_price=None, bucket="_ostatni")
+        for i in ids
+    ]
+    return {h.product.id: h for h in _score_products(db, lights)}
+
+
+def home_board(db, *, featured_limit: int = 8, per_cat: int = 8):
+    """Výběr na úvod: napříč kategoriemi, plus další kusy schované do filtru čipů.
+
+    Vrací (featured, extras, chips). Čipy jsou (slug, krátký název).
+    """
+    from .categories import CATEGORIES
+    from .offer_trust import use_cutoffs
+    use_cutoffs(db)
+    featured_limit = max(0, int(featured_limit))
+    per_cat = max(1, int(per_cat))
+    now = time.time()
+    hit = _cache.get("board")
+    if hit and now - hit[0] < HERO_TTL_S:
+        data = hit[1]
+        by_id = _score_ids(db, list(data["featured"]) + list(data["extras"]))
+        featured = [by_id[i] for i in data["featured"] if i in by_id]
+        extras = [by_id[i] for i in data["extras"] if i in by_id]
+        if featured or extras:
+            return featured, extras, data["chips"]
+
+    picks = _candidates(db)
+    featured = _choose(picks, featured_limit)
+    featured_ids = {h.product.id for h in featured}
+    by_cat: dict[str, list[HeroPick]] = {}
+    ranked = sorted(picks, key=lambda h: (h.badge is not None, h.score), reverse=True)
+    for h in ranked:
+        slug = h.category_slug
+        if not slug:
+            continue
+        bucket = by_cat.setdefault(slug, [])
+        if len(bucket) < per_cat:
+            bucket.append(h)
+    extras = [h for items in by_cat.values() for h in items if h.product.id not in featured_ids]
+    present = set(by_cat)
+    chips = [(c.slug, CHIP_LABELS.get(c.slug, c.name)) for c in CATEGORIES if c.slug in present]
+    _cache["board"] = (now, {
+        "featured": [h.product.id for h in featured],
+        "extras": [h.product.id for h in extras],
+        "chips": chips,
+    })
+    return featured, extras, chips

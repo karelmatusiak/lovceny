@@ -60,13 +60,14 @@ def _no_live_network(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)  # testy nikdy nevolají skutečné Gemini
     ai.client.clear()
     ai.client.calls_today = 0
-    from lovceny import verify, seasons, hero, catcache, deals, blackfriday, honesty, landings
+    from lovceny import verify, seasons, hero, catcache, deals, blackfriday, honesty, landings, popular
     from lovceny.main import clear_display_names_cache
     from lovceny.offer_trust import reset_cutoffs
     reset_cutoffs()
     verify.clear_cache()
     seasons.clear_cache()
     hero.clear_cache()
+    popular.clear_cache()
     catcache.clear()
     deals.clear_cache()
     blackfriday.clear_cache()
@@ -78,6 +79,7 @@ def _no_live_network(monkeypatch):
     verify.clear_cache()
     seasons.clear_cache()
     hero.clear_cache()
+    popular.clear_cache()
     catcache.clear()
     deals.clear_cache()
     blackfriday.clear_cache()

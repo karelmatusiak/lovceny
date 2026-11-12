@@ -128,8 +128,10 @@ def test_home_renders_hero_picks():
     assert "Hero na homepage" in html
     assert 'class="hero-pick-cat">Notebooky' in html
     assert html.find('action="/hledat"') < html.find('class="hero-picks"')
-    assert html.find('class="hero-picks"') < html.find("Naposledy přidané")
+    assert "Naposledy přidané" not in html
+    assert "Nejlevněji v" in html and "srovnáno" in html
     assert 'rel="nofollow sponsored noopener"' in html
+    assert 'href="/go/' in html
     assert 'target="_blank"' in html
     assert "hero-art" not in html
     db.close()
@@ -157,6 +159,8 @@ def test_hero_pick_img_css_scales_whole_product():
     assert "scroll-snap" not in hero
     assert "150px" not in hero
     assert "repeat(2,minmax(0,1fr))" in compact
+    assert "repeat(4,minmax(0,1fr))" in compact
+    assert "aspect-ratio:1" in block.replace(" ", "")
 
 
 def test_family_key_collapses_colour_and_parenthetical_variant():

@@ -8,7 +8,7 @@
 <section class="cat-hero"><div class="wrap">
   <div class="eyebrow"><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }}</div>
   <h1 class="page-h1">{{ page_title }}</h1>
-  <p class="lead cat-lead">{% if view == 'nejlevnejsi' %}Nejlevnější {{ c.gen }}, které sledujeme – seřazeno jen podle aktuální nejnižší ceny napříč obchody.{% elif view == 've-sleve' %}Jen produkty, jejichž cena je teď u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, sem nezařazujeme.{% else %}{{ c.lead }}{% endif %}</p>
+  <p class="lead cat-lead">{% if view == 'nejlevnejsi' %}Nejlevnější {{ c.gen }}, které sledujeme. Nejdřív produkty s fotkou, v rámci nich jen podle aktuální nejnižší ceny napříč obchody.{% elif view == 've-sleve' %}Jen produkty, jejichž cena je teď u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, sem nezařazujeme.{% else %}{{ c.lead }}{% endif %}</p>
   {% if season_tip(c.slug) %}
   <div class="tip-full">{{ season_hint(c.slug) }}</div>
   <details class="tip-box">
@@ -59,7 +59,7 @@
 {% endif %}
 <section style="padding-top:8px"><div class="wrap">
   {% if rows %}
-  <p class="cat-count">Zobrazeno {{ range_from }}–{{ range_to }} z {{ cz_count(total, 'produkt', 'produkty', 'produktů') }} · řazeno {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
+  <p class="cat-count">Zobrazeno {{ range_from }}–{{ range_to }} z {{ cz_count(total, 'produkt', 'produkty', 'produktů') }} · nejdřív s fotkou, pak {% if view == 've-sleve' %}podle skutečné úspory{% else %}podle ceny{% endif %}, bez placených pozic · {{ rank_link() }}</p>
   {% include "_pager.html" %}
   <div class="grid cat-grid">{% for p, best, v in rows %}{{ pcard(p, best, v) }}{% endfor %}</div>
   {% include "_pager.html" %}
