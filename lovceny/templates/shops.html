@@ -9,7 +9,7 @@
 <tbody>
 {% for s in shops %}{% set st, label = s.status_label() %}
 <tr>
-<td data-label="Obchod"><b>{{ s.name }}</b></td>
+<td data-label="Obchod">{% if s.slug in status_slugs %}<a href="/stav#obchod-{{ s.slug }}"><b>{{ s.name }}</b></a>{% else %}<b>{{ s.name }}</b>{% endif %}</td>
 <td data-label="Zdroj cen">{% if s.source=='feed' %}oficiální feed{% elif s.ehub_bid %}affiliate odkazy{% else %}stránka produktu{% endif %}</td>
 <td data-label="Stav"><span class="st st-{{ st }}">{{ label }}</span></td>
 <td data-label="Poznámka" class="muted">{{ s.note }}</td>

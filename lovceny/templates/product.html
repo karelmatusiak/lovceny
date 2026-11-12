@@ -77,7 +77,7 @@
         {% set is_best = best and o.id == best.id %}
         {% set note = offer_notes.get(o.id) if offer_notes is defined else none %}
         <div class="offer{% if is_best %} offer-best{% endif %}{% if note %} offer-unverified{% elif is_oos %} offer-oos{% endif %}">
-          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if variant_labels and o.variant_id %} · {{ variant_labels[o.variant_id] }}{% endif %}{% if is_best %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
+          <div><b style="color:{{ s.color }}">●</b> {{ s.name }}{% if variant_labels and o.variant_id %} · {{ variant_labels[o.variant_id] }}{% endif %}{% if is_best and offers and o.price == offers[0].price %} <span class="offer-best-tag">nejlevnější</span>{% endif %}
             <div class="stock">{% if o.status=='ok' %}{% if o.in_stock %}Skladem{% elif o.in_stock is none %}&nbsp;{% else %}<span class="stock-oos">Není skladem</span>{% endif %}
             {% elif o.status=='pending' %}<span class="offer-quiet">Připravujeme cenu{% if s.source=='feed' %} z feedu{% endif %}</span>
             {% elif o.status=='blocked' %}<span style="color:#B3261E">Obchod blokuje automatické čtení</span>

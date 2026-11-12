@@ -27,7 +27,7 @@ from .util import czk, cz_count, cz_plural
 from .names import canonical_slug, card_label, short_name, uniquify_short_names
 from .availability import (
     offer_is_buyable, best_buyable_offer, last_known_offer,
-    sort_offers_for_display,
+    sort_offers_for_display, visible_offer_count,
 )
 from . import images
 from . import analytics
@@ -128,6 +128,7 @@ def shop_rel(shop) -> str:
 
 
 tpl.env.globals["shop_rel"] = shop_rel
+tpl.env.globals["visible_offer_count"] = visible_offer_count
 
 
 def _prague(d, fmt="%-d. %-m. %H:%M"):
@@ -283,10 +284,11 @@ def priced_product_cards(db, *, limit: int = 6, order: str = "new"):
     from .offer_trust import offer_is_captcha_hidden
     scored = []
     for p in products:
-        if is_accessory_text(p.name or "", p.category):
-            continue
+        from .categories import is_non_new
         from .exclusions import is_excluded_brand
         if is_excluded_brand(p.name or ""):
+            continue
+        if is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
             continue
         best, v = product_summary(p)
         if best is None:
@@ -427,9 +429,10 @@ def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
     products = search_db(db, q)
     assign_display_names(products)
     results = []
+    from .categories import is_non_new
     from .exclusions import is_excluded_brand
     for p in products:
-        if is_excluded_brand(p.name or ""):
+        if is_excluded_brand(p.name or "") or is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
             continue
         best, v = product_summary(p)
         # Do výsledků i OOS (poslední cena) – bez CTA „Do obchodu“ v šabloně.
@@ -673,10 +676,13 @@ def unsubscribe(request: Request, token: str, db=Depends(get_db)):
 
 
 @app.get("/obchody", response_class=HTMLResponse)
-def shops(request: Request):
+def shops(request: Request, db=Depends(get_db)):
+    from .monitor import status_slugs
     listed = [s for s in SHOPS.values() if not s.retired]
     listed.sort(key=lambda s: (0 if s.status_label()[0] == "ok" else 1, s.name.lower()))
-    return tpl.TemplateResponse(request, "shops.html", {"shops": listed})
+    return tpl.TemplateResponse(request, "shops.html", {
+        "shops": listed, "status_slugs": status_slugs(db),
+    })
 
 
 _health_cache: dict = {}
@@ -915,10 +921,11 @@ def _cat_rows(db, c):
                 continue
             if p.catalog_hidden or p.needs_review:
                 continue
+            from .categories import is_non_new
             from .exclusions import is_excluded_brand
             if is_excluded_brand(p.name or ""):
                 continue
-            if is_accessory_text(p.name or "", p.category):
+            if is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
                 continue
             best = next((o for o in p.offers if o.id == bid), None) if bid else None
             if best is not None and not offer_is_promoted(best, cutoffs, p):
@@ -941,9 +948,10 @@ def _cat_rows(db, c):
     for p in products:
         # Výpis je to, co ukazuje stránka produktu (category_slug). classify() z názvu
         # sem nepatří: 6,67" u telefonu a „for Xbox“ u sluchátek by je z kategorie vyřadily.
+        from .categories import is_non_new
         if is_excluded_brand(p.name or ""):
             continue
-        if is_accessory_text(p.name or "", p.category):
+        if is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
             continue
         buyable, v = product_summary(p)
         # Do výpisu kategorie necháme i čistě OOS (poslední cena), bez buy CTA v šabloně.

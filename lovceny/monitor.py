@@ -158,6 +158,20 @@ def evaluate(db, run: list[ShopRunStat] | None = None, now: datetime | None = No
     return {"run_id": run[0].run_id if run else None, "checked_at": now.isoformat(), "shops": out}
 
 
+def status_slugs(db) -> set[str]:
+    """Obchody, které mají na /stav vlastní blok. Jinak odkaz z /obchody nemá kam vést."""
+    hist = history(db)
+    health = evaluate(db, list(hist["last"].values()))
+    slugs = set()
+    from .shops import SHOPS
+    for shop in SHOPS.values():
+        if shop.retired:
+            continue
+        if health["shops"].get(shop.slug) or hist["last"].get(shop.slug):
+            slugs.add(shop.slug)
+    return slugs
+
+
 def history(db, days: int = 14, now: datetime | None = None) -> dict:
     """Pro /stav: per obchod denní úspěšnost za posledních `days` dní (UTC dny)."""
     now = now or datetime.now(timezone.utc)

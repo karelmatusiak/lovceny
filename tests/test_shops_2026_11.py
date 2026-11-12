@@ -167,8 +167,9 @@ def test_catalog_rules_keep_devices_and_drop_accessories():
     assert _slug("xupe", "Tesla CoffeeMaster ES400", "Kuchyně -> Kávovar na espresso", 2919) == ("kavovary", "ok")
 
     assert _slug("tera", "Apple iPhone 15 128GB", "MOBILY | Nové mobily | Apple iPhone", 16820) == ("telefony", "ok")
-    assert _slug("tera", "Lenovo ThinkPad T14s", "Notebooky | Repasované notebooky | Dle výrobce", 12990) == ("notebooky", "ok")
-    assert _slug("tera", "Lenovo ThinkCentre M75s", "Počítače | Repasované počítače | Dle výrobce", 5290) == ("pocitace", "ok")
+    assert _slug("tera", "Lenovo ThinkPad T14s", "Notebooky | Repasované notebooky | Dle výrobce", 12990)[1] == "used"
+    assert _slug("tera", "Lenovo ThinkPad T14s", "Notebooky | Nové notebooky | Dle výrobce", 12990) == ("notebooky", "ok")
+    assert _slug("tera", "Lenovo ThinkCentre M75s", "Počítače | Repasované počítače | Dle výrobce", 5290)[1] == "used"
     assert _slug("tera", "Trust sluchátka", "Doplňky | Audio, video, foto | Sluchátka", 165)[1] == "price"
     assert _slug("tera", "Marvo herní sluchátka", "Doplňky | Herní zóna | Herní sluchátka", 890) == ("sluchatka", "ok")
     assert _slug("tera", "Aligator kryt iPhone", "MOBILY | Příslušenství | Pouzdra a kryty", 199)[1] == "accessory"
@@ -211,6 +212,10 @@ def test_catalog_rules_keep_devices_and_drop_accessories():
     assert _slug(
         "bscom", "Dell Latitude 5420",
         "E-shop > Počítače a notebooky > Repasované a zánovní > Repasované notebooky", 12210,
+    )[1] == "used"
+    assert _slug(
+        "bscom", "Dell Latitude 5420",
+        "E-shop > Počítače a notebooky > Notebooky > Notebooky", 12210,
     ) == ("notebooky", "ok")
     assert _slug(
         "bscom", "Kryt na mobil Xiaomi",
@@ -235,7 +240,11 @@ def test_catalog_rules_keep_devices_and_drop_accessories():
     assert _slug(
         "iphonemarket", "Apple iPhone 15 128GB",
         "Zánovní a použité iPhony | iPhone 15 | iPhone 15 128 GB", 12990,
-    ) == ("telefony", "ok")
+    )[1] == "used"
+    assert _slug(
+        "iphonemarket", "Apple iPhone 15 128GB Stav produktu: Výborný",
+        "Mobilní telefony | iPhone 15", 12990,
+    )[1] == "used"
     assert _slug(
         "iphonemarket", "Pouzdro pro iPhone 15",
         "Příslušenství pro iPhone | Kryty a obaly pro iPhone | Kryty pro iPhone 15", 290,
@@ -314,7 +323,14 @@ def test_apply_feed_creates_phone_hides_case_and_page_links(client_db, monkeypat
         "ip15", "Apple iPhone 15 128GB Black",
         "https://www.iphonemarket.cz/iphone-15-128-black",
         12990, ean="0194253773494",
-        category="Zánovní a použité iPhony | iPhone 15 | iPhone 15 128 GB",
+        category="Mobilní telefony | iPhone 15",
+        in_stock=True,
+    )
+    used = FeedItem(
+        "used", "Apple iPhone 15 128GB Výborný",
+        "https://www.iphonemarket.cz/iphone-15-vyborny",
+        11990, condition="bazar",
+        category="Zánovní a použité iPhony | iPhone 15",
         in_stock=True,
     )
     case = FeedItem(
@@ -323,8 +339,8 @@ def test_apply_feed_creates_phone_hides_case_and_page_links(client_db, monkeypat
         290, category="Příslušenství pro iPhone | Kryty a obaly pro iPhone",
         in_stock=True,
     )
-    st = apply_feed(db, "iphonemarket", [phone, case], create_missing=True, max_create=5)
-    assert st["created"] == 1 and st["skipped_accessory"] >= 1
+    st = apply_feed(db, "iphonemarket", [phone, case, used], create_missing=True, max_create=5)
+    assert st["created"] == 1 and st["skipped_accessory"] >= 1 and st["skipped_used"] >= 1
     db.commit()
     from lovceny.models import Product
     rows = db.query(Product).filter(Product.name.contains("iPhone 15")).all()

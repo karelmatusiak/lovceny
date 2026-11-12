@@ -159,6 +159,9 @@ def unverified_note(offer, cutoffs: dict[str, datetime] | None = None, product=N
 
 def offer_is_promoted(offer, cutoffs: dict[str, datetime] | None = None, product=None) -> bool:
     """Smí být nejlevnější, ve slevách a mít tlačítko Koupit."""
+    from .availability import offer_is_suppressed
+    if offer_is_suppressed(offer):
+        return False
     if getattr(offer, "withheld", False):
         return False
     if not offer_is_buyable(offer):

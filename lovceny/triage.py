@@ -221,6 +221,9 @@ def resolve_category(db: Session, shop: str, name: str, shop_category: str | Non
         if reason == "ok" and slug:
             return Resolved("high", slug)
         return Resolved("skip")
+    from .categories import is_non_new
+    if is_non_new(name, shop_category=shop_category):
+        return Resolved("skip")
     if is_accessory_text(name, shop_category):
         return Resolved("accessory")
     raw = shop_category

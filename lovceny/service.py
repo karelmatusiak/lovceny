@@ -403,7 +403,10 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     def conflicts_with(prod: Product | None, it: FeedItem, clean: str) -> bool:
         if prod is None:
             return False
-        from .matching import clear_model_conflict, label_from_url
+        from .matching import clear_model_conflict, label_from_url, model_codes_conflict
+        # Stejné EAN jiný model nespáruje. Liší-li se číslice kódu, nespáruje se ani bez EAN.
+        if model_codes_conflict(prod.name or "", it.name or "") or model_codes_conflict(prod.name or "", clean):
+            return True
         if offer_conflicts_product(
             prod.name or "", clean, it.name or None, category_slug=prod.category_slug,
         ):
@@ -466,6 +469,15 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     held = 0
     created = 0
     for it in items:
+        from .categories import is_non_new
+        if is_non_new(it.name, condition=it.condition, shop_category=it.category):
+            clean_used = clean_url(it.url)
+            existing_used = by_url.get(clean_used) or by_id.get(it.item_id)
+            if existing_used is not None and not existing_used.withheld:
+                existing_used.withheld = True
+                stats["withheld_used"] = stats.get("withheld_used", 0) + 1
+            stats["skipped_used"] = stats.get("skipped_used", 0) + 1
+            continue
         res = resolve_category(db, shop_slug, it.name, it.category, it.price, url=it.url, rows=map_rows)
         # Příslušenství / explicitní mapování accessory se jako hlavní produkt nezaloží.
         if res.action == "accessory":

@@ -330,6 +330,10 @@ def names_match(a: str, b: str) -> bool:
         if va != vb:
             return False
 
+    from ..matching import model_codes_conflict
+    if model_codes_conflict(a, b):
+        return False
+
     mpn_a, mpn_b = _mpn_tokens(ca), _mpn_tokens(cb)
     if mpn_a and mpn_b:
         # Jen přesná shoda množiny MPN – průnik (svc3001 ∩ filtr SVXD…svc3001) nestačí.
@@ -405,6 +409,50 @@ def _item_id(r: dict) -> str | None:
     return (r.get("ITEM_ID") or r.get("PRODUCTNO") or "").strip() or None
 
 
+def _grade_key(value: str | None) -> str:
+    raw = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", raw).strip()
+
+
+def _google_detail_condition(el) -> str | None:
+    """Google product_detail „stav produktu“ (NOVÉ / použité), když g:condition chybí."""
+    for node in el.iter():
+        if _local(node.tag) != "product_detail":
+            continue
+        label = value = ""
+        for child in list(node):
+            key = _local(child.tag)
+            if key == "attribute_name":
+                label = _grade_key(child.text)
+            elif key == "attribute_value":
+                value = (child.text or "").strip()
+        if label in ("stav produktu", "stav", "condition") and value:
+            return value
+    return None
+
+
+def _heureka_condition(el) -> str | None:
+    """ITEM_TYPE (bazar) a parametr Stav produktu (Výborný, Zánovní, …)."""
+    item_type = ""
+    grade = ""
+    for child in list(el):
+        tag = child.tag.split("}")[-1]
+        if tag == "ITEM_TYPE":
+            item_type = (child.text or "").strip()
+        elif tag == "PARAM":
+            name = val = ""
+            for field in list(child):
+                key = field.tag.split("}")[-1]
+                if key == "PARAM_NAME":
+                    name = _grade_key(field.text)
+                elif key == "VAL":
+                    val = (field.text or "").strip()
+            if name in ("stav produktu", "stav", "condition") and val:
+                grade = val
+    parts = [p for p in (item_type, grade) if p]
+    return " ".join(parts) or None
+
+
 def _from_row(r: dict) -> FeedItem | None:
     r = {k.upper(): (v or "").strip() for k, v in r.items() if k}
     price = _f(r.get("PRICE_VAT"))
@@ -433,6 +481,7 @@ def _from_row(r: dict) -> FeedItem | None:
         category=r.get("CATEGORYTEXT") or None,
         original_price=_f(r.get("PRICE_VAT_ORIGINAL")),
         in_stock=in_stock,
+        condition=(r.get("ITEM_TYPE") or r.get("CONDITION") or None) or None,
     )
 
 
@@ -446,6 +495,7 @@ def parse_xml(data: bytes | str) -> list[FeedItem]:
         row = {c.tag.split("}")[-1]: (c.text or "") for c in el}
         it = _from_row(row)
         if it:
+            it.condition = _heureka_condition(el) or it.condition
             out.append(it)
     return out
 
@@ -461,6 +511,8 @@ def parse_xml_stream(source, keep=None) -> list[FeedItem]:
             continue
         row = {c.tag.split("}")[-1]: (c.text or "") for c in el}
         it = _from_row(row)
+        if it:
+            it.condition = _heureka_condition(el) or it.condition
         el.clear()
         if it and (keep is None or keep(it)):
             out.append(it)
@@ -612,10 +664,9 @@ def parse_google_xml(source, keep=None, *, include_description: bool = True) -> 
         if not link or (price is None and sale is None):
             el.clear()
             continue
-        original = None
-        if sale is not None and price is not None and sale < price:
-            original, price = price, sale
-        elif price is None:
+        # g:price je běžná cena. g:sale_price umí být jen cena se slevovým kódem
+        # (TESLA ES400: 2 489 Kč, se SLEVA25 1 867 Kč). Do srovnání patří běžná cena.
+        if price is None:
             price = sale
         title = (direct["title"].text or "").strip() if "title" in direct and direct["title"].text else ""
         item_id = (direct["id"].text or "").strip() if "id" in direct and direct["id"].text else None
@@ -633,6 +684,8 @@ def parse_google_xml(source, keep=None, *, include_description: bool = True) -> 
             desc = _html_text(direct["description"].text if "description" in direct else None)
         cond_node = direct.get("condition")
         condition = (cond_node.text or "").strip().lower() if cond_node is not None and cond_node.text else None
+        if not condition:
+            condition = _google_detail_condition(el)
         clean = _clean_product_url(link)
         item = FeedItem(
             item_id=item_id or None,
@@ -642,7 +695,7 @@ def parse_google_xml(source, keep=None, *, include_description: bool = True) -> 
             ean=gtin or None,
             image=_feed_image(image),
             category=normalize_category(cat),
-            original_price=original,
+            original_price=None,
             in_stock=_in_stock_from_text(avail, missing=None),
             description=desc,
             condition=condition or None,
