@@ -38,7 +38,9 @@
     document.querySelectorAll('[data-cmp-id]').forEach(function (b) {
       var on = l.indexOf(+b.dataset.cmpId) >= 0;
       b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.classList.toggle('on', on);
-      var t = b.querySelector('.cmp-txt'); if (t) t.textContent = on ? 'Ve srovnání ✓' : 'Přidat do srovnání';
+      var t = b.querySelector('.cmp-txt');
+      if (t) t.textContent = on ? 'Ve srovnání ✓' : 'Přidat do srovnání';
+      else if (b.classList.contains('btn-cmp-icon')) b.setAttribute('aria-label', on ? 'Ve srovnání, odebrat' : 'Přidat do srovnání');
     });
     var bar = document.getElementById('cmp-bar'); if (!bar) { reserve(null); return; }
     var onPage = !!document.getElementById('cmp-page');
