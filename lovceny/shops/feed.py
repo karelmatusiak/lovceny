@@ -95,6 +95,34 @@ def strip_tracking(url: str) -> str:
     return urlunparse(p._replace(query=urlencode(q)))
 
 
+# Prázdný parametr, jehož klíč vypadá jako kus názvu z feedu (mezera, uvozovka,
+# jiný znak mimo běžný query klíč). `GO` je zkrácenina „Clean&Go“ u Sencoru.
+_QUERY_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,40}\Z")
+
+
+def _empty_key_is_junk(key: str) -> bool:
+    if (key or "").upper() == "GO":
+        return True
+    return _QUERY_KEY.fullmatch(key or "") is None
+
+
+def strip_junk_query(url: str) -> str:
+    """Před affiliate obalem sundá prázdné parametry, které do URL utekly z názvu ve feedu.
+
+    `?GO=` a `?+MATZ+KM0240FHD-S6+SMART+TV+40%22=` zmizí. `?vid=2546520` a jiné
+    parametry s hodnotou zůstanou, včetně prázdného klíče, který vypadá jako
+    obyčejný parametr (`?ref=`). Když není co sundat, vrátí původní řetězec.
+    """
+    if not url or "?" not in url:
+        return url
+    parsed = urlparse(url)
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    kept = [(key, value) for key, value in pairs if value != "" or not _empty_key_is_junk(key)]
+    if len(kept) == len(pairs):
+        return url
+    return urlunparse(parsed._replace(query=urlencode(kept)))
+
+
 def normalize_name(name: str) -> str:
     """Pro konzervativní párování: bez diakritiky, lowercase, jen alfanumerika+mezery."""
     s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()

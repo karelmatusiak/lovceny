@@ -346,11 +346,15 @@ def test_apply_feed_creates_phone_hides_case_and_page_links(client_db, monkeypat
     rows = db.query(Product).filter(Product.name.contains("iPhone 15")).all()
     assert len(rows) == 1 and rows[0].category_slug == "telefony" and rows[0].catalog_hidden is not True
     html = c.get(f"/produkt/{rows[0].id}").text
+    offer = rows[0].offers[0]
     assert "iPhoneMarket" in html
-    assert "ehub.cz/system/scripts/click.php" in html
-    assert "a_bid=2bcd6f9d" in html
+    assert f'href="/go/{offer.id}"' in html
+    assert "ehub.cz" not in html
     assert "nofollow sponsored noopener" in html
     assert 'class="btn btn-shop"' in html
+    hop = c.get(f"/go/{offer.id}", follow_redirects=False)
+    assert "ehub.cz/system/scripts/click.php" in hop.headers["location"]
+    assert "a_bid=2bcd6f9d" in hop.headers["location"]
 
     p = make([1990], name="TESLA Sound EB10", shop="tesla", category="sluchatka")
     o = p.offers[0]
@@ -358,11 +362,16 @@ def test_apply_feed_creates_phone_hides_case_and_page_links(client_db, monkeypat
     o.in_stock = True
     db.commit()
     page = c.get(f"/produkt/{p.id}").text
-    assert "TESLA" in page and "go.dognet.com" in page and "chid=9CFqgvpQ" in page
+    assert "TESLA" in page and f'href="/go/{o.id}"' in page
+    assert "go.dognet.com" not in page
     assert "nofollow sponsored noopener" in page
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert hop.headers["location"].startswith("https://go.dognet.com/?chid=9CFqgvpQ&url=")
     o.in_stock = False
     db.commit()
     oos = c.get(f"/produkt/{p.id}").text
     assert "Není skladem" in oos
+    assert "btn-buy" not in oos
     assert 'class="btn btn-shop"' not in oos
-    assert "go.dognet.com" in oos and "nofollow sponsored" in oos
+    assert f'href="/go/{o.id}"' in oos and "nofollow sponsored" in oos
+    assert "go.dognet.com" not in oos

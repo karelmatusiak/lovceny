@@ -317,9 +317,12 @@ def test_product_page_dognet_rel(client_db, monkeypatch):
     o.in_stock = True
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
-    assert "go.dognet.com" in html and "chid=9CFqgvpQ" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "go.dognet.com" not in html
     assert "nofollow sponsored noopener" in html
     assert "Dyson" in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert hop.headers["location"].startswith("https://go.dognet.com/?chid=9CFqgvpQ&url=")
 
 
 def test_oos_hides_buy(client_db, monkeypatch):
@@ -556,8 +559,11 @@ def test_allegro_product_page_dognet_and_oos(client_db, monkeypatch):
     o.in_stock = True
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
-    assert "go.dognet.com" in html and "chid=9CFqgvpQ" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "go.dognet.com" not in html
     assert "allegro.cz" in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert "go.dognet.com" in hop.headers["location"] and "chid=9CFqgvpQ" in hop.headers["location"]
     o.in_stock = False
     db.commit()
     html = c.get(f"/produkt/{p.id}").text

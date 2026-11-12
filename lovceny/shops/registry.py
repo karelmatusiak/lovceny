@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
-from .feed import ALLEGRO_TD_PAGE_CAP, ALLEGRO_TD_QUERIES, ALLEGRO_TD_TOTAL_CAP
+from .feed import ALLEGRO_TD_PAGE_CAP, ALLEGRO_TD_QUERIES, ALLEGRO_TD_TOTAL_CAP, strip_junk_query
 
 
 @dataclass
@@ -113,7 +113,9 @@ class Shop:
 
     def affiliate_link(self, url: str) -> str:
         """Affiliate obalení: Alza/Datart parametr, eHUB click.php, nebo Dognet go.dognet.com.
-        Bez nastaveného ID / a_aid / chid vrací URL beze změny. Na pořadí ani verdikt nemá vliv."""
+        Bez nastaveného ID / a_aid / chid vrací URL beze změny. Na pořadí ani verdikt nemá vliv.
+        Nejdřív sundá prázdné parametry, které do URL utekly z názvu ve feedu."""
+        url = strip_junk_query(url)
         aff_id = os.environ.get(self.affiliate_env, "") if self.affiliate_env else ""
         if self.affiliate_param and aff_id:
             p = urlparse(url)

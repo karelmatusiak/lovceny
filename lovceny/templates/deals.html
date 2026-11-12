@@ -44,7 +44,7 @@
       <div class="deal-act">
       {{ cmp_button(r.product) }}
       {% if r.best %}{% set s = get_shop(r.best.shop) %}
-      <a class="btn btn-shop-sm" href="{{ s.affiliate_link(r.best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% endif %}
       </div>
     </article>
@@ -84,7 +84,7 @@
         <div class="deal-act">
         {{ cmp_button(r.product) }}
         {% if r.best and r.best.in_stock is not false %}{% set s = get_shop(r.best.shop) %}
-        <a class="btn btn-shop-sm" href="{{ s.affiliate_link(r.best.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         {% endif %}
         </div>
       </article>

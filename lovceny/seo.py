@@ -296,6 +296,8 @@ def robots_txt() -> str:
         "Disallow: /admin",
         "Disallow: /img/",
         "Disallow: /offline",
+        "Disallow: /go/",
+        "Disallow: /data/go.json",
         f"Sitemap: {public_url()}/sitemap.xml", ""])
 
 

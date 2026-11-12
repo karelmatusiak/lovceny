@@ -49,7 +49,7 @@
           <span class="bf-drop"><b>{{ r.offer.price|czk }}</b><span>−{{ r.drop_czk|czk }} · −{{ '%.0f'|format(r.drop_pct) }}&nbsp;%</span></span>
         </a>
         {% if r.offer.in_stock and sh %}
-        <a class="btn btn-shop-sm" href="{{ sh.affiliate_link(r.offer.url) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <a class="btn btn-shop-sm" href="{{ go_href(r.offer) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         {% endif %}
       </li>{% endfor %}
     </ul>
@@ -106,7 +106,7 @@
       </div>
       <div class="bf-act">
       {{ cmp_button(r.product) }}
-      {% if sh %}<a class="btn btn-shop-sm" href="{{ sh.affiliate_link(r.best.url) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+      {% if sh %}<a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
       </div>
     </li>{% endfor %}
   </ul>

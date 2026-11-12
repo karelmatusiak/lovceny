@@ -280,7 +280,9 @@ def test_hero_oos_not_buyable_and_accessory_not_filed_as_main():
     assert phone_pick.best.shop != "alza"
     html = TestClient(app).get("/").text
     assert cheap.url not in html
-    assert f'href="{phone_pick.best.url}"' in html or phone_pick.best.url in html
+    assert f'href="/go/{phone_pick.best.id}"' in html
+    hop = TestClient(app).get(f"/go/{phone_pick.best.id}", follow_redirects=False)
+    assert hop.status_code == 302 and hop.headers["location"] == phone_pick.best.url
     assert "hero-pick-buy" in html
     assert 'rel="nofollow sponsored noopener"' in html
     assert all("kabel" not in n.lower() for n in names)

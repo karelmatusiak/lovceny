@@ -23,7 +23,7 @@
       {% if review %}
       <p class="oos-banner">Ten produkt ve srovnání neukazujeme. Historie cen zůstává uložená a odkaz na koupi tu není.</p>
       {% elif best %}{% set bs = get_shop(best.shop) %}
-      <a class="btn btn-primary btn-buy" href="{{ bs.affiliate_link(best.url) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      <a class="btn btn-primary btn-buy" href="{{ go_href(best) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
       {% elif unverified_head %}
       <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>
       {% elif all_oos %}
@@ -87,9 +87,9 @@
           {% if note %}
           <span class="offer-unverified-note">{{ note }}</span>
           {% elif is_oos %}
-          <a class="offer-oos-link" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
+          <a class="offer-oos-link" href="{{ go_href(o) }}" rel="{{ shop_rel(s) }}" target="_blank">Odkaz do obchodu <span class="sr-only">(není skladem, otevře se v novém okně)</span></a>
           {% else %}
-          <a class="btn btn-shop" href="{{ s.affiliate_link(o.url) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+          <a class="btn btn-shop" href="{{ go_href(o) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
           {% endif %}
         </div>{% endfor %}
       </div>

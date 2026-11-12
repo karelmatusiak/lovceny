@@ -131,6 +131,22 @@ tpl.env.globals["shop_rel"] = shop_rel
 tpl.env.globals["visible_offer_count"] = visible_offer_count
 
 
+def go_href(offer) -> str:
+    """Tlačítko do obchodu. Uložená nabídka jde přes /go/<id>, ať je první hop na lovceny.cz."""
+    from .go import go_path
+    oid = getattr(offer, "id", None)
+    if isinstance(oid, int) and oid > 0 and not isinstance(oid, bool):
+        return go_path(oid)
+    shop = get_shop(getattr(offer, "shop", "") or "")
+    url = getattr(offer, "url", "") or ""
+    if shop is not None:
+        return shop.affiliate_link(url)
+    return url
+
+
+tpl.env.globals["go_href"] = go_href
+
+
 def _prague(d, fmt="%-d. %-m. %H:%M"):
     """Čas pro lidi v Česku (DB ukládá UTC)."""
     if not d:
@@ -1152,6 +1168,23 @@ def sitemap(db=Depends(get_db)):
 @app.get("/robots.txt")
 def robots_txt():
     return Response(seo.robots_txt(), media_type="text/plain")
+
+
+@app.get("/go/{offer_id}")
+def go_offer(offer_id: int, db=Depends(get_db)):
+    """302 na affiliate URL. Cíl bere z nabídky, ne z query (žádný open redirect)."""
+    from .go import not_found_headers, redirect_headers, targets_for
+    offer = db.get(Offer, offer_id)
+    headers = not_found_headers()
+    if offer is None or not (offer.url or "").strip():
+        return Response("Odkaz do obchodu už neplatí.", status_code=404, media_type="text/plain; charset=utf-8", headers=headers)
+    pair = targets_for(get_shop(offer.shop), offer.url)
+    if pair is None:
+        return Response("Odkaz do obchodu už neplatí.", status_code=404, media_type="text/plain; charset=utf-8", headers=headers)
+    affiliate, _plain = pair
+    headers = redirect_headers()
+    headers["Location"] = affiliate
+    return Response(status_code=302, headers=headers)
 
 
 # ---------- Obrázky produktů: proxy + zmenšení do WebP ----------
