@@ -813,8 +813,9 @@ def parse_tradedoubler(data: bytes | str) -> tuple[list[FeedItem], int | None]:
 # Idle mezi kusy, a celý soubor. Visící spojení se přeskočí, pomalý obchod neblokuje ostatní.
 FEED_READ_TIMEOUT_S = 25
 FEED_TOTAL_S = 300
-# ProMobily Heureka má stovky MB kvůli popisům. Stream se neukládá celé, strop jen ať neskončí v nekonečnu.
-FEED_MAX_BYTES = 450 * 1024 * 1024
+# ProMobily Heureka a BScom mají stovky MB kvůli popisům. Stream se neukládá celé,
+# strop jen ať neskončí v nekonečnu. BScom v listopadu 2026 mělo 472 MB.
+FEED_MAX_BYTES = 560 * 1024 * 1024
 # Počty z posledního load_shop (doplněk k logu): ok / accessory / uncategorized / …
 FILTER_STATS: dict[str, dict[str, int]] = {}
 
