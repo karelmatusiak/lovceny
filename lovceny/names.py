@@ -755,7 +755,123 @@ def _join_card(tokens: list[str]) -> str:
     return _clean_ws(text)
 
 
-def card_label(name: str) -> str:
+# Obchodní výplň z feedu. Samostatná slova, ne části značek (Ancillary, DualSense).
+_FEED_ALWAYS = (
+    r"nov[éeý]\s+by\s+harman",
+    r"by\s+harman",
+    r"smartphone",
+    r"televizor",
+    r"televize",
+)
+# Až když v názvu je model. Forma sluchátek jen u sluchátek, ať „drátová myš“ zůstane.
+_FEED_WITH_MODEL = (
+    r"dual\s+sim",
+    r"nfc",
+    r"origin[aá]ln[íi]",
+    r"original",
+    r"nov[éeý]",
+)
+_FEED_HEADPHONES = (
+    r"origin[aá]ln[íi]\s+(?:bezdr[aá]tov\w+\s+|dr[aá]tov\w+\s+|bluetooth\s+|in[\s-]?ear\s+)*sluch[aá]tk\w+",
+    r"(?:bezdr[aá]tov\w+|dr[aá]tov\w+|bluetooth|in[\s-]?ear)\s+sluch[aá]tk\w+",
+    r"na\s+u[sš]i\s+s\s+mikrofonem",
+    r"s\s+mikrofonem",
+    r"na\s+u[sš]i",
+    r"do\s+u[sš][ií]",
+    r"in[\s-]?ear",
+    r"dr[aá]tov[áéý]",
+    r"bezdr[aá]tov[áéý]",
+)
+_SPEC_TOKEN = re.compile(
+    r"(?i)^(?:\d+\s*cd(?:\s*/\s*m(?:i|2|²))?|\d+cd(?:/(?:mi|m2|m²))?|24/7|so|mi)$"
+)
+
+
+def _normalize_inch_quotes(text: str) -> str:
+    """`55\"`, `55''` a `55″` jsou totéž co 55\"."""
+    s = text.replace('\\"', '"').replace("\\'", "'")
+    s = re.sub(r"(\d{1,3})\s*'{2,}", r'\1"', s)
+    s = re.sub(r"(\d{1,3})\s*[″”„]", r'\1"', s)
+    s = re.sub(r'(\d{1,3})\s*\\+"', r'\1"', s)
+    return s
+
+
+def _has_model_token(text: str) -> bool:
+    for tok in _split_card_tokens(text):
+        raw = tok.strip(".,;:()[]\"'")
+        if not raw or raw in {"/", "-"}:
+            continue
+        if _is_model_code(raw):
+            return True
+        if re.fullmatch(r"\d{2,4}", raw):
+            return True
+        if re.search(r"(?i)\d+\s*/\s*\d+\s*(gb|tb)|\d+\s*(gb|tb)", raw):
+            return True
+    return False
+
+
+def _headphone_feed(text: str) -> bool:
+    folded = _fold(text)
+    return any(bit in folded for bit in ("sluch", "headphone", "earbud", "in-ear", "in ear", "tune"))
+
+
+def _spec_dump(text: str) -> bool:
+    return bool(re.search(r"(?i)\d+\s*cd|24\s*/\s*7", text) or "''" in text or '\\"' in text)
+
+
+def _drop_echo_tokens(tokens: list[str]) -> list[str]:
+    """Druhá stejná značka a `T290`, když už v názvu je `290`."""
+    drop: set[int] = set()
+    folds = [_token_fold(t) for t in tokens]
+    seen_brand = False
+    for i, tok in enumerate(tokens):
+        if _is_card_brand(tok):
+            if seen_brand:
+                drop.add(i)
+            else:
+                seen_brand = True
+        echo = re.fullmatch(r"t(\d{2,4})", folds[i])
+        if echo and echo.group(1) in folds:
+            drop.add(i)
+    if not drop:
+        return tokens
+    return [tok for i, tok in enumerate(tokens) if i not in drop]
+
+
+def polish_feed_display(text: str) -> str:
+    """Sundá z už zkráceného názvu surový feed: předponu obchodu, „by Harman“, Dual SIM, uvozovky u úhlopříčky.
+
+    Nemění uložený název. Bez modelu (samotná „sluchátka na uši“) výplň nechá, ať se produkty pořád liší.
+    """
+    original = text or ""
+    s = _normalize_inch_quotes(_clean_ws(original))
+    if not s:
+        return ""
+    for pat in _FEED_ALWAYS:
+        s = re.sub(rf"(?i)\b(?:{pat})\b", " ", s)
+    if _has_model_token(s):
+        patterns = _FEED_WITH_MODEL
+        if _headphone_feed(original) or _headphone_feed(s):
+            patterns = _FEED_HEADPHONES + patterns
+        for pat in patterns:
+            s = re.sub(rf"(?i)\b(?:{pat})\b", " ", s)
+    s = re.sub(r'(?i)(\d{1,3}\s*")\s+LED\b', r"\1", s)
+    if _spec_dump(original):
+        s = re.sub(r",+", " ", s)
+        kept = []
+        for tok in _split_card_tokens(s):
+            core = tok.strip(".,;:")
+            if _SPEC_TOKEN.match(core.replace(" ", "")) or _SPEC_TOKEN.match(core):
+                continue
+            if re.fullmatch(r"(?i)led", core) and re.search(r'\d{1,3}\s*"', s):
+                continue
+            kept.append(tok.strip(","))
+        s = " ".join(kept)
+    tokens = _drop_echo_tokens(_split_card_tokens(_clean_ws(s)))
+    return _clean_ws(" ".join(tokens))
+
+
+def _card_label_core(name: str) -> str:
     """Viditelný název na kartě. Původní `name` se nemění.
 
     Značka a model, pokud ve zdroji opravdu jsou, jdou na začátek. Pryč jdou jen
@@ -824,3 +940,39 @@ def card_label(name: str) -> str:
             continue
         tail.append(tok)
     return _join_card(head + tail) or prose
+
+
+def card_label(name: str) -> str:
+    """Viditelný název na kartě. Původní `name` se nemění.
+
+    Nejdřív dosavadní zkrácení (značka a model dopředu, bez výčtu specifikací),
+    pak ``polish_feed_display``: předpony typu Smartphone / Televizor / Bluetooth
+    sluchátka, marketing „originální … nové by Harman“, druhé stejné značky a
+    úhlopříčka zapsaná jako ``55\\" LED``.
+    """
+    core = _card_label_core(name)
+    return polish_feed_display(core) or core
+
+
+def canonical_slug(name: str, stored: str | None = None) -> str:
+    """Veřejný slug. Ručně nastavený slug necháme.
+
+    Když je uložený slug jen ``slugify`` syrového feedu a úklid názvu ho změní,
+    kanonická adresa je slug vyčištěného názvu. Stará adresa pak 301.
+    Úklid, který slug nezmění, adresu neposouvá.
+    """
+    from .util import slugify
+
+    stored_s = (stored or "").strip().strip("-")
+    core = _card_label_core(name or "")
+    polished = polish_feed_display(core) or core
+    new_slug = slugify(polished) if polished else ""
+    if not new_slug or new_slug == "produkt":
+        return stored_s or "produkt"
+    raw_slug = slugify(name or "")
+    core_slug = slugify(core) if core else ""
+    if stored_s and stored_s not in {raw_slug, core_slug, new_slug}:
+        return stored_s
+    if new_slug == core_slug:
+        return stored_s or new_slug
+    return new_slug

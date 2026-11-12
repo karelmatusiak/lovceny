@@ -38,7 +38,8 @@ def test_homepage_ld_and_canonical_use_lovceny_cz(monkeypatch):
     assert "lovceny.onrender.com" not in html
     assert "https://lovceny.cz" in html
     assert '"@type": "WebSite"' in html or '"@type":"WebSite"' in html
-    assert "https://lovceny.cz/hledat?q={search_term_string}" in html
+    assert '"url":"https://lovceny.cz/"' in html or '"url": "https://lovceny.cz/"' in html
+    assert "SearchAction" not in html
     assert 'rel="canonical" href="https://lovceny.cz/"' in html or 'href="https://lovceny.cz/"' in html
 
 

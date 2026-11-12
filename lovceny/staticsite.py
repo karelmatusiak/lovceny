@@ -119,10 +119,43 @@ def norm_offer_url(url: str) -> str:
 
 
 def product_path(product) -> str:
-    slug = (product.slug or "").strip("-")
+    from .names import canonical_slug
+    slug = canonical_slug(getattr(product, "name", "") or "", getattr(product, "slug", "") or "")
     if slug:
         return f"/produkt/{product.id}-{slug}"
     return f"/produkt/{product.id}"
+
+
+def security_headers() -> str:
+    """Hlavičky pro Cloudflare Pages. Skripty jsou vlastní a vložené (menu, stránkování, onerror).
+
+    Obrázky jdou z wsrv.nl a z CDN obchodů, odkazy do obchodů jsou běžná navigace
+    (CSP je neblokuje). Affiliate `rel` se nemění.
+    """
+    csp = "; ".join([
+        "default-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https://wsrv.nl https://images.weserv.nl https:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "worker-src 'self'",
+        "manifest-src 'self'",
+        "upgrade-insecure-requests",
+    ])
+    return "\n".join([
+        "/*",
+        "  Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        "  X-Content-Type-Options: nosniff",
+        "  Referrer-Policy: strict-origin-when-cross-origin",
+        "  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+        f"  Content-Security-Policy: {csp}",
+        "",
+    ])
 
 
 def _redirect_target(db, product) -> str:
@@ -152,6 +185,10 @@ class _Redirects:
         slug = (product.slug or "").strip("-")
         if slug:
             self.gone[f"{product.id}-{slug}"] = dest
+
+    def add_former_slug(self, product_id: int, old_slug: str, dest: str) -> None:
+        """Starý feedový slug → nová kanonická adresa. Holé /produkt/ID nechává live."""
+        self.gone[f"{product_id}-{old_slug}"] = dest
 
     def add_live_id(self, product) -> None:
         path = product_path(product)
@@ -363,9 +400,11 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 book.add_retired(item, _redirect_target(db, item))
                 continue
             path = product_path(item)
+            prefix = f"/produkt/{item.id}-"
+            public_slug = path[len(prefix):] if path.startswith(prefix) else ""
             req = request_for(path)
             try:
-                response = product(req, item.id, item.slug or "", db=db)
+                response = product(req, item.id, public_slug, db=db)
             except HTTPException as exc:
                 if exc.status_code == 404:
                     continue
@@ -380,6 +419,9 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 continue
             write_html(path, response)
             book.add_live_id(item)
+            stored_slug = (item.slug or "").strip("-")
+            if stored_slug and stored_slug != public_slug:
+                book.add_former_slug(item.id, stored_slug, path)
             if not item.needs_review:
                 row = _index_row(item)
                 if row is not None:
@@ -426,6 +468,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         book.add("/porovnani", _location(legacy), _status(legacy))
 
         mode = write_redirects(root, book, static_limit=redirect_static_limit)
+        (root / "_headers").write_text(security_headers(), encoding="utf-8")
         affiliate = _affiliate_stats(products)
         total_bytes = sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
         file_count = sum(1 for p in root.rglob("*") if p.is_file())
@@ -443,6 +486,13 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
             "url_changes": [
                 "Stránkování kategorií: /kategorie/{slug}?strana={n} je /kategorie/{slug}/strana/{n} (stejně /nejlevnejsi a /ve-sleve). Staré ?strana= prohlížeč přesměruje.",
                 "Adresa /produkt/{id} bez slugu je 301 na kanonickou /produkt/{id}-{slug}. Živý web na ní vrací 200 a v HTML má kanonický odkaz.",
+                "Když úklid názvu změní slug, /produkt/{id}-{starý slug} je 301 na /produkt/{id}-{nový slug}.",
+            ],
+            "dashboard_steps": [
+                "www.lovceny.cz na https://lovceny.cz se stavem 301 nejde zapsat do Pages _redirects "
+                "(domain-level redirects nejsou podporované) ani do _headers. "
+                "V Cloudflare nastav Bulk Redirect nebo Redirect Rule: hostname www.lovceny.cz, "
+                "cíl https://lovceny.cz, stav 301, zachovat cestu a query.",
             ],
             "not_published": LOST_WITHOUT_SERVER,
         }
@@ -510,7 +560,7 @@ def _render_offline_note(root: Path, tpl) -> None:
         "noindex": True,
         "art": "",
         "text": "Potvrzení a odhlášení hlídání, e-mailů a oznámení potřebuje server. "
-                "Napiš na info@lovceny.cz a vyřídíme to ručně.",
+                "Napiš na <!--email_off-->info@lovceny.cz<!--/email_off--> a vyřídíme to ručně.",
         "canonical_path": "/bez-serveru",
     }
     html = tpl.get_template("message.html").render(ctx)
@@ -559,6 +609,7 @@ def _render_category(root: Path, db, cat) -> int:
 
 def _index_row(product) -> dict | None:
     from .main import product_summary, shop_rel
+    from .names import canonical_slug, card_label
     visible = [o for o in product.offers if not getattr(o, "withheld", False)]
     best, verdict = product_summary(product)
     display = best or last_known_offer(visible)
@@ -566,10 +617,11 @@ def _index_row(product) -> dict | None:
         return None
     shop = get_shop(display.shop) if best else get_shop(getattr(display, "shop", "") or "")
     buy = best is not None and best.in_stock is not False and shop is not None
+    label = card_label(product.name or "") or (product.name or "")
     row = {
         "i": product.id,
-        "s": product.slug,
-        "n": product.name or "",
+        "s": canonical_slug(product.name or "", product.slug or ""),
+        "n": label,
         "c": product.category_slug or "",
         "b": guess_brand(product.name or "") or "",
         "p": float(display.price),
@@ -579,6 +631,8 @@ def _index_row(product) -> dict | None:
         "vl": verdict.headline,
         "a": 1 if is_accessory_text(product.name or "", product.category) else 0,
     }
+    if product.name and product.name != label:
+        row["f"] = product.name
     if product.ean:
         row["e"] = product.ean
     if buy and shop is not None:

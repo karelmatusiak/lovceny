@@ -121,10 +121,12 @@ def send(sub: PushSubscription, payload: dict) -> str:
 
 
 def alert_payload(sub: PushSubscription, offer, shop_name: str, public_url: str) -> dict:
+    from .names import canonical_slug
     p = sub.product
+    slug = canonical_slug(p.name or "", p.slug or "")
     return {"title": f"Cena klesla: {p.name[:80]}",
             "body": f"Teď {czk(offer.price)} v obchodě {shop_name} (tvůj cíl {czk(sub.target_price)}).",
-            "url": f"{public_url}/produkt/{p.id}-{p.slug}?utm_source=push",
+            "url": f"{public_url}/produkt/{p.id}-{slug}?utm_source=push",
             "unsubscribe": f"{public_url}/hlidani/push/zrusit/{sub.token}",
             "tag": f"lovceny-{p.id}"}
 

@@ -17,6 +17,12 @@ def public_url() -> str:
     return _public_url()
 
 
+def _product_url(product) -> str:
+    from .names import canonical_slug
+    slug = canonical_slug(getattr(product, "name", "") or "", getattr(product, "slug", "") or "")
+    return f"{public_url()}/produkt/{product.id}-{slug}"
+
+
 @dataclass
 class Email:
     subject: str
@@ -36,7 +42,7 @@ def confirm_email(watch) -> Email:
     return _render("confirm", f"Potvrď hlídání ceny: {watch.product.name}", p=watch.product, w=watch,
                    confirm_url=f"{base}/hlidani/potvrdit/{watch.token}",
                    unsub_url=f"{base}/hlidani/zrusit/{watch.token}",
-                   product_url=f"{base}/produkt/{watch.product.id}-{watch.product.slug}")
+                   product_url=_product_url(watch.product))
 
 
 def alert_email(watch, offer, shop_name: str, shop_url: str) -> Email:
@@ -44,7 +50,7 @@ def alert_email(watch, offer, shop_name: str, shop_url: str) -> Email:
     return _render("alert", f"Cena klesla: {watch.product.name} za {czk(offer.price)}", p=watch.product, w=watch,
                    o=offer, shop_name=shop_name, shop_url=shop_url,
                    unsub_url=f"{base}/hlidani/zrusit/{watch.token}",
-                   product_url=f"{base}/produkt/{watch.product.id}-{watch.product.slug}")
+                   product_url=_product_url(watch.product))
 
 
 def digest_confirm_email(sub) -> Email:

@@ -40,6 +40,14 @@ def test_209_products_are_nine_pages_without_gaps(client_db):
 
     mid = c.get("/kategorie/konzole", params={"strana": 5})
     assert mid.status_code == 200
+    title1 = first.text.split("<title>", 1)[1].split("</title>", 1)[0]
+    title5 = mid.text.split("<title>", 1)[1].split("</title>", 1)[0]
+    assert "– strana" not in title1
+    assert title5.startswith("Herní konzole – ceny, historie a verdikt – strana 5 |")
+    desc5 = re.search(r'<meta name="description" content="([^"]*)"', mid.text).group(1)
+    desc1 = re.search(r'<meta name="description" content="([^"]*)"', first.text).group(1)
+    assert "Strana 5." in desc5 and "Strana" not in desc1
+    assert 'class="page-h1">Herní konzole – ceny, historie a verdikt</h1>' in mid.text
     assert "Zobrazeno 97–120 z 209" in mid.text
     assert 'rel="canonical" href="https://lovceny.cz/kategorie/konzole?strana=5"' in mid.text
     assert 'rel="prev" href="https://lovceny.cz/kategorie/konzole?strana=4"' in mid.text

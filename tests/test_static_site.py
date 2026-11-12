@@ -1,5 +1,6 @@
 """Statický generátor: stejné URL a pravidla jako živý web, bez databáze pro návštěvníka."""
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -10,7 +11,8 @@ from lovceny.categories import is_accessory_text
 from lovceny.main import app, tpl
 from lovceny.models import Offer, PricePoint, Product
 from lovceny.seo import robots_txt, sitemap_xml
-from lovceny.staticsite import _Redirects, build, norm_offer_url, output_path, rewrite_img_proxy, rewrite_pagination, write_redirects
+from lovceny.names import canonical_slug
+from lovceny.staticsite import _Redirects, build, norm_offer_url, output_path, rewrite_img_proxy, rewrite_pagination, security_headers, write_redirects
 from lovceny.web import public_url
 from lovceny.util import slugify
 
@@ -136,7 +138,12 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
         name="Samsung Galaxy A55 staré URL", slug="samsung-galaxy-a55-stare",
         category_slug="telefony", category="Mobilní telefony", retired_at=now,
     )
-    db.add_all([good, thin, oos, stale, accessory, laptop, gpu, perfume, hidden, review, merged])
+    dirty_name = '55\\" LED Samsung OM55N-S FHD 4000cd/mi SO 24/7'
+    dirty = Product(
+        name=dirty_name, slug=slugify(dirty_name),
+        category_slug="televize", category="Televize",
+    )
+    db.add_all([good, thin, oos, stale, accessory, laptop, gpu, perfume, hidden, review, merged, dirty])
     db.flush()
     merged.redirect_product_id = good.id
     db.add_all([
@@ -147,6 +154,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
         _offer(accessory, "alza", "https://www.alza.cz/kryt-a55", 299),
         _offer(laptop, "alza", "https://www.alza.cz/gigabyte-a16", 24990),
         _offer(review, "alza", "https://www.alza.cz/iphone-16e", 19990),
+        _offer(dirty, "alza", "https://www.alza.cz/samsung-om55n", 79185),
     ])
     extra = []
     for i in range(30):
@@ -202,6 +210,9 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert f"/kategorie/telefony/strana/2" in phones
     page2 = (out / "kategorie" / "telefony" / "strana" / "2.html").read_text()
     assert "A54" in page2
+    assert "– strana 2" in page2.split("</title>", 1)[0]
+    assert 'rel="canonical" href="https://lovceny.cz/kategorie/telefony/strana/2"' in page2
+    assert "– strana" not in phones.split("</title>", 1)[0]
     notebooks = (out / "kategorie" / "notebooky.html").read_text()
     assert "A16" not in notebooks and "Gigabyte" not in notebooks and "RTX 4070" not in notebooks
     assert not (out / "produkt" / f"{laptop.id}-{laptop.slug}.html").exists()
@@ -273,5 +284,33 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert f"/produkt/{good.id} /produkt/{good.id}-{good.slug} 301" in redirects
 
     assert f"/produkt/{merged.id}-{merged.slug} /produkt/{good.id}-{good.slug} 301" in redirects
+    dirty_public = canonical_slug(dirty.name, dirty.slug)
+    assert dirty_public != dirty.slug
+    assert f"/produkt/{dirty.id}-{dirty.slug} /produkt/{dirty.id}-{dirty_public} 301" in redirects
+    assert (out / "produkt" / f"{dirty.id}-{dirty_public}.html").is_file()
+    assert not (out / "produkt" / f"{dirty.id}-{dirty.slug}.html").exists()
+    dirty_html = (out / "produkt" / f"{dirty.id}-{dirty_public}.html").read_text()
+    dirty_h1 = dirty_html.split("<h1", 1)[1].split("</h1>", 1)[0].split(">", 1)[1]
+    assert "Samsung OM55N-S" in dirty_h1 and "55" in dirty_h1
+    assert "4000cd" not in dirty_h1 and "LED" not in dirty_h1
     assert "/pes/* /bez-serveru 301" in redirects
+    headers = (out / "_headers").read_text()
+    assert headers == security_headers()
+    assert "Strict-Transport-Security:" in headers
+    assert "X-Content-Type-Options: nosniff" in headers
+    assert "Referrer-Policy:" in headers
+    assert "Permissions-Policy:" in headers
+    assert "https://wsrv.nl" in headers and "script-src 'self' 'unsafe-inline'" in headers
+    home = (out / "index.html").read_text()
+    assert "SearchAction" not in home
+    assert "<!--email_off-->" in home and "info@lovceny.cz" in home
+    assert "www.lovceny.cz" in " ".join(report["dashboard_steps"])
+    external_scripts = []
+    for html_path in out.rglob("*.html"):
+        text = html_path.read_text(encoding="utf-8")
+        for src in re.findall(r'<script[^>]+src="([^"]+)"', text):
+            if src.startswith(("http://", "https://", "//")):
+                external_scripts.append(src)
+    assert external_scripts == []
+    assert "<script>" in home  # vložené menu musí CSP pustit přes unsafe-inline
     assert "/hlidani/* /bez-serveru 301" in redirects

@@ -21,7 +21,7 @@
     <div class="card adm-card"><h2 class="h3">Nejnavštěvovanější stránky</h2>
       {% if r.top_pages %}<table class="tbl"><tr><th>Stránka</th><th class="num">Zobrazení</th></tr>{% for p, n in r.top_pages %}<tr><td><a href="{{ p }}">{{ p }}</a></td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
     <div class="card adm-card"><h2 class="h3">Nejoblíbenější produkty</h2>
-      {% if r.top_products %}<table class="tbl"><tr><th>Produkt</th><th class="num">Zobrazení</th></tr>{% for p, n in r.top_products %}<tr><td><a href="/produkt/{{ p.id }}-{{ p.slug }}">{{ p.name }}</a></td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
+      {% if r.top_products %}<table class="tbl"><tr><th>Produkt</th><th class="num">Zobrazení</th></tr>{% for p, n in r.top_products %}<tr><td><a href="/produkt/{{ p.id }}-{{ pslug(p) }}">{{ p.name }}</a></td><td class="num">{{ n }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
     <div class="card adm-card"><h2 class="h3">Nejčastější hledání</h2>
       {% if r.top_searches %}<table class="tbl"><tr><th>Dotaz</th><th class="num">Počet</th><th class="num">Výsledků</th></tr>{% for q, n, mxr in r.top_searches %}<tr><td>{{ q }}</td><td class="num">{{ n }}</td><td class="num">{{ mxr if mxr is not none else '–' }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Zatím nic.</p>{% endif %}</div>
     <div class="card adm-card"><h2 class="h3">Hledání bez výsledků</h2>

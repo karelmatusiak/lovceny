@@ -48,12 +48,13 @@ def product_brand_name(p) -> str | None:
 
 
 def product_ld(p: Product, offers, verdict=None) -> dict:
-    from .names import short_name
+    from .names import canonical_slug, short_name
     from .shops import get_shop
     from .availability import offer_is_buyable
     priced = [o for o in offers if o.price is not None]
+    slug = canonical_slug(getattr(p, "name", "") or "", getattr(p, "slug", "") or "")
     d = {"@context": "https://schema.org", "@type": "Product", "name": getattr(p, "display_name", None) or short_name(p.name),
-         "url": _abs(f"/produkt/{p.id}-{p.slug}")}
+         "url": _abs(f"/produkt/{p.id}-{slug}")}
     brand = product_brand_name(p)
     if brand:
         d["brand"] = {"@type": "Brand", "name": brand}
@@ -166,8 +167,11 @@ def validate_product_ld(d: dict) -> list[str]:
 
 
 def itemlist_ld(rows, path: str, start: int = 0) -> dict:
+    from .names import canonical_slug
     return {"@context": "https://schema.org", "@type": "ItemList", "url": _abs(path),
-            "itemListElement": [{"@type": "ListItem", "position": start + i + 1, "url": _abs(f"/produkt/{p.id}-{p.slug}"), "name": getattr(p, "display_name", None) or p.name}
+            "itemListElement": [{"@type": "ListItem", "position": start + i + 1,
+                                 "url": _abs(f"/produkt/{p.id}-{canonical_slug(p.name or '', p.slug or '')}"),
+                                 "name": getattr(p, "display_name", None) or p.name}
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
@@ -223,12 +227,13 @@ def sitemap_xml(db) -> str:
         for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
             offers_by[offer.product_id].append(offer)
     from .exclusions import is_excluded_brand
+    from .names import canonical_slug
     for pid, slug, created, name in products:
         if is_excluded_brand(name or ""):
             continue
         holder = type("P", (), {"name": name})()
         if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):
-            urls.append((f"{base}/produkt/{pid}-{slug}", created))
+            urls.append((f"{base}/produkt/{pid}-{canonical_slug(name or '', slug)}", created))
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for u, lm in urls:
         out.append(f"<url><loc>{escape(u)}</loc>" + (f"<lastmod>{lm.date().isoformat()}</lastmod>" if lm else "") + "</url>")
@@ -254,21 +259,13 @@ def robots_txt() -> str:
 
 
 def website_ld() -> dict:
-    """WebSite + SearchAction for homepage (Google sitelinks search box)."""
+    """WebSite na homepage. SearchAction ne: /hledat je v robots.txt a statický web tam nemá serverové výsledky."""
     return {
         "@context": "https://schema.org",
         "@type": "WebSite",
         "name": "Lovceny",
         "url": _abs("/"),
         "inLanguage": "cs-CZ",
-        "potentialAction": {
-            "@type": "SearchAction",
-            "target": {
-                "@type": "EntryPoint",
-                "urlTemplate": _abs("/hledat") + "?q={search_term_string}",
-            },
-            "query-input": "required name=search_term_string",
-        },
     }
 
 

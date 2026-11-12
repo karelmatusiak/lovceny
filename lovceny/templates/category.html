@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_macros.html" import season_hint, pcard, rank_link %}
-{% block title %}{{ page_title }} | Lovceny{% endblock %}
+{% block title %}{{ page_title }}{% if page is defined and page > 1 %} – strana {{ page }}{% endif %} | Lovceny{% endblock %}
 {% block description %}{{ page_desc }}{% endblock %}
 {% block head %}{% if page_prev %}<link rel="prev" href="{{ canonical(page_prev) }}">{% endif %}{% if page_next %}<link rel="next" href="{{ canonical(page_next) }}">{% endif %}
 {% if STATIC_SITE %}<script>(function(){var q=new URLSearchParams(location.search),s=q.get("strana");if(s&&s!=="1"&&/^[1-9]\d*$/.test(s)){q.delete("strana");var rest=q.toString(),p=location.pathname.replace(/\/$/,"")+"/strana/"+s;location.replace(p+(rest?"?"+rest:"")+location.hash);}})();</script>{% endif %}
