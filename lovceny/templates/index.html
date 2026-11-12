@@ -24,7 +24,7 @@
       {% set shop_name = (hs.name if hs else h.best.shop) %}
       <div class="hero-pick">
         {% if h.badge %}<span class="hero-pick-badge">{{ h.badge }}</span>{% endif %}
-        <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ h.product.slug }}">
+        <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ pslug(h.product) }}">
           <div class="hero-pick-img">{% if h.product.image_url %}{{ shop_img(h.product.image_url, 180, priority=(loop.index <= 2), alt=dname(h.product)) }}{% else %}{{ img_missing() }}{% endif %}</div>
           {% if h.category_name %}<div class="hero-pick-cat">{{ h.category_name }}</div>{% endif %}
           <div class="hero-pick-name" title="{{ h.product.name }}">{{ dname(h.product) }}{% if dname(h.product) != h.product.name %}<span class="sr-only">. Celý název: {{ h.product.name }}</span>{% endif %}</div>
@@ -64,7 +64,7 @@
 <section class="deals-teaser" style="padding-top:24px"><div class="wrap">
   <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
   <div class="teaser-grid">{% for r in deals %}
-    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">
+    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">
       <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
       {{ badge(r.verdict) }}
       <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>

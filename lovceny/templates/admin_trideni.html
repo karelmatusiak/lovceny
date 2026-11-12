@@ -25,7 +25,7 @@
         <p><b>{{ it.d.summary }}</b></p>
         <p class="muted">{{ it.d.reason }}</p>
         <ul>
-          {% if it.product %}<li>Produkt #{{ it.product.id }}: <a href="/produkt/{{ it.product.id }}-{{ it.product.slug }}">{{ it.product.name }}</a> · {{ it.product.category_slug or "bez kategorie" }}</li>{% endif %}
+          {% if it.product %}<li>Produkt #{{ it.product.id }}: <a href="/produkt/{{ it.product.id }}-{{ pslug(it.product) }}">{{ it.product.name }}</a> · {{ it.product.category_slug or "bez kategorie" }}</li>{% endif %}
           {% if it.other %}<li>Druhý produkt #{{ it.other.id }}: {{ it.other.name }}</li>{% endif %}
           {% if it.names %}<li>Celá skupina: {{ it.names }}</li>{% endif %}
           {% if it.offer %}<li>Nabídka #{{ it.offer.id }} · {{ it.offer.shop }} · {{ it.offer.url }}</li>{% endif %}

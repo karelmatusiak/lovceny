@@ -29,8 +29,9 @@ def test_homepage_website_organization_ld():
     types = {o.get("@type") for o in _ld(html)}
     assert "WebSite" in types and "Organization" in types
     site = next(o for o in _ld(html) if o["@type"] == "WebSite")
-    assert site["potentialAction"]["@type"] == "SearchAction"
-    assert "{search_term_string}" in site["potentialAction"]["target"]["urlTemplate"]
+    assert "potentialAction" not in site
+    assert "SearchAction" not in html
+    assert "/hledat?q=" not in html.split("</head>", 1)[0]
     org = next(o for o in _ld(html) if o["@type"] == "Organization")
     assert org["email"] == "info@lovceny.cz"
     assert "address" not in org and "streetAddress" not in str(org)

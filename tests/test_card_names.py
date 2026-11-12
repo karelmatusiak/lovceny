@@ -1,7 +1,7 @@
 """Viditelný název na kartě. Uložený name, slug, hledání ani JSON-LD se nemění."""
 from types import SimpleNamespace
 
-from lovceny.names import card_label, short_name
+from lovceny.names import canonical_slug, card_label, short_name
 from lovceny.seo import product_ld
 from lovceny.service import search_db
 from lovceny.util import slugify
@@ -11,8 +11,8 @@ def test_headphone_feed_titles_lead_with_model():
     raw = "Originální Drátová Sluchátka Jbl Tune 500 Na Uši S Mikrofonem, Černá"
     label = card_label(raw)
     assert label.startswith("JBL Tune 500")
-    assert "Originální" in label and "Černá" in label and "Na Uši" in label
-    assert "Mikrofonem, Černá" in label
+    assert "Černá" in label
+    assert "Originální" not in label and "Na Uši" not in label and "Mikrofonem" not in label
     assert "Jbl" not in label  # celý token značky se sjednotí na JBL
     assert "sluchátka" not in label.casefold()
 
@@ -91,7 +91,7 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     assert search_db(db, "Originální Drátová")[0].id == jbl.id
 
     html = client.get("/kategorie/sluchatka").text
-    assert "JBL Tune 500 Originální" in html
+    assert "JBL Tune 500, Černá" in html
     assert f'title="{raw}"' in html
     assert "Celý název:" in html and raw in html
     assert 'onerror="alert(1)"' not in html
@@ -101,9 +101,8 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     detail = client.get(f"/produkt/{jbl.id}-{jbl.slug}").text
     assert raw in detail
     assert 'class="p-full-name"' in detail
-    h1 = detail.split('<h1 class="p-name"', 1)[1].split("</h1>", 1)[0]
-    assert "JBL Tune 500" in h1 and "Originální" in h1
-    assert "Originální Drátová Jbl" not in h1
+    h1 = detail.split('<h1 class="p-name"', 1)[1].split("</h1>", 1)[0].split(">", 1)[1]
+    assert h1 == "JBL Tune 500, Černá"
     ld = product_ld(SimpleNamespace(
         id=jbl.id, slug=jbl.slug, name=jbl.name, display_name=short_name(jbl.name),
         image_url=None, ean=None, category_slug="sluchatka", category="Sluchátka",
@@ -111,7 +110,8 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     assert ld["name"] == short_name(raw)
     assert ld["name"] != card_label(raw)
     assert ld["name"].startswith("Originální Drátová Jbl")
-    assert f"/produkt/{jbl.id}-{jbl.slug}" in ld["url"]
+    assert ld["url"].endswith(f"/produkt/{jbl.id}-{canonical_slug(jbl.name, jbl.slug)}")
+    assert canonical_slug(jbl.name, jbl.slug) != jbl.slug
     assert plain.name == "JBL Tune 500 černá"
 
 
@@ -158,11 +158,11 @@ def test_detail_compare_and_schema_keep_identity(client_db):
     assert jbl_ld["name"] == short_name(jbl_raw)
     assert jbl_ld["name"].startswith("Originální Drátová Jbl")
     assert "JBL Tune 500" not in jbl_ld["name"]
-    assert jbl_ld["url"].endswith(f"/produkt/{jbl.id}-{jbl.slug}")
+    assert jbl_ld["url"].endswith(f"/produkt/{jbl.id}-{canonical_slug(jbl.name, jbl.slug)}")
 
     compared = client.get(f"/porovnat?p={sony.id}-{sony.slug},{jbl.id}-{jbl.slug},{generic.id}-{generic.slug}").text
     assert "Sony MDR-ZX310APR, červená" in compared
-    assert "JBL Tune 500 Originální Drátová" in compared
+    assert "JBL Tune 500, Černá" in compared
     assert "Bezdrátová Bluetooth 5.3 ANC ENC Dokanálový Mikrofon Černá" in compared
     assert f'title="{sony_raw}"' in compared and f'title="{generic_raw}"' in compared
     assert "Celý název: " + generic_raw in compared

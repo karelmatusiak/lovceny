@@ -24,7 +24,7 @@
         <div><h2 class="p-name" id="ov-name">{{ r.name or (r.query|pretty_name) or 'Produkt' }}</h2>
           <div class="p-cat">{% if r.shop %}<span class="shop-dot" style="background:{{ r.shop.color }}"></span>{{ r.shop.name }}{% else %}{{ host }}{% endif %} · <a href="{{ r.url }}" target="_blank" rel="noopener nofollow">otevřít v obchodě ↗</a></div></div>
       </div>
-      {% if r.message %}<div class="notice {{ 'info' if r.status in ('feed','unknown_shop') else 'warn' }} ov-status">{{ r.message }}{% if r.status == 'unknown_shop' %} <a href="mailto:info@lovceny.cz">Napiš na info@lovceny.cz</a>{% endif %}</div>{% endif %}
+      {% if r.message %}<div class="notice {{ 'info' if r.status in ('feed','unknown_shop') else 'warn' }} ov-status">{{ r.message }}{% if r.status == 'unknown_shop' %} <!--email_off--><a href="mailto:info@lovceny.cz">Napiš na info@lovceny.cz</a><!--/email_off-->{% endif %}</div>{% endif %}
       {% if r.price %}
       <div class="price-row"><span class="price">{{ r.price|czk }}</span>
         {% if r.original_price %}<span class="was">{{ r.original_price|czk }}</span><span class="claimed">−{{ ((1 - r.price/r.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}</div>
@@ -45,9 +45,9 @@
           <p>Nejnižší cena za posledních 30 dní podle našich měření: <b>{{ c.min30|czk }}</b> (dne {{ c.min30_date.day }}. {{ c.min30_date.month }}. {{ c.min30_date.year }}).
           {% if c.claimed %}Uváděná původní cena {{ c.claimed|czk }} odpovídá naměřené historii (není o víc než 5 % vyšší).{% elif c.current and c.current <= c.min30 %}Dnešní cena je na 30denním minimu nebo pod ním.{% elif c.current %}Dnešní cena je o {{ ((c.current/c.min30 - 1)*100)|round|int }} % vyšší.{% endif %}</p>
           {% endif %}
-          <p class="ov-muted">Z {{ c.days }} dní měření za 90 dní{% if c.has_demo %} (obsahuje ukázková demo data){% endif %}. <a href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Celá historie ceny →</a></p>
+          <p class="ov-muted">Z {{ c.days }} dní měření za 90 dní{% if c.has_demo %} (obsahuje ukázková demo data){% endif %}. <a href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">Celá historie ceny →</a></p>
         {% elif r.product %}
-          <p>Produkt sledujeme teprve {{ c.days if c else 0 }} {{ 'den' if (c and c.days == 1) else ('dny' if (c and 2 <= c.days <= 4) else 'dní') }} – na kontrolu 30 dní potřebujeme aspoň týden měření. <a href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Historie ceny →</a></p>
+          <p>Produkt sledujeme teprve {{ c.days if c else 0 }} {{ 'den' if (c and c.days == 1) else ('dny' if (c and 2 <= c.days <= 4) else 'dní') }} – na kontrolu 30 dní potřebujeme aspoň týden měření. <a href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">Historie ceny →</a></p>
         {% else %}
           <p>Tento produkt zatím nesledujeme, takže jeho historii nemáme a kontrolu 30 dní udělat nemůžeme.{% if r.original_price %} Obchod uvádí původní cenu {{ r.original_price|czk }} – podle zákona by to měla být nejnižší cena za posledních 30 dní před slevou.{% endif %}</p>
         {% endif %}
@@ -55,7 +55,7 @@
 
       {% if r.product and r.verdict %}<div class="ov-verdict">{{ badge(r.verdict, link=true) }}</div>{% endif %}
       <div class="ov-actions">
-        {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ r.product.slug }}">Detail produktu</a>{% endif %}
+        {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">Detail produktu</a>{% endif %}
         {% if r.can_track %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ r.url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>{% endif %}
         {{ share(share_url, share_text, 'Ověření slevy na Lovceny') }}
       </div>

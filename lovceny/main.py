@@ -24,7 +24,7 @@ from .verdict import Verdict, compute
 from .deals import real_deals
 from .chart import build_chart, verdict_note
 from .util import czk, cz_count, cz_plural
-from .names import card_label, short_name, uniquify_short_names
+from .names import canonical_slug, card_label, short_name, uniquify_short_names
 from .availability import (
     offer_is_buyable, best_buyable_offer, last_known_offer,
     sort_offers_for_display,
@@ -97,7 +97,13 @@ def dname(p):
     return card_label(getattr(p, "name", "") or "")
 
 
+def pslug(p) -> str:
+    """Veřejný slug. Uložený slug feedu zůstane, dokud úklid názvu adresu nezmění."""
+    return canonical_slug(getattr(p, "name", "") or "", getattr(p, "slug", "") or "")
+
+
 tpl.env.globals["dname"] = dname
+tpl.env.globals["pslug"] = pslug
 # Statický generátor ho na čas zapne. Živý web ho nechává vypnutý.
 tpl.env.globals["STATIC_SITE"] = False
 
@@ -415,7 +421,7 @@ def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
         request.state.an = {"kind": "search", "query": q, "results": 0 if prod is None else 1}
         if prod is None:
             return tpl.TemplateResponse(request, "search.html", {"q": q, "results": [], "error": msg, "noindex": True}, status_code=422)
-        r = f"/produkt/{prod.id}-{prod.slug}"
+        r = f"/produkt/{prod.id}-{pslug(prod)}"
         return RedirectResponse(r + (f"?msg={msg}" if msg else ""), 303)
     products = search_db(db, q)
     assign_display_names(products)
@@ -518,7 +524,7 @@ def track(request: Request, url: str = Form(...), compare: int = Form(0), db=Dep
         raise HTTPException(422, msg)
     if compare:  # „Porovnat“ u živého výsledku: nejdřív sledovat, pak přidat do porovnání (JS sloučí s výběrem)
         return RedirectResponse(f"/porovnat?pridat={prod.id}", 303)
-    r = f"/produkt/{prod.id}-{prod.slug}"
+    r = f"/produkt/{prod.id}-{pslug(prod)}"
     return RedirectResponse(r + (f"?msg={quote(msg)}" if msg else ""), 303)
 
 
@@ -535,7 +541,7 @@ def preview(request: Request, url: str = "", db=Depends(get_db)):
     curl = shop.canonical_url(url)
     existing = db.scalar(select(Offer).where(Offer.url == curl))
     if existing:
-        return RedirectResponse(f"/produkt/{existing.product.id}-{existing.product.slug}", 303)
+        return RedirectResponse(f"/produkt/{existing.product.id}-{pslug(existing.product)}", 303)
     hit = find_cached_hit(url) or find_cached_hit(curl)
     return tpl.TemplateResponse(request, "preview.html", {"hit": hit, "url": url, "shop": shop,
                                                           "noindex": True}, headers={"X-Robots-Tag": "noindex"})
@@ -558,14 +564,15 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     if p.retired_at is not None:
         target_prod = _merged_target(db, p)
         if target_prod is not None:
-            return RedirectResponse(f"/produkt/{target_prod.id}-{target_prod.slug}", status_code=301)
+            return RedirectResponse(f"/produkt/{target_prod.id}-{pslug(target_prod)}", status_code=301)
         cat = BY_SLUG.get(p.category_slug or "")
         target = f"/kategorie/{cat.slug}" if cat else "/"
         return RedirectResponse(target, status_code=301)
-    # Aktivní: špatný slug → kanonická URL (zachovat canonical chování).
-    if slug and slug != p.slug:
+    # Aktivní: špatný nebo starý feedový slug → kanonická URL.
+    canon_slug = pslug(p)
+    if slug and slug != canon_slug:
         q = request.url.query
-        dest = f"/produkt/{p.id}-{p.slug}" + (f"?{q}" if q else "")
+        dest = f"/produkt/{p.id}-{canon_slug}" + (f"?{q}" if q else "")
         return RedirectResponse(dest, status_code=301)
     from .offer_trust import unverified_note, use_cutoffs
     cutoffs = use_cutoffs(db)
@@ -589,7 +596,7 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     names = assign_all_display_names(db)
     p.display_name = names.get(p.id) or short_name(p.name or "")
     dn = dname(p)
-    crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(dn, f"/produkt/{p.id}-{p.slug}")]
+    crumbs = [("Lovceny", "/")] + ([(cat.name, f"/kategorie/{cat.slug}")] if cat else []) + [(dn, f"/produkt/{p.id}-{canon_slug}")]
     has_demo = any(pt.is_demo for pt in pts)
     all_oos = best is None and unverified_head is None and last_known is not None
     display_price = best or unverified_head or last_known
@@ -617,10 +624,10 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         "display_price": display_price, "v": v, "offers": offers, "noindex": review,
         "chart_ranges": ranges, "chart_note": verdict_note(v, ranges),
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "cat": cat, "crumbs": crumbs,
-        "canonical_path": f"/produkt/{p.id}-{p.slug}",
+        "canonical_path": f"/produkt/{p.id}-{canon_slug}",
         "ld": [seo.product_ld(p, schema_offers, v), seo.breadcrumb_ld(crumbs)],
         "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
-        "share_url": canonical(f"/produkt/{p.id}-{p.slug}"),
+        "share_url": canonical(f"/produkt/{p.id}-{canon_slug}"),
         "share_text": f"{dn}" + share_price + f" ({v.headline}) na Lovceny"},
         headers={"X-Robots-Tag": "noindex, follow"} if review else None)
 
@@ -632,9 +639,9 @@ def watch(pid: int, email: str = Form(...), target_price: float = Form(...),
     if not p:
         raise HTTPException(404)
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) or target_price <= 0:
-        return RedirectResponse(f"/produkt/{p.id}-{p.slug}?msg=Zkontroluj e-mail a cílovou cenu.#hlidani", 303)
+        return RedirectResponse(f"/produkt/{p.id}-{pslug(p)}?msg=Zkontroluj e-mail a cílovou cenu.#hlidani", 303)
     create_watch(db, p, email, target_price, only_in_stock)
-    return RedirectResponse(f"/produkt/{p.id}-{p.slug}?ok=1#hlidani", 303)
+    return RedirectResponse(f"/produkt/{p.id}-{pslug(p)}?ok=1#hlidani", 303)
 
 
 @app.get("/hlidani/potvrdit/{token}", response_class=HTMLResponse)
@@ -721,7 +728,7 @@ def parse_ids(raw: str) -> list[int]:
 
 
 def compare_token(p: Product) -> str:
-    return f"{p.id}-{p.slug}"
+    return f"{p.id}-{pslug(p)}"
 
 
 def resolve_compare(db, raw: str) -> list[Product]:
@@ -1071,6 +1078,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
     page, strip_strana = _parse_strana(strana)
     title_t, desc_t = CAT_VIEWS[view]
     fmt = {"name": c.name, "name_l": c.name[:1].lower() + c.name[1:], "gen": c.gen}
+    page_title = title_t.format(**fmt)
     path = f"/kategorie/{slug}" + (f"/{view}" if view else "")
     crumbs = [("Lovceny", "/"), (c.name, f"/kategorie/{slug}")] + ([({"nejlevnejsi": "Nejlevnější", "ve-sleve": "Ve slevě"}[view], path)] if view else [])
     priced = [float(b.price) for _, b, _ in rows if b]
@@ -1097,7 +1105,8 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
     return tpl.TemplateResponse(request, "category.html", {
         "c": c, "view": view, "rows": page_rows, "crumbs": crumbs, "canonical_path": canon_path,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "email_on": digestmod.email_enabled(),
-        "page_title": title_t.format(**fmt), "page_desc": desc_t.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else ""),
+        "page_title": page_title,
+        "page_desc": desc_t.format(**fmt) + (f" Ceny od {czk(min(priced))}." if priced else "") + (f" Strana {page}." if page > 1 else ""),
         "thin_history": price_history_thin(db),
         "cat_intro": CATEGORY_INTROS.get(slug) if not view else None,
         "brands": brands, "filter_brand": brand, "filter_od": od.strip(), "filter_do": do.strip(),
@@ -1674,7 +1683,7 @@ def verify_json(r) -> dict:
         "lovceny_url": canonical("/over-slevu", "url=" + quote(r.url, safe="")),
     }
     if r.product is not None and v is not None:
-        out["tracked"] = {"id": r.product.id, "url": canonical(f"/produkt/{r.product.id}-{r.product.slug}"),
+        out["tracked"] = {"id": r.product.id, "url": canonical(f"/produkt/{r.product.id}-{pslug(r.product)}"),
                           "verdict": {"code": v.code, "label": v.headline, "reason": v.reason}}
     if c is not None and c.enough:
         out["check30"] = {"min30": c.min30, "date": c.min30_date.isoformat(), "flag": c.flag, "days": c.days,
@@ -2039,7 +2048,7 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
            "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in BF_FAQ]}]
     if rows:
         ld.append({"@context": "https://schema.org", "@type": "ItemList", "url": seo._abs("/black-friday"),
-                   "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": seo._abs(f"/produkt/{r.product.id}-{r.product.slug}"),
+                   "itemListElement": [{"@type": "ListItem", "position": i + 1, "url": seo._abs(f"/produkt/{r.product.id}-{pslug(r.product)}"),
                                         "name": r.product.name} for i, r in enumerate(rows[:30])]})
     return tpl.TemplateResponse(request, "black_friday.html", {
         "s": s, "today": bfmod.today_prague(), "countdown": bfmod.countdown_text(), "phase": s.phase(bfmod.today_prague()),

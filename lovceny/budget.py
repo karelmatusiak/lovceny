@@ -195,14 +195,16 @@ def pending(db, b: BudgetWatch, now=None) -> list[tuple[Product, Offer]]:
 
 
 def payload(b: BudgetWatch, items: list, base: str) -> dict:
+    from .names import canonical_slug
     from .shops import get_shop
     p, o = items[0]
     s = get_shop(o.shop)
     more = len(items) - 1
     extra = "" if more <= 0 else (f" + {more} další" if more <= 4 else f" + {more} dalších")
+    slug = canonical_slug(p.name or "", p.slug or "")
     return {"title": f"V rozpočtu: {p.name[:60]}",
             "body": f"{czk(o.price)} v obchodě {s.name if s else o.shop}{extra} · hlídáš {describe(b)}.",
-            "url": (f"{base}/produkt/{p.id}-{p.slug}?utm_source=push" if more <= 0
+            "url": (f"{base}/produkt/{p.id}-{slug}?utm_source=push" if more <= 0
                     else f"{base}/hlidat-rozpocet/{b.token}?utm_source=push"),
             "unsubscribe": f"{base}/hlidat-rozpocet/zrusit/{b.token}", "tag": f"lovceny-rozpocet-{b.id}",
             "open_label": "Zobrazit", "stop_label": "Zrušit hlídání"}

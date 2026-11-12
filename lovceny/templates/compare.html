@@ -45,7 +45,7 @@
             {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="{{ shop_rel(s) }}">{{ s.name if s else o.shop }}<span class="sr-only"> (otevře se v novém okně)</span></a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
           </ul></dd></div>
         </dl>
-        <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ p.slug }}">Detail a historie<span class="sr-only"> – {{ dname(p) }}</span> →</a>
+        <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ pslug(p) }}">Detail a historie<span class="sr-only"> – {{ dname(p) }}</span> →</a>
       </article>
       {% endfor %}
     </div>

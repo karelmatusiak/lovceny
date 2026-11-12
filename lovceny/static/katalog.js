@@ -70,7 +70,7 @@
     if (!tokens.length) return [];
     return items.filter(function (it) {
       if (it.e && tokens.length === 1 && tokens[0] === String(it.e)) return true;
-      var name = fold(it.n);
+      var name = fold(it.n + " " + (it.f || ""));
       return tokens.every(function (t) { return name.indexOf(t) >= 0; });
     });
   }
