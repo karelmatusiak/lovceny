@@ -6,7 +6,7 @@
   <div>
     <div class="eyebrow"><span aria-hidden="true">🛍️</span> Black Friday {{ s.year }}</div>
     <h1 class="page-h1">Které slevy na Black Friday jsou <span class="hl">opravdu nejnižší?</span></h1>
-    <p class="lead">Nevěř procentům na cenovce. Každou slevu porovnáme s cenami, které jsme v obchodech sami naměřili – s nejnižší cenou za 30 dní, obvyklou cenou a minimem za celou dobu sledování. Jen naše data, žádné placené pozice. {{ rank_link() }}</p>
+    <p class="lead">Nevěř procentům na cenovce. Každou slevu porovnáme s cenami, které jsme v obchodech sami naměřili – s nejnižší cenou za 30 dní, obvyklou cenou a minimem za celou dobu sledování. Jen naše data, žádné placené pozice. {{ rank_link() }} <a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
   </div>
   <div class="card bf-count" id="bf-count" data-bf="{{ bf_iso }}">
     {% set dl = (s.bf - today).days %}

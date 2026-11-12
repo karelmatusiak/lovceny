@@ -286,3 +286,31 @@ def build_multi(products: list[dict], now: datetime | None = None) -> list[dict]
             r["svg_m"] = _multi_svg(have, key, label, 380, 280, "m", r["summary"])
         out.append(r)
     return out
+
+
+def sparkline(points, now: datetime | None = None, days: int = 90) -> str:
+    """Malé SVG z naměřených denních minim. Méně než dva dny = nic (žádná čára z jednoho bodu)."""
+    now = now or datetime.now(timezone.utc)
+    items = list(daily_best(points, now - timedelta(days=days)).items())
+    if len(items) < 2:
+        return ""
+    vals = [v for _, v in items]
+    lo, hi = min(vals), max(vals)
+    if hi <= lo:
+        hi = lo + 1
+    w, h, pad = 128, 36, 2
+    span = max((items[-1][0] - items[0][0]).days, 1)
+
+    def x(d: date) -> float:
+        return pad + ((d - items[0][0]).days / span) * (w - 2 * pad)
+
+    def y(v: float) -> float:
+        return pad + (1 - (v - lo) / (hi - lo)) * (h - 2 * pad)
+
+    pts = " ".join(f"{x(d):.1f},{y(v):.1f}" for d, v in items)
+    label = f"Naměřené denní minimum, {len(items)} dní, od {czk(lo)} do {czk(hi)}"
+    return (
+        f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" '
+        f'aria-label="{escape(label)}"><polyline fill="none" stroke="#0B6E4F" stroke-width="2" '
+        f'stroke-linejoin="round" stroke-linecap="round" points="{pts}"/></svg>'
+    )

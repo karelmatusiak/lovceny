@@ -166,6 +166,44 @@ def validate_product_ld(d: dict) -> list[str]:
     return errors
 
 
+def priced_itemlist_ld(path: str, name: str, pairs, limit: int = 48) -> dict:
+    """ItemList produktů, které na stránce opravdu jsou. Offer jen u ceny skladem."""
+    from .images import normalize_allegro_image
+    from .names import canonical_slug, short_name
+    from .shops import get_shop
+    elements = []
+    for pair in list(pairs)[:limit]:
+        if hasattr(pair, "product"):
+            product, offer = pair.product, pair.offer
+        else:
+            product, offer = pair[0], pair[1]
+        slug = canonical_slug(product.name or "", getattr(product, "slug", "") or "")
+        url = _abs(f"/produkt/{product.id}-{slug}")
+        label = getattr(product, "display_name", None) or short_name(product.name or "") or product.name
+        item = {"@type": "Product", "name": label, "url": url}
+        image = getattr(product, "image_url", None)
+        if image:
+            item["image"] = normalize_allegro_image(image)
+        if (offer is not None and offer.price is not None and offer.in_stock is True
+                and str(getattr(offer, "url", "") or "").startswith("http")):
+            shop = get_shop(offer.shop)
+            item["offers"] = {
+                "@type": "Offer",
+                "price": f"{float(offer.price):.2f}",
+                "priceCurrency": "CZK",
+                "availability": "https://schema.org/InStock",
+                "url": offer.url,
+                "seller": {"@type": "Organization", "name": shop.name if shop else offer.shop},
+            }
+        elements.append({
+            "@type": "ListItem", "position": len(elements) + 1, "url": url, "name": label, "item": item,
+        })
+    return {
+        "@context": "https://schema.org", "@type": "ItemList", "name": name, "url": _abs(path),
+        "numberOfItems": len(elements), "itemListElement": elements,
+    }
+
+
 def itemlist_ld(rows, path: str, start: int = 0) -> dict:
     from .names import canonical_slug
     return {"@context": "https://schema.org", "@type": "ItemList", "url": _abs(path),
@@ -175,7 +213,7 @@ def itemlist_ld(rows, path: str, start: int = 0) -> dict:
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
-STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday"]
+STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday", "/black-friday/skutecna-sleva"]
 
 
 def indexable_static_pages() -> list[str]:
@@ -227,7 +265,10 @@ def sitemap_xml(db) -> str:
         for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
             offers_by[offer.product_id].append(offer)
     from .exclusions import is_excluded_brand
+    from .landings import published_paths
     from .names import canonical_slug
+    for path in published_paths(db):
+        urls.append((base + path, None))
     for pid, slug, created, name in products:
         if is_excluded_brand(name or ""):
             continue
