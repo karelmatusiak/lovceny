@@ -93,6 +93,82 @@ _PLACEHOLDER_IMAGE = re.compile(
 )
 
 
+# Výsledek HEAD/GET u fotek na úvodu. True = server vrátil obrázek, False = 404/410, None = nevíme (necháme).
+_probe_cache: dict[str, tuple[float, bool | None]] = {}
+_PROBE_TTL_OK = 6 * 3600
+_PROBE_TTL_BAD = 24 * 3600
+_PROBE_TTL_UNKNOWN = 20 * 60
+
+
+def clear_probe_cache() -> None:
+    _probe_cache.clear()
+
+
+def _probe_ttl(result: bool | None) -> float:
+    if result is True:
+        return _PROBE_TTL_OK
+    if result is False:
+        return _PROBE_TTL_BAD
+    return _PROBE_TTL_UNKNOWN
+
+
+def classify_image_status(code: int) -> bool | None:
+    """404 a 410 jsou rozbitá fotka. 403/5xx/timeout necháme – mohlo to být dočasné."""
+    if code in (404, 410):
+        return False
+    if 200 <= code < 400:
+        return True
+    return None
+
+
+def probe_images(urls) -> dict[str, bool | None]:
+    """HEAD (a při 405 krátké GET) jen u povolených hostů. Ostatní URL = None.
+
+    Během pytestu síť nevoláme. Stejná adresa se v procesu znovu neptá, dokud platí cache.
+    """
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    out: dict[str, bool | None] = {}
+    pending: list[str] = []
+    now = time.monotonic()
+    for raw in urls:
+        url = (raw or "").strip()
+        if not url or url in out:
+            continue
+        hit = _probe_cache.get(url)
+        if hit and now - hit[0] < _probe_ttl(hit[1]):
+            out[url] = hit[1]
+            continue
+        if os.environ.get("PYTEST_CURRENT_TEST") or not is_allowed(url):
+            out[url] = None
+            continue
+        pending.append(url)
+        out[url] = None
+
+    def one(url: str) -> tuple[str, bool | None]:
+        result: bool | None = None
+        try:
+            with httpx.Client(timeout=4.0, follow_redirects=True, max_redirects=3) as client:
+                response = client.head(url, headers={"User-Agent": USER_AGENT})
+                if response.status_code == 405:
+                    response = client.get(url, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-1023"})
+                final = str(response.url)
+                if is_allowed(final):
+                    result = classify_image_status(response.status_code)
+        except Exception:
+            result = None
+        _probe_cache[url] = (time.monotonic(), result)
+        return url, result
+
+    if pending:
+        workers = min(6, len(pending))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for url, result in pool.map(one, pending):
+                out[url] = result
+    return out
+
+
 def has_working_image(url: str | None) -> bool:
     """Fotka, kterou karta může ukázat. Prázdná adresa a známý placeholder ne.
 

@@ -374,6 +374,33 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
     return JSONResponse({"detail": detail}, status_code=exc.status_code, headers=headers)
 
 
+def _drop_broken_home_images(featured, extras, popular):
+    """Rozbitá fotka (404/410) nepatří do výběru na úvodu. Neznámý výsledek necháme."""
+    from .images import probe_images
+    urls = []
+    for group in (featured, extras, popular):
+        for item in group:
+            urls.append(getattr(getattr(item, "product", None), "image_url", None))
+    status = probe_images(urls)
+
+    def keep(item) -> bool:
+        url = (getattr(getattr(item, "product", None), "image_url", None) or "").strip()
+        return status.get(url) is not False
+
+    featured = [h for h in featured if keep(h)]
+    extras = [h for h in extras if keep(h)]
+    popular = [h for h in popular if keep(h)]
+    seen = {h.product.id for h in featured}
+    for extra in extras:
+        if len(featured) >= 8:
+            break
+        if extra.product.id not in seen:
+            featured.append(extra)
+            seen.add(extra.product.id)
+    extras = [h for h in extras if h.product.id not in seen]
+    return featured, extras, popular
+
+
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
     from .offer_trust import use_cutoffs
@@ -383,6 +410,8 @@ def home(request: Request, db=Depends(get_db)):
     from .images import has_working_image
     from .popular import popular_picks
     featured, extras, chips = home_board(db)
+    popular = popular_picks(db, limit=8)
+    featured, extras, popular = _drop_broken_home_images(featured, extras, popular)
     deals = [r for r in real_deals(db, top=12)["buys"] if has_working_image(r.product.image_url)][:3]
     bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     cat_counts = listing_category_counts(db)
@@ -391,7 +420,7 @@ def home(request: Request, db=Depends(get_db)):
         "thin_history": price_history_thin(db),
         "home_picks": [(h, False) for h in featured] + [(h, True) for h in extras],
         "pick_chips": chips,
-        "popular": popular_picks(db, limit=8),
+        "popular": popular,
         "cat_counts": cat_counts,
         "landings": _home_landings(db),
         "ld": [seo.website_ld(), seo.organization_ld()],
