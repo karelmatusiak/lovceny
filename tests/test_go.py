@@ -1,5 +1,6 @@
 """První hop /go/<id> a úklid prázdných parametrů, které utekly z feedu."""
 import json
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from lovceny.go import (
@@ -24,6 +25,15 @@ F8_CLEAN = "https://www.bscom.cz/sluchatka-bluetooth-kruger-matz-f8a-black-05560
 
 def _dest(url: str) -> str:
     return unquote(parse_qs(urlparse(url).query)["desturl"][0])
+
+
+def test_pages_deploy_runs_inside_dist_so_functions_upload():
+    """Wrangler bere functions/ z cwd. `pages deploy dist` z kořene funkci tiše vynechá."""
+    text = Path(".github/workflows/static.yml").read_text(encoding="utf-8")
+    assert "cd dist" in text
+    assert "pages deploy ." in text
+    assert "Uploading Functions bundle" in text
+    assert "pages deploy dist" not in text
 
 
 def test_strip_junk_query_keeps_real_params():
