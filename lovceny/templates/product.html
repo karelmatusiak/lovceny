@@ -31,6 +31,18 @@
       {% endif %}
       <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, dname(p)) }}</div></div>
       <div class="explain v-{{ v.code }}">{{ v.text }}</div>
+      {% if honesty %}
+      <aside class="honest-box honest-{{ honesty.code }}" aria-label="Je to skutečná sleva?">
+        <p class="honest-kicker"><a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
+        <p><b>{{ honesty.label }}</b> {{ honesty.text }}</p>
+        {% if honesty.show_facts %}
+        <dl class="bf-facts">
+          {% if honesty.min30 is not none %}<div><dt>Nejnižší za 30 dní</dt><dd>{{ honesty.min30|czk }}{% if honesty.min30_date %} <small>({{ honesty.min30_date.day }}. {{ honesty.min30_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
+          {% if honesty.min90 is not none %}<div><dt>Nejnižší za 90 dní</dt><dd>{{ honesty.min90|czk }}{% if honesty.min90_date %} <small>({{ honesty.min90_date.day }}. {{ honesty.min90_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
+        </dl>
+        {% endif %}
+      </aside>
+      {% endif %}
       {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
       {% if cat %}{{ season_hint(cat.slug) }}{% endif %}
     </div>

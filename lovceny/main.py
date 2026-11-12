@@ -360,6 +360,7 @@ def home(request: Request, db=Depends(get_db)):
         "thin_history": price_history_thin(db),
         "hero_picks": hero_showcase(db),
         "cat_counts": cat_counts,
+        "landings": _home_landings(db),
         "ld": [seo.website_ld(), seo.organization_ld()],
     })
 
@@ -610,6 +611,10 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     else:
         share_price = ""
     review = bool(p.needs_review)
+    honest = None
+    if not review and best is not None:
+        from .honesty import for_offers
+        honest = for_offers(p, p.offers, cutoffs=cutoffs)
     if review:
         best = None
         unverified_head = None
@@ -626,7 +631,7 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "cat": cat, "crumbs": crumbs,
         "canonical_path": f"/produkt/{p.id}-{canon_slug}",
         "ld": [seo.product_ld(p, schema_offers, v), seo.breadcrumb_ld(crumbs)],
-        "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop,
+        "has_demo": has_demo, "msg": msg, "ok": ok, "get_shop": get_shop, "honesty": honest,
         "share_url": canonical(f"/produkt/{p.id}-{canon_slug}"),
         "share_text": f"{dn}" + share_price + f" ({v.headline}) na Lovceny"},
         headers={"X-Robots-Tag": "noindex, follow"} if review else None)
@@ -874,6 +879,12 @@ def push_unsubscribe_link(request: Request, token: str, db=Depends(get_db)):
 
 
 # ---------- SEO: kategorie, nejlevnější, ve slevě, sitemap, robots ----------
+def _home_landings(db):
+    """Pár odkazů na hotové vstupní stránky. Prázdný seznam, když žádná nesplní práh."""
+    from .landings import ready_landings
+    return ready_landings(db)[:8]
+
+
 def _cat_or_404(slug: str):
     c = BY_SLUG.get(slug)
     if not c:
@@ -1005,6 +1016,11 @@ def _parse_strana(raw: str | None) -> tuple[int, bool]:
     return n, n == 1
 
 
+def _category_landings(db, slug: str):
+    from .landings import for_category
+    return for_category(db, slug)
+
+
 def _cat_url(path: str, params: list[tuple[str, str]], page: int) -> str:
     q = list(params)
     if page > 1:
@@ -1116,6 +1132,7 @@ def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
         "page_prev": _cat_url(path, fq, page - 1) if page > 1 else "",
         "page_next": _cat_url(path, fq, page + 1) if page < pages else "",
         "page_links": [(n, _cat_url(path, fq, n) if n else "") for n in _pager_numbers(page, pages)],
+        "landings": _category_landings(db, slug),
         "ld": [seo.breadcrumb_ld(crumbs), seo.itemlist_ld(page_rows, canon_path, start=start)]})
 
 
@@ -2058,6 +2075,53 @@ def black_friday(request: Request, kategorie: str = "", obchod: str = "", db=Dep
         "canonical_path": "/black-friday", "noindex": bool(kategorie or obchod), "get_shop": get_shop,
         "push_key": pushmod.public_key() if pushmod.enabled() else "", "include_demo": bfmod_include_demo(),
         "bf_iso": datetime.combine(s.bf, datetime.min.time(), tzinfo=bfmod.PRAGUE).isoformat()})
+
+
+def _landing_response(request, page):
+    if page is None:
+        raise HTTPException(404)
+    if not page.ready:
+        return RedirectResponse(page.redirect, status_code=301)
+    cat = BY_SLUG[page.category_slug]
+    crumbs = [("Lovceny", "/"), (cat.name, f"/kategorie/{cat.slug}"), (page.h1, page.path)]
+    return tpl.TemplateResponse(request, "landing.html", {
+        "page": page, "cat": cat, "crumbs": crumbs, "canonical_path": page.path,
+        "ld": [seo.breadcrumb_ld(crumbs), seo.priced_itemlist_ld(page.path, page.h1, page.rows)],
+    })
+
+
+@app.get("/nejlevnejsi/{slug}", response_class=HTMLResponse)
+def series_landing(request: Request, slug: str, db=Depends(get_db)):
+    from .landings import find_series
+    return _landing_response(request, find_series(db, slug))
+
+
+@app.get("/kategorie/{slug}/do/{amount:int}", response_class=HTMLResponse)
+def price_landing(request: Request, slug: str, amount: int, db=Depends(get_db)):
+    from .landings import find_cap
+    return _landing_response(request, find_cap(db, slug, amount))
+
+
+@app.get("/black-friday/skutecna-sleva", response_class=HTMLResponse)
+def honesty_page(request: Request, db=Depends(get_db)):
+    from .honesty import PAGE, listing, methodology, prague_day
+    found = listing(db)
+    today = bfmod.today_prague()
+    checked = prague_day(found.latest_check)
+    crumbs = [("Lovceny", "/"), (f"Black Friday {bfmod.season().year}", "/black-friday"),
+              ("Je to skutečná sleva?", PAGE)]
+    ld = [seo.breadcrumb_ld(crumbs)]
+    if found.rows:
+        ld.append(seo.priced_itemlist_ld(PAGE, "Je to skutečná sleva?", found.rows, limit=30))
+    return tpl.TemplateResponse(request, "honesty.html", {
+        "rows": found.rows, "counts": found.counts, "method": methodology(),
+        "earliest": found.earliest, "shown_note": found.shown_note,
+        "today_label": bfmod.cz_date(today),
+        "checked_label": bfmod.cz_date(checked) if checked else "",
+        "crumbs": crumbs, "canonical_path": PAGE, "ld": ld,
+        "share_url": canonical(PAGE),
+        "share_text": "Je to skutečná sleva? Porovnání s cenami, které Lovceny samo naměřilo.",
+    })
 
 
 def bfmod_include_demo() -> bool:

@@ -43,7 +43,7 @@
     {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
     {% set n_shops = tracked|length %}
     <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
-    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a></p>
+    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a> · <a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
     <div class="hero-verdicts">
       <div class="verdicts" aria-label="Možné verdikty">
         <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
@@ -89,6 +89,13 @@
   {% endfor %}
   </ul>
 </div></section>
+
+{% if landings %}
+<section class="home-landings" aria-labelledby="home-land-h"><div class="wrap">
+  <div class="teaser-head"><div><div class="eyebrow">Často hledané</div><h2 id="home-land-h">Nejlevnější a do rozpočtu</h2></div></div>
+  <ul class="landing-links">{% for item in landings %}<li><a href="{{ item.path }}">{{ item.h1 }}</a></li>{% endfor %}</ul>
+</div></section>
+{% endif %}
 
 {% if cards %}
 <section style="padding-top:24px"><div class="wrap">

@@ -16,6 +16,9 @@
     {{ season_hint(c.slug) }}
   </details>
   {% endif %}
+  {% if landings %}
+  <nav class="landing-links" aria-label="Výběry v kategorii">{% for item in landings %}<a href="{{ item.path }}">{{ item.h1 }}</a>{% endfor %}</nav>
+  {% endif %}
   <nav class="cat-tabs" aria-label="Pohled na kategorii">
     <a href="/kategorie/{{ c.slug }}{{ filter_qs }}"{% if not view %} aria-current="page"{% endif %}>Vše</a>
     <a href="/kategorie/{{ c.slug }}/nejlevnejsi{{ filter_qs }}"{% if view == 'nejlevnejsi' %} aria-current="page"{% endif %}>Nejlevnější</a>

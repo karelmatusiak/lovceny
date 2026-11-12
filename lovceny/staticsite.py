@@ -302,6 +302,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
     from . import catcache
     from .main import (
         about, black_friday, budget_page, categories_index, category, compare,
+        honesty_page, price_landing, series_landing,
         compare_legacy, cookies, deals_page, digest_archive, extension_page,
         for_shops_page, home, kontakt_get, manifest, offline, privacy,
         product, ranking_page, robots_txt, service_worker, shops,
@@ -375,6 +376,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         call("/over-slevu", verify_page, request_for("/over-slevu"), url="", db=db)
         call("/stav", status_page, request_for("/stav"), db=db)
         call("/black-friday", black_friday, request_for("/black-friday"), db=db)
+        call("/black-friday/skutecna-sleva", honesty_page, request_for("/black-friday/skutecna-sleva"), db=db)
         call("/porovnat", compare, request_for("/porovnat"), p="", db=db)
         call("/offline", offline, request_for("/offline"))
         _render_search(root, tpl)
@@ -452,6 +454,12 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         index_bytes = json.dumps(public_rows, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         (data / "katalog.json").write_bytes(index_bytes)
         (data / "url.json").write_bytes(json.dumps(url_map, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+        from .landings import cap_specs, series_specs
+        for spec in series_specs():
+            call(spec.path, series_landing, request_for(spec.path), spec.slug, db=db)
+        for spec in cap_specs():
+            call(spec.path, price_landing, request_for(spec.path), spec.category, spec.amount, db=db)
 
         xml = sitemap_xml(db)
         (root / "sitemap.xml").write_text(xml, encoding="utf-8")
