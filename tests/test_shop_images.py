@@ -69,8 +69,8 @@ def test_update_offer_stores_image_without_changing_identity(client_db, monkeypa
     assert float(o.price) == 14490
     html_page = client.get(f"/produkt/{p.id}-{p.slug}").text
     assert "wsrv.nl" in html_page
-    assert 'sizes="(max-width: 560px) min(320px, calc(100vw - 62px)), 120px"' in html_page
-    assert 'width="320"' in html_page
+    assert 'sizes="(max-width: 700px) 100vw, 360px"' in html_page
+    assert 'width="360"' in html_page
     assert "img-missing" in html_page  # skrytý fallback, kdyby wsrv selhal
     assert 'aria-label="Fotka produktu chybí"' in html_page
 
@@ -84,5 +84,5 @@ def test_product_page_missing_image_uses_framed_placeholder(client_db):
     slot = html.split('class="p-img p-hero"', 1)[1].split("</div>", 1)[0]
     assert "<img " not in slot and "img-missing" in slot
     css = (Path(__file__).resolve().parents[1] / "lovceny/static/app.css").read_text(encoding="utf-8")
-    assert ".product .p-head .p-img{width:120px;height:120px;" in css
-    assert ".product .p-head .img-missing svg{width:42px;height:42px}" in css
+    assert ".product .p-top .p-img{width:360px;height:360px;" in css
+    assert ".product .p-top .img-missing svg{width:64px;height:64px}" in css

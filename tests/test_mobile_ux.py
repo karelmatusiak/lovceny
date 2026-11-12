@@ -60,8 +60,8 @@ def test_category_header_collapses_tip_and_filters():
 
 
 def test_product_hero_is_large_on_mobile_and_desktop_slot_stays():
-    assert "width:min(320px,100%);max-width:320px;height:auto;aspect-ratio:1" in CSS
-    assert ".product .p-head .p-img{width:120px;height:120px;" in CSS
+    assert ".product .p-top .p-img{width:100%;max-width:none;height:auto;aspect-ratio:1}" in CSS
+    assert ".product .p-top .p-img{width:360px;height:360px;" in CSS
 
 
 def test_tap_targets_and_minimum_text():
