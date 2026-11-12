@@ -196,5 +196,25 @@ def test_shop_name_links_to_status_block_when_it_exists(client_db):
     assert 'id="obchod-tesla"' in status
 
 
+def test_price_fetch_does_not_republish_a_used_phone(client_db):
+    from lovceny.auto_resolve import apply_listing
+    c, db, make = client_db
+    phone = make(
+        [20390],
+        name="Apple iPhone 15 256GB Black Stav produktu: Zánovní",
+        shop="tera",
+        category="telefony",
+    )
+    phone.catalog_hidden = True
+    phone.needs_review = False
+    phone.offers[0].in_stock = True
+    phone.offers[0].status = "ok"
+    db.commit()
+    assert apply_listing(db, phone) == "hidden"
+    assert phone.catalog_hidden is True
+    assert phone.needs_review is False
+    assert c.get(f"/produkt/{phone.id}", follow_redirects=False).status_code == 404
+
+
 def test_feed_item_roundtrip_types():
     assert isinstance(FeedItem("1", "A", "https://example.test/a", 10), FeedItem)

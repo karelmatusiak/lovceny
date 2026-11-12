@@ -626,8 +626,15 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         if not fresh and o.product.retired_at is None:
             from .allegro_narrow import is_known_brand
             from .auto_resolve import apply_listing
-            from .categories import is_accessory_text
+            from .categories import is_accessory_text, is_non_new
             from .category_guard import guarded_category
+            if is_non_new(o.product.name or "", shop_category=o.product.category):
+                o.product.catalog_hidden = True
+                o.product.needs_review = False
+                if not o.withheld:
+                    o.withheld = True
+                    stats["withheld_used"] = stats.get("withheld_used", 0) + 1
+                continue
             unknown_allegro = (
                 shop_slug == "allegro"
                 and o.product.id not in other_shop_ids

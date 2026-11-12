@@ -113,8 +113,11 @@ def listing_outcome(db: Session, product: Product) -> tuple[str, str | None]:
 
     Mapování obchodu samo nestačí: druh v názvu musí s kategorií souhlasit.
     """
+    from .categories import is_non_new
     from .category_guard import guarded_category
     if is_accessory_text(product.name or ""):
+        return "hide", None
+    if is_non_new(product.name or "", shop_category=product.category):
         return "hide", None
     mapped = confident_category(db, product) or product.category_slug
     action, slug = guarded_category(product.name or "", mapped)
@@ -132,6 +135,11 @@ def listing_outcome(db: Session, product: Product) -> tuple[str, str | None]:
 def apply_listing(db: Session, product: Product) -> str:
     from .allegro_narrow import allegro_only, is_known_brand
     from .exclusions import bury_excluded, is_excluded_brand
+    from .categories import is_non_new
+    if is_non_new(product.name or "", shop_category=product.category):
+        product.catalog_hidden = True
+        product.needs_review = False
+        return "hidden"
     if is_excluded_brand(product.name or ""):
         bury_excluded(product)
         return "hidden"

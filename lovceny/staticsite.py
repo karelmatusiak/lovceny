@@ -399,12 +399,13 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
 
         public_rows = []
         url_map: dict[str, str] = {}
+        from .categories import is_non_new
         from .exclusions import is_excluded_brand
         for item in products:
             if is_excluded_brand(item.name or ""):
                 book.add_retired(item, _redirect_target(db, item))
                 continue
-            if item.catalog_hidden:
+            if item.catalog_hidden or is_non_new(item.name or "", shop_category=item.category):
                 continue
             if item.retired_at is not None:
                 book.add_retired(item, _redirect_target(db, item))
