@@ -3,6 +3,9 @@ on:
   pull_request:
   workflow_dispatch: {}
   workflow_call: {}
+  # Stejný běh jako ruční Run workflow (workflow 414497804).
+  repository_dispatch:
+    types: [static-site]
 # actions: read stačí. Job neruší běhy ani nezapisuje do Actions API
 # (cache i artefakt jedou bez zápisu). Volající fetch.yml zápis nemá
 # a volaný workflow oprávnění zvýšit nesmí, jinak se celý běh nespustí.
