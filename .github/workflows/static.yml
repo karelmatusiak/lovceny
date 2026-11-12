@@ -67,7 +67,15 @@ jobs:
             exit 0
           fi
           # --branch=main je produkční větev Pages, takže výsledek jde na lovceny.pages.dev.
-          npx --yes wrangler@4 pages deploy dist --project-name=lovceny --branch=main --commit-dirty
+          # Wrangler hledá functions/ v aktuálním adresáři, ne uvnitř nahrávané složky.
+          # Nasazení z kořene by funkci vynechalo a /go/ by zůstal statický HTML 200.
+          cd dist
+          out=$(npx --yes wrangler@4 pages deploy . --project-name=lovceny --branch=main --commit-dirty)
+          printf '%s\n' "$out"
+          if [ -d functions ] && ! printf '%s\n' "$out" | grep -q 'Uploading Functions bundle'; then
+            echo "dist/functions existuje, ale Wrangler nenahrál Functions bundle." >&2
+            exit 1
+          fi
           echo "deployed=true" >> "$GITHUB_OUTPUT"
       - name: Artefakt webu
         if: steps.deploy.outputs.deployed != 'true'
