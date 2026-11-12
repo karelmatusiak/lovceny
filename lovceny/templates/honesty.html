@@ -19,32 +19,36 @@
   <p class="sub">Sestaveno {{ today_label }}.{% if earliest %} Nejstarší cena v tomhle přehledu je z {{ earliest.day }}. {{ earliest.month }}. {{ earliest.year }}.{% endif %}{% if checked_label %} Poslední ověřená cena je z {{ checked_label }}.{% endif %}{% if shown_note %} {{ shown_note }}{% endif %}</p>
   {% if rows %}
   <ol class="honest-list">{% for r in rows %}{% set a = r.assessment %}{% set sh = get_shop(r.offer.shop) %}
-    <li class="card honest-row honest-{{ a.code }}">
-      <a class="bf-main" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">
-        <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 60) }}{% else %}{{ img_missing() }}{% endif %}</span>
+    <li class="card honest-card honest-{{ a.code }}">
+      <a class="honest-main" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">
+        <span class="p-img">{% if r.product.image_url %}{{ shop_img(r.product.image_url, 72) }}{% else %}{{ img_missing() }}{% endif %}</span>
         <span class="bf-info">
           <span class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</span>
           <span class="bf-meta">{{ sh.name if sh else r.offer.shop }}{% if r.offer.last_checked %} · ověřeno {{ r.offer.last_checked|prague }}{% endif %}</span>
         </span>
-        <span class="bf-price"><b>{{ r.offer.price|czk }}</b>{% if a.code == 'skutecna' and a.real_pct %}<span class="save-pct">−{{ '%.0f'|format(a.real_pct) }}&nbsp;%</span>{% endif %}</span>
       </a>
-      <div class="honest-body">
-        <p class="honest-label">{{ a.label }}</p>
-        <p>{{ a.text }}</p>
-        {% if a.show_facts %}
-        <dl class="bf-facts">
-          {% if a.min30 is not none %}<div><dt>Nejnižší za 30 dní</dt><dd>{{ a.min30|czk }}{% if a.min30_date %} <small>({{ a.min30_date.day }}. {{ a.min30_date.month }}.)</small>{% endif %} <small>· {{ a.min30_days }} dní</small></dd></div>{% endif %}
-          {% if a.min90 is not none %}<div><dt>Nejnižší za 90 dní</dt><dd>{{ a.min90|czk }}{% if a.min90_date %} <small>({{ a.min90_date.day }}. {{ a.min90_date.month }}.)</small>{% endif %} <small>· {{ a.min90_days }} dní</small></dd></div>{% endif %}
-        </dl>
-        {% endif %}
-        {% if a.spark %}<div class="honest-spark">{{ a.spark|safe }}</div>{% endif %}
-      </div>
-      <div class="bf-act">
-        {{ cmp_button(r.product) }}
+      <div class="honest-side">
+        <b class="honest-price">{{ r.offer.price|czk }}</b>
+        {% if a.code == 'skutecna' and a.real_pct %}<span class="save-pct">−{{ '%.0f'|format(a.real_pct) }}&nbsp;%</span>{% endif %}
+        <span class="honest-label">{{ a.label }}</span>
         {% if sh and r.offer.in_stock is not false %}
         <a class="btn btn-shop-sm" href="{{ go_href(r.offer) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         {% endif %}
+        {{ cmp_button(r.product) }}
       </div>
+      <details class="honest-why">
+        <summary>Proč?</summary>
+        <div class="honest-body">
+          <p>{{ a.text }}</p>
+          {% if a.show_facts %}
+          <dl class="bf-facts">
+            {% if a.min30 is not none %}<div><dt>Nejnižší za 30 dní</dt><dd>{{ a.min30|czk }}{% if a.min30_date %} <small>({{ a.min30_date.day }}. {{ a.min30_date.month }}.)</small>{% endif %} <small>· {{ a.min30_days }} dní</small></dd></div>{% endif %}
+            {% if a.min90 is not none %}<div><dt>Nejnižší za 90 dní</dt><dd>{{ a.min90|czk }}{% if a.min90_date %} <small>({{ a.min90_date.day }}. {{ a.min90_date.month }}.)</small>{% endif %} <small>· {{ a.min90_days }} dní</small></dd></div>{% endif %}
+          </dl>
+          {% endif %}
+          {% if a.spark %}<div class="honest-spark">{{ a.spark|safe }}</div>{% endif %}
+        </div>
+      </details>
     </li>
   {% endfor %}</ol>
   {% else %}

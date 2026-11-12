@@ -119,6 +119,8 @@ def test_page_sorts_real_discounts_and_hides_unsafe_products(client_db, monkeypa
     assert "vyprodano-1111" not in html and "1 111" not in plain
     assert "iphone-16-256gb" not in html and "2 222" not in plain
     assert "9 000" in plain
+    assert "<summary>Proč?</summary>" in html
+    assert html.find("<summary>Proč?</summary>") < html.find("Verdikt o slevě nedáváme")
     body = html.split('<ol class="honest-list">', 1)[1]
     row = body.split("BF dostupny telefon", 1)[1].split("<li", 1)[0]
     assert "btn-shop" in row and "nofollow" in row
