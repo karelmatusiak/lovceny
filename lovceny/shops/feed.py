@@ -818,6 +818,8 @@ FEED_TOTAL_S = 420
 FEED_MAX_BYTES = 1100 * 1024 * 1024
 # Počty z posledního load_shop (doplněk k logu): ok / accessory / uncategorized / …
 FILTER_STATS: dict[str, dict[str, int]] = {}
+# Adresy položek, které pravidlo zahodilo jako příslušenství. Úklid DB je schová.
+ACCESSORY_URLS: set[str] = set()
 
 
 def _http_get(url: str) -> bytes:
@@ -1095,6 +1097,8 @@ def _catalog_keep(slug: str):
     def keep(item: FeedItem) -> bool:
         _slug, reason = classify_feed_item(slug, item.name, item.category, item.price, item.url)
         stats[reason] = stats.get(reason, 0) + 1
+        if reason == "accessory" and item.url:
+            ACCESSORY_URLS.add(strip_tracking(item.url))
         return reason == "ok"
 
     return keep

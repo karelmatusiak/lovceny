@@ -470,6 +470,11 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         # Příslušenství / explicitní mapování accessory se jako hlavní produkt nezaloží.
         if res.action == "accessory":
             stats["skipped_accessory"] += 1
+            clean = clean_url(it.url)
+            leaked = by_url.get(clean) or (by_id.get(it.item_id) if it.item_id else None)
+            if leaked is not None and not leaked.withheld:
+                leaked.withheld = True
+                stats["withheld_accessory"] = stats.get("withheld_accessory", 0) + 1
             continue
         clean = clean_url(it.url)
         gtin = normalize_gtin(it.ean)
@@ -642,6 +647,41 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         note_offer_due(existing, looked_at)
     db.commit()
     return stats
+
+
+def withhold_leaked_accessory_offers(db: Session) -> dict[str, int]:
+    """Schová nabídky, jejichž adresa nebo název je příslušenství na cizím výrobku.
+
+    Řádek a historie cen zůstanou. Na webu se neukážou a nemají Koupit.
+    Vrací počty nově schovaných nabídek podle obchodu.
+    """
+    from .categories import BY_SLUG, is_accessory_text, offer_title_from_url
+    from .shops.feed import ACCESSORY_URLS, strip_tracking
+
+    counts: dict[str, int] = {}
+    banned = set(ACCESSORY_URLS)
+    offers = db.scalars(select(Offer)).all()
+    for offer in offers:
+        if getattr(offer, "withheld", False):
+            continue
+        label = offer_title_from_url(offer.url or "")
+        category = offer.shop_category
+        if not category and offer.product is not None and offer.product.category_slug in BY_SLUG:
+            category = BY_SLUG[offer.product.category_slug].name
+        url_is_case = strip_tracking(offer.url or "") in banned or is_accessory_text(label, category)
+        name_is_case = (
+            offer.product is not None and is_accessory_text(offer.product.name or "", category)
+        )
+        if name_is_case and offer.product is not None and not offer.product.catalog_hidden:
+            offer.product.catalog_hidden = True
+        if not url_is_case and not name_is_case:
+            continue
+        offer.withheld = True
+        counts[offer.shop] = counts.get(offer.shop, 0) + 1
+    if counts:
+        db.commit()
+    ACCESSORY_URLS.clear()
+    return counts
 
 
 def create_watch(db: Session, product: Product, email: str, target: float, only_in_stock: bool) -> Watch:
