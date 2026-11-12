@@ -31,7 +31,7 @@
           <b class="hero-pick-price">{{ h.best.price|czk }}</b>
         </a>
         {% if hs and h.best.in_stock is not false %}
-        <a class="btn btn-shop-sm hero-pick-buy" href="{{ hs.affiliate_link(h.best.url) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
+        <a class="btn btn-shop-sm hero-pick-buy" href="{{ go_href(h.best) }}" rel="nofollow sponsored noopener" target="_blank">{{ shop_name }} <span aria-hidden="true">→</span><span class="sr-only">Do obchodu (otevře se v novém okně)</span></a>
         {% else %}<span class="hero-pick-shop">{{ shop_name }}</span>{% endif %}
       </div>
       {% endfor %}

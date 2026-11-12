@@ -32,7 +32,7 @@
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>
-            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ it.best_shop.affiliate_link(it.best.url) }}" target="_blank" rel="{{ shop_rel(it.best_shop) }}">Koupit v obchodě {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ go_href(it.best) }}" target="_blank" rel="{{ shop_rel(it.best_shop) }}">Koupit v obchodě {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
             {% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v, link=true) }}</dd></div>
         </dl>
@@ -42,7 +42,7 @@
         </dl>
         <dl class="cmp-dl">
           <div><dt>Obchody ({{ it.n_shops }})</dt><dd><ul class="cmp-shops">
-            {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ s.affiliate_link(o.url) if s else o.url }}" target="_blank" rel="{{ shop_rel(s) }}">{{ s.name if s else o.shop }}<span class="sr-only"> (otevře se v novém okně)</span></a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
+            {% for o in it.offers %}{% set s = get_shop(o.shop) %}<li><a href="{{ go_href(o) }}" target="_blank" rel="{{ shop_rel(s) }}">{{ s.name if s else o.shop }}<span class="sr-only"> (otevře se v novém okně)</span></a><b>{% if o.price %}{{ o.price|czk }}{% else %}–{% endif %}</b></li>{% endfor %}
           </ul></dd></div>
         </dl>
         <a class="btn btn-ghost cmp-detail" href="/produkt/{{ p.id }}-{{ pslug(p) }}">Detail a historie<span class="sr-only"> – {{ dname(p) }}</span> →</a>

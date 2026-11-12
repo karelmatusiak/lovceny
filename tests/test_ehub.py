@@ -455,9 +455,13 @@ def test_xm_product_page_ehub_rel(client_db, monkeypatch):
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
     assert "XM.cz" in html
-    assert "ehub.cz/system/scripts/click.php" in html
-    assert "a_bid=0ff74973" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "ehub.cz" not in html
     assert "nofollow sponsored noopener" in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert hop.status_code == 302
+    assert "ehub.cz/system/scripts/click.php" in hop.headers["location"]
+    assert "a_bid=0ff74973" in hop.headers["location"]
 
 
 def test_product_line_oled_monitor_vs_tv():
@@ -647,17 +651,22 @@ def test_pocitace24_product_page_ehub_rel_and_oos(client_db, monkeypatch):
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
     assert "Počítače24" in html
-    assert "ehub.cz/system/scripts/click.php" in html
-    assert "a_bid=8f4cb4de" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "ehub.cz" not in html
     assert "nofollow sponsored noopener" in html
     assert 'class="btn btn-shop"' in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert "ehub.cz/system/scripts/click.php" in hop.headers["location"]
+    assert "a_bid=8f4cb4de" in hop.headers["location"]
     o.in_stock = False
     db.commit()
     html_oos = c.get(f"/produkt/{p.id}").text
     assert "Není skladem" in html_oos
+    assert "btn-buy" not in html_oos
     assert 'class="btn btn-shop"' not in html_oos
     assert "Odkaz do obchodu" in html_oos
-    assert "a_bid=8f4cb4de" in html_oos
+    assert f'href="/go/{o.id}"' in html_oos
+    assert "a_bid=8f4cb4de" not in html_oos
 
 
 def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):
@@ -670,9 +679,11 @@ def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
     assert "EVOLVEO" in html
-    assert "ehub.cz/system/scripts/click.php" in html
-    assert "a_bid=f89ce7c7" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "ehub.cz" not in html
     assert "nofollow sponsored noopener" in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert "a_bid=f89ce7c7" in hop.headers["location"]
 
 
 JBL_FIXTURE = Path(__file__).parent / "fixtures" / "jbl_gmerchant_mini.xml"
@@ -821,15 +832,19 @@ def test_jbl_product_page_ehub_rel_and_oos(client_db, monkeypatch):
     db.commit()
     html = c.get(f"/produkt/{p.id}").text
     assert "JBL" in html
-    assert "ehub.cz/system/scripts/click.php" in html
-    assert "a_bid=c4f80d1f" in html
-    assert "a_aid=667205fc" in html
+    assert f'href="/go/{o.id}"' in html
+    assert "ehub.cz" not in html
     assert "nofollow sponsored noopener" in html
     assert 'class="btn btn-shop"' in html
+    hop = c.get(f"/go/{o.id}", follow_redirects=False)
+    assert "a_bid=c4f80d1f" in hop.headers["location"]
+    assert "a_aid=667205fc" in hop.headers["location"]
     o.in_stock = False
     db.commit()
     html_oos = c.get(f"/produkt/{p.id}").text
     assert "Není skladem" in html_oos
+    assert "btn-buy" not in html_oos
     assert 'class="btn btn-shop"' not in html_oos
     assert "Odkaz do obchodu" in html_oos
-    assert "a_bid=c4f80d1f" in html_oos
+    assert f'href="/go/{o.id}"' in html_oos
+    assert "a_bid=c4f80d1f" not in html_oos

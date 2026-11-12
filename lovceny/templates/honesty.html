@@ -42,7 +42,7 @@
       <div class="bf-act">
         {{ cmp_button(r.product) }}
         {% if sh and r.offer.in_stock is not false %}
-        <a class="btn btn-shop-sm" href="{{ sh.affiliate_link(r.offer.url) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <a class="btn btn-shop-sm" href="{{ go_href(r.offer) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         {% endif %}
       </div>
     </li>

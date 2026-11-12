@@ -24,7 +24,7 @@
       </a>
       <div class="bf-act">
         {% if sh and o.in_stock is true %}
-        <a class="btn btn-shop-sm" href="{{ sh.affiliate_link(o.url) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <a class="btn btn-shop-sm" href="{{ go_href(o) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
         {% endif %}
       </div>
     </li>

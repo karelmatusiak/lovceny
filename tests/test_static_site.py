@@ -188,7 +188,21 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     good_html = good_path.read_text()
     assert "btn-buy" in good_html
     assert "nofollow sponsored" in good_html
-    assert "idp=testovaci" in good_html
+    assert 'target="_blank"' in good_html
+    alza_offer = next(o for o in good.offers if o.shop == "alza")
+    assert f'href="/go/{alza_offer.id}"' in good_html
+    assert "idp=testovaci" not in good_html
+    go_map = json.loads((out / "data" / "go.json").read_text())
+    assert "idp=testovaci" in go_map[str(alza_offer.id)]["u"]
+    assert go_map[str(alza_offer.id)]["f"] == "https://www.alza.cz/samsung-galaxy-a55"
+    go_page = (out / "go" / f"{alza_offer.id}.html").read_text()
+    assert 'name="robots" content="noindex, nofollow"' in go_page
+    assert "idp=testovaci" in go_page and "https://www.alza.cz/samsung-galaxy-a55" in go_page
+    assert "stránku produktu" in go_page
+    script = (out / "functions" / "go" / "[[path]].js").read_text()
+    assert "status: 302" in script and "no-store" in script and "RESOLVE_AFFILIATE = false" in script
+    routes = json.loads((out / "_routes.json").read_text())
+    assert "/go/*" in routes["include"]
     assert "<svg" in good_html
     assert "https://data.planeo.cz/foto/a55.jpg" in good_html
     assert "/img/" not in good_html.replace("/static/img/", "")
@@ -226,7 +240,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "Nejistý iPhone 16e" not in names
     assert "Skrytý iPhone 16" not in names
     kryt = next(row for row in index if row["n"] == accessory_name)
-    assert kryt["a"] == 1 and "h" in kryt and "nofollow sponsored" in kryt["r"]
+    assert kryt["a"] == 1 and kryt["h"].startswith("/go/") and "nofollow sponsored" in kryt["r"]
     urls = json.loads((out / "data" / "url.json").read_text())
     assert urls[norm_offer_url("https://www.alza.cz/samsung-galaxy-a55")] == f"/produkt/{good.id}-{good.slug}"
 
@@ -238,6 +252,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
 
     sitemap = (out / "sitemap.xml").read_text()
     assert sitemap == sitemap_xml(db)
+    assert "/go/" not in sitemap
     assert f"/produkt/{good.id}-" in sitemap
     assert f"/produkt/{perfume.id}-" not in sitemap
     assert f"/produkt/{laptop.id}-" not in sitemap

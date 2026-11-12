@@ -155,6 +155,14 @@ def security_headers() -> str:
         "  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
         f"  Content-Security-Policy: {csp}",
         "",
+        "/go/*",
+        "  X-Robots-Tag: noindex, nofollow",
+        "  Cache-Control: no-store",
+        "",
+        "/data/go.json",
+        "  X-Robots-Tag: noindex, nofollow",
+        "  Cache-Control: no-store",
+        "",
     ])
 
 
@@ -476,6 +484,9 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         book.add("/porovnani", _location(legacy), _status(legacy))
 
         mode = write_redirects(root, book, static_limit=redirect_static_limit)
+        from .go import merge_routes, write_go_assets
+        write_go_assets(root, products)
+        merge_routes(root, ["/go/*"])
         (root / "_headers").write_text(security_headers(), encoding="utf-8")
         affiliate = _affiliate_stats(products)
         total_bytes = sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
@@ -495,6 +506,7 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 "Stránkování kategorií: /kategorie/{slug}?strana={n} je /kategorie/{slug}/strana/{n} (stejně /nejlevnejsi a /ve-sleve). Staré ?strana= prohlížeč přesměruje.",
                 "Adresa /produkt/{id} bez slugu je 301 na kanonickou /produkt/{id}-{slug}. Živý web na ní vrací 200 a v HTML má kanonický odkaz.",
                 "Když úklid názvu změní slug, /produkt/{id}-{starý slug} je 301 na /produkt/{id}-{nový slug}.",
+                "Tlačítko do obchodu vede na /go/{id nabídky}. Pages Function vrátí 302 na affiliate URL. /go/ je v robots.txt a odpověď má noindex.",
             ],
             "dashboard_steps": [
                 "www.lovceny.cz na https://lovceny.cz se stavem 301 nejde zapsat do Pages _redirects "
@@ -643,8 +655,9 @@ def _index_row(product) -> dict | None:
         row["f"] = product.name
     if product.ean:
         row["e"] = product.ean
-    if buy and shop is not None:
-        row["h"] = shop.affiliate_link(best.url)
+    if buy and shop is not None and getattr(best, "id", None):
+        from .go import go_path
+        row["h"] = go_path(best.id)
         row["r"] = shop_rel(shop)
     return row
 

@@ -123,7 +123,10 @@ def test_page_sorts_real_discounts_and_hides_unsafe_products(client_db, monkeypa
     row = body.split("BF dostupny telefon", 1)[1].split("<li", 1)[0]
     assert "btn-shop" in row and "nofollow" in row
     big_row = body.split("BF real telefon 20", 1)[1].split("<li", 1)[0]
-    assert 'rel="nofollow sponsored noopener"' in big_row and "idp=testovaci" in big_row
+    assert 'rel="nofollow sponsored noopener"' in big_row and f'/go/{big.offers[0].id}' in big_row
+    hop = client.get(f"/go/{big.offers[0].id}", follow_redirects=False)
+    assert hop.status_code == 302 and "idp=testovaci" in hop.headers["location"]
+    assert hop.headers["cache-control"] == "no-store"
     assert "<svg" in html and "Metodika" in html and "nedoplňujeme" in html
     assert 'rel="canonical" href="https://lovceny.cz/black-friday/skutecna-sleva"' in html
     assert 'property="og:title"' in html and "Je to skutečná sleva?" in html

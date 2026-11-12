@@ -28,6 +28,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;               // obrázky obchodů apod. – nechat prohlížeči
+  if (url.pathname === '/go' || url.pathname.startsWith('/go/')) return; // 302 do obchodu řeší prohlížeč
   if (req.mode === 'navigate') {                                  // stránky: vždy síť, offline → záložní stránka
     e.respondWith(fetch(req).catch(() => caches.match(OFFLINE_URL)));
     return;
