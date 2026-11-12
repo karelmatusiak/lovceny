@@ -8,43 +8,48 @@
   {% if msg %}<div class="notice warn">{{ msg }}</div>{% endif %}
   {% if has_demo %}<div class="notice demo"><b>DEMO data:</b> část historie v grafu je vygenerovaná ukázka (v DB <code>is_demo = true</code>), aby bylo co zobrazit. Skutečné ceny přibývají s každým během stahovače.</div>{% endif %}
   <div class="card product" style="margin-top:12px">
-    <div class="p-info">
-      <div class="p-head">
-        <div class="p-img p-hero">{% if p.image_url %}{{ shop_img(p.image_url, 400, priority=true, sizes="(max-width: 560px) min(320px, calc(100vw - 62px)), 120px", box=320) }}{% else %}{{ img_missing() }}{% endif %}</div>
-        <div class="p-title"><h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>{% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}{% if variants %}<p class="p-cat">Varianty: {% for v in variants %}<span class="offer-best-tag">{{ v.label }}</span> {% endfor %}</p>{% endif %}<div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div></div>
-      </div>
-      <div class="price-row">
-        {% if best %}<span class="price">{{ best.price|czk }}</span>
-        {% elif unverified_head %}<span class="price price-unverified">{{ unverified_head.price|czk }}</span><span class="oos-label">{{ offer_notes[unverified_head.id] }}</span>
-        {% elif last_known %}<span class="price">{{ last_known.price|czk }}</span><span class="oos-label">Momentálně není skladem</span>
-        {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
-        {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
-      </div>
-      {% if review %}
-      <p class="oos-banner">Ten produkt ve srovnání neukazujeme. Historie cen zůstává uložená a odkaz na koupi tu není.</p>
-      {% elif best %}{% set bs = get_shop(best.shop) %}
-      <a class="btn btn-primary btn-buy" href="{{ go_href(best) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
-      {% elif unverified_head %}
-      <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>
-      {% elif all_oos %}
-      <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
-      {% endif %}
-      <div class="p-verdict-row">{{ badge(v, big=true, link=true) }}<div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, dname(p)) }}</div></div>
-      <div class="explain v-{{ v.code }}">{{ v.text }}</div>
-      {% if honesty %}
-      <aside class="honest-box honest-{{ honesty.code }}" aria-label="Je to skutečná sleva?">
-        <p class="honest-kicker"><a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
-        <p><b>{{ honesty.label }}</b> {{ honesty.text }}</p>
-        {% if honesty.show_facts %}
-        <dl class="bf-facts">
-          {% if honesty.min30 is not none %}<div><dt>Nejnižší za 30 dní</dt><dd>{{ honesty.min30|czk }}{% if honesty.min30_date %} <small>({{ honesty.min30_date.day }}. {{ honesty.min30_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
-          {% if honesty.min90 is not none %}<div><dt>Nejnižší za 90 dní</dt><dd>{{ honesty.min90|czk }}{% if honesty.min90_date %} <small>({{ honesty.min90_date.day }}. {{ honesty.min90_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
-        </dl>
+    <div class="p-top">
+      <div class="p-img p-hero">{% if p.image_url %}{{ shop_img(p.image_url, 400, priority=true, sizes="(max-width: 700px) 100vw, 360px", box=360) }}{% else %}{{ img_missing() }}{% endif %}</div>
+      <div class="p-info p-buycol">
+        <h1 class="p-name" title="{{ p.name }}">{{ dname(p) }}</h1>
+        {% if dname(p) != p.name %}<p class="p-full-name">{{ p.name }}</p>{% endif %}
+        {% if variants %}<p class="p-cat">Varianty: {% for v in variants %}<span class="offer-best-tag">{{ v.label }}</span> {% endfor %}</p>{% endif %}
+        <div class="p-cat">{% if cat %}{{ cat.name }}{% elif p.category and '|' not in p.category %}{{ p.category }}{% endif %}{% if p.ean %}<span class="p-ean" title="EAN {{ p.ean }}"> · EAN {{ p.ean }}</span>{% endif %}</div>
+        <div class="price-row">
+          {% if best %}<span class="price">{{ best.price|czk }}</span>
+          {% elif unverified_head %}<span class="price price-unverified">{{ unverified_head.price|czk }}</span><span class="oos-label">{{ offer_notes[unverified_head.id] }}</span>
+          {% elif last_known %}<span class="price">{{ last_known.price|czk }}</span><span class="oos-label">Momentálně není skladem</span>
+          {% else %}<span class="price price-missing">Cena zatím není k dispozici</span>{% endif %}
+          {% if best and best.original_price %}<span class="was">{{ best.original_price|czk }}</span><span class="claimed">−{{ ((1 - best.price/best.original_price)*100)|round|int }} % podle obchodu</span>{% endif %}
+        </div>
+        {% if review %}
+        <p class="oos-banner">Ten produkt ve srovnání neukazujeme. Historie cen zůstává uložená a odkaz na koupi tu není.</p>
+        {% elif best %}{% set bs = get_shop(best.shop) %}
+        <a class="btn btn-primary btn-buy" href="{{ go_href(best) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        {% elif unverified_head %}
+        <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>
+        {% elif all_oos %}
+        <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
         {% endif %}
-      </aside>
-      {% endif %}
-      {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
-      {% if cat %}{{ season_hint(cat.slug) }}{% endif %}
+        <section class="verify-card v-{{ v.code }}" aria-label="Ověření ceny">
+          {{ badge(v, big=true, link=true) }}
+          {% if honesty %}
+          <aside class="honest-box honest-{{ honesty.code }}" aria-label="Je to skutečná sleva?">
+            <p><b>{{ honesty.label }}</b> {{ honesty.text }} <a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
+            {% if honesty.show_facts %}
+            <dl class="bf-facts">
+              {% if honesty.min30 is not none %}<div><dt>Nejnižší za 30 dní</dt><dd>{{ honesty.min30|czk }}{% if honesty.min30_date %} <small>({{ honesty.min30_date.day }}. {{ honesty.min30_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
+              {% if honesty.min90 is not none and honesty.min90 != honesty.min30 %}<div><dt>Nejnižší za 90 dní</dt><dd>{{ honesty.min90|czk }}{% if honesty.min90_date %} <small>({{ honesty.min90_date.day }}. {{ honesty.min90_date.month }}.)</small>{% endif %}</dd></div>{% endif %}
+            </dl>
+            {% endif %}
+          </aside>
+          {% else %}
+          <p class="explain v-{{ v.code }}">{{ v.text }}</p>
+          {% endif %}
+          {% if v.median90 %}<p class="p-usual">Obvyklá cena (medián 90 dní): <b>{{ v.median90|czk }}</b>{% if v.max90 and v.max90 > v.min90 %} · nejvýš {{ v.max90|czk }}{% endif %}</p>{% endif %}
+        </section>
+        <div class="p-actions">{{ cmp_button(p, 'btn btn-ghost btn-cmp') }}{{ share(share_url, share_text, dname(p)) }}</div>
+      </div>
     </div>
     <div class="p-chart">
       <div class="chart-top"><h2 class="h3" id="hist-h">Historie ceny</h2></div>
@@ -99,6 +104,7 @@
       <p class="coverage-note">Zatím tu máme cenu z jednoho obchodu. Katalog postupně rozšiřujeme – ceny teď čteme z {{ cz_count(n_ok, "e-shopu", "e-shopů", "e-shopů") }} (viz <a href="/obchody">Hlídané obchody</a>). Affiliate partnerství (eHUB a Dognet, např. iStyle, Počítače24, JBL, TESLA, Tera a BScom) označujeme u odkazů – na pořadí nemá vliv.</p>
       {% endif %}
       {{ affiliate_note() }}
+      {% if cat %}{{ season_hint(cat.slug) }}{% endif %}
     </div>
   </div>
 </div></section>
