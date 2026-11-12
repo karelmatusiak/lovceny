@@ -187,6 +187,15 @@ def main(argv=None):
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
             log.info("%s: feed URL není nastaven (%s) – nabídky zůstávají 'cena bude doplněna'", s.name, s.feed_url_env)
 
+    # Kryty a pouzdra, které už v DB visí na sluchátkách nebo telefonech.
+    try:
+        from lovceny.service import withhold_leaked_accessory_offers
+        removed = withhold_leaked_accessory_offers(db)
+        log.info("Příslušenství schováno: %s", removed or "nic")
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        log.error("Úklid příslušenství selhal: %s", exc)
+
     # 2) přímé čtení stránek (jen obchody, které to dovolují). Sériově.
     # Mironet jde první a jen nejstarší nabídky: čerstvé nenecháme sežrat limit,
     # a po sérii blokací přestaneme (captcha se neobchází).

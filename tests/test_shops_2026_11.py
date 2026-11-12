@@ -75,6 +75,67 @@ def test_feed_byte_cap_covers_bscom():
     assert feed.FEED_MAX_BYTES >= 1000 * 1024 * 1024
 
 
+def test_pouzdro_in_the_title_is_a_case_not_the_headphones():
+    from lovceny.categories import is_accessory_text, offer_title_from_url
+    case = "Spigen Urban Fit pouzdro AirPods Pro 3 dune beige"
+    path = "Doplňky | Audio, video, foto | Sluchátka"
+    assert is_accessory_text(case, path)
+    assert is_accessory_text(case, "Sluchátka")
+    assert not is_accessory_text("Apple AirPods Pro 3", path)
+    assert not is_accessory_text("Apple AirPods Pro s nabíjecím pouzdrem", "Audio-video > Sluchátka")
+    assert not is_accessory_text(
+        "Apple Watch Series 11 GPS 46mm zlaté titanové pouzdro se zlatým milánským tahem",
+        "Chytré hodinky",
+    )
+    assert not is_accessory_text(
+        "Apple Watch Series 11 GPS 46mm zlaté titanové pouzdro se zlatým milánským tahem",
+    )
+    assert is_accessory_text("Pouzdro pro AirPods Pro 3", "Audio-video > Sluchátka")
+    assert is_accessory_text("Silikonový kryt na iPhone 15", "Mobilní telefony")
+    title = offer_title_from_url(
+        "https://www.tera.cz/spigen-urban-fit-pouzdro-airpods-pro-3-dune-beige_d1627464.html"
+    )
+    assert is_accessory_text(title, path)
+    assert "1627464" not in title
+
+
+def test_leaked_case_offer_is_withheld_real_headphones_stay(client_db):
+    from lovceny.models import Offer
+    from lovceny.service import withhold_leaked_accessory_offers
+    _c, db, make = client_db
+    buds = make([5609], name="Apple AirPods Pro 3", shop="tera", category="sluchatka")
+    case = buds.offers[0]
+    case.url = "https://www.tera.cz/spigen-urban-fit-pouzdro-airpods-pro-3-dune-beige_d1627464.html"
+    case.shop_category = "Doplňky | Audio, video, foto | Sluchátka"
+    case.withheld = False
+    real = Offer(
+        product=buds, shop="alza",
+        url="https://www.alza.cz/apple-airpods-pro-3",
+        price=5990, in_stock=True, status="ok",
+        shop_category="Audio | Sluchátka",
+    )
+    watch = make(
+        [11990],
+        name="Apple Watch Series 11 GPS 46mm zlaté titanové pouzdro se zlatým tahem",
+        shop="istyle", category="chytre-hodinky",
+    )
+    watch.offers[0].url = "https://istyle.cz/apple-watch-series-11-titanove-pouzdro"
+    watch.offers[0].shop_category = "Chytré hodinky"
+    buds.offers.append(real)
+    db.commit()
+    removed = withhold_leaked_accessory_offers(db)
+    db.refresh(case)
+    db.refresh(real)
+    db.refresh(watch.offers[0])
+    db.refresh(buds)
+    assert case.withheld is True
+    assert real.withheld is False
+    assert watch.offers[0].withheld is False
+    assert buds.catalog_hidden is not True
+    assert removed.get("tera") == 1
+    assert "istyle" not in removed
+
+
 def test_delonghi_content_campaign_stays_unwired():
     shop = get_shop("delonghi")
     assert shop.source == "scrape" and shop.dognet_chid is None and shop.ehub_bid is None

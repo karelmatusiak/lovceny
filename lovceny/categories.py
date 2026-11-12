@@ -377,9 +377,85 @@ def _game_controller(name_folded: str) -> bool:
     return True
 
 
+# Pouzdro jako tělo hodinek nebo jako součást balení, ne jako prodávaný kryt.
+_INCIDENTAL_ACCESSORY = re.compile(
+    r"\b(?:s|se|vcetne)\s+(?:\w+\s+){0,3}pouzdr\w*"
+    r"|\bv\s+pouzdr\w*"
+    r"|\b(?:titanov\w*|hlinikov\w*|ocelov\w*|nerezov\w*|keramick\w*)\s+pouzdr\w*"
+)
+# Slovo, které samo označuje příslušenství. „bezkabelové“ sem nesedí (\b).
+_STANDALONE_ACCESSORY = re.compile(
+    r"\b(pouzdr\w*|case|pasek|pasku|paskem|pasky|sack\w*)\b"
+)
+_ACCESSORY_LEAD = re.compile(
+    r"^(pouzdr\w*|kryt\w*|obal\w*|skl\w*|foli\w*|case|cover\w*|kabel\w*|nabijeck\w*|"
+    r"adapter\w*|drzak\w*|filtr\w*|sacek\w*|sack\w*|pasek\w*|reminek\w*|naramek\w*)\b"
+)
+# „pouzdro AirPods“ je kryt na zařízení, i když slovo není první.
+_CASE_FOR_DEVICE = re.compile(
+    r"\b(pouzdr\w*|kryt\w*|obal\w*|case|cover)\b.{0,30}\b("
+    r"airpods|iphone|ipad|galaxy|pixel|macbook|airpod)\b"
+)
+_NOT_EXPLICIT_SEGMENT = ("doplnk", "prislusen", "accessor", "nahradn")
+
+
+def explicit_main_category(shop_category: str | None) -> bool:
+    """Cesta je přímo hlavní výrobek. „Doplňky | … | Sluchátka“ explicitní není."""
+    if not (shop_category or "").strip():
+        return False
+    if feed_category_slug(shop_category) is None:
+        return False
+    parts = _path_segments(shop_category)
+    if len(parts) < 1:
+        return False
+    leaf = " " + parts[-1] + " "
+    if any(_stem_at_word(leaf, stem) for stem in _ACCESSORY_CATEGORY):
+        return False
+    for seg in parts[:-1]:
+        if any(mark in seg for mark in _NOT_EXPLICIT_SEGMENT):
+            return False
+    return True
+
+
+def _title_starts_with_accessory(folded: str) -> bool:
+    return _ACCESSORY_LEAD.match(folded.strip()) is not None
+
+
+def standalone_accessory_product(name: str, shop_category: str | None = None) -> bool:
+    """Samostatné slovo příslušenství v názvu.
+
+    Zůstane hlavní výrobek, jen když kategorie je přímo ten výrobek a název
+    slovem nezačíná (titanové pouzdro hodinek, AirPods s nabíjecím pouzdrem).
+    „pouzdro AirPods“ je kryt i uprostřed názvu a i ve větvi Sluchátka.
+    """
+    folded = _fold(name)
+    if _CASE_FOR_DEVICE.search(folded):
+        return True
+    if _title_starts_with_accessory(folded):
+        return True
+    stripped = _INCIDENTAL_ACCESSORY.sub(" ", folded)
+    if _STANDALONE_ACCESSORY.search(stripped) is None:
+        return False
+    if explicit_main_category(shop_category):
+        return False
+    return True
+
+
+def offer_title_from_url(url: str) -> str:
+    """Poslední úsek adresy jako název. Tera `_d123` a přípona souboru se odříznou."""
+    from urllib.parse import urlparse
+    path = (urlparse(url).path or "").rstrip("/")
+    slug = path.split("/")[-1] if path else ""
+    slug = re.sub(r"\.(html?|php|aspx)$", "", slug, flags=re.I)
+    slug = re.sub(r"[_-]d\d+$", "", slug, flags=re.I)
+    return slug.replace("-", " ").replace("_", " ")
+
+
 def is_accessory_text(name: str, shop_category: str | None = None) -> bool:
     """True = příslušenství / náhradní díl / služba – ne hlavní produkt."""
     n = _fold(name)
+    if standalone_accessory_product(name, shop_category):
+        return True
     if _ACCESSORY_NAME_RX.search(n):
         return True
     if any(re.search(r"\b" + re.escape(a), n) for a in _ACCESSORY_NAME):
