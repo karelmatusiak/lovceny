@@ -157,13 +157,14 @@ def priced_offers(offers) -> list:
             if getattr(o, "price", None) is not None and not offer_is_suppressed(o)]
 
 
-def best_buyable_offer(offers, cutoffs=None):
+def best_buyable_offer(offers, cutoffs=None, product=None):
     """Nejlevnější nabídka, kterou smíme ukázat jako cenu a tlačítko Koupit.
 
     Mimo hru je nedostupná, blokovaná, zastaralá a ta, jejíž adresa patří k jinému modelu.
+    `product` se předá rovnou, ať kontrola adresy nespouští dotaz na vztah offer.product.
     """
     from .offer_trust import offer_is_promoted
-    promoted = [o for o in offers if offer_is_promoted(o, cutoffs)]
+    promoted = [o for o in offers if offer_is_promoted(o, cutoffs, product)]
     return min(promoted, key=lambda o: float(o.price), default=None)
 
 

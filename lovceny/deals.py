@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from sqlalchemy import select
@@ -33,6 +33,9 @@ def include_demo() -> bool:
 _DEALS_TTL_S = 7 * 60
 _deals_cache: dict[tuple, tuple[float, tuple, dict]] = {}
 _deals_lock = Lock()
+# Jen jeden výpočet slev najednou. Ostatní requesty počkají na hotovou cache,
+# místo aby každý načetl celou historii a držel vlastní spojení.
+_deals_compute_lock = Lock()
 
 
 def clear_cache() -> None:
@@ -75,8 +78,12 @@ def load_offers_for(db, products) -> dict[int, list]:
     return by
 
 
-def load_points_for_offers(db, offer_ids) -> dict[int, list]:
-    """Jen sloupce, které verdikt potřebuje. Index (offer_id, captured_at)."""
+def load_points_for_offers(db, offer_ids, *, since=None) -> dict[int, list]:
+    """Jen sloupce, které verdikt potřebuje. Index (offer_id, captured_at).
+
+    `since` ořízne historii na okno verdiktu (90 dní). Bez něj se čte celá řada,
+    což na stovkách nabídek drží spojení, dokud se nenačtou desítky tisíc řádků.
+    """
     ids = [i for i in dict.fromkeys(offer_ids) if i is not None]
     by: dict[int, list] = {}
     if not ids:
@@ -84,11 +91,11 @@ def load_points_for_offers(db, offer_ids) -> dict[int, list]:
     chunk = 2000
     for i in range(0, len(ids), chunk):
         part = ids[i:i + chunk]
-        rows = db.execute(
-            select(PricePoint.offer_id, PricePoint.price, PricePoint.captured_at, PricePoint.is_demo)
-            .where(PricePoint.offer_id.in_(part))
-        )
-        for oid, price, captured, demo in rows:
+        q = select(PricePoint.offer_id, PricePoint.price, PricePoint.captured_at, PricePoint.is_demo)
+        q = q.where(PricePoint.offer_id.in_(part))
+        if since is not None:
+            q = q.where(PricePoint.captured_at >= since)
+        for oid, price, captured, demo in db.execute(q):
             by.setdefault(oid, []).append(LitePoint(price, captured, demo))
     return by
 
@@ -140,6 +147,14 @@ def _series_offers(product, offers):
     return kept
 
 
+def _pin_products(products, offers_by: dict) -> None:
+    """Nabídka už má produkt v paměti. Čtení offer.product pak neotevře další SELECT."""
+    from sqlalchemy.orm.attributes import set_committed_value
+    for product in products:
+        for offer in offers_by.get(product.id, ()):
+            set_committed_value(offer, "product", product)
+
+
 def public_products(db, *, limit_products: int | None = None) -> list:
     """Všechny veřejné produkty, od nejstaršího id. Okno „500 nejnovějších“ vynechalo
     produkty s týdnem cen, protože nově zveřejněné ho zaplnily."""
@@ -161,19 +176,20 @@ def product_rows(db, *, allow_demo: bool | None = None, limit_products: int | No
     use_cutoffs(db)
     products = public_products(db, limit_products=limit_products)
     offers_by = load_offers_for(db, products)
+    _pin_products(products, offers_by)
     pending = []
     offer_ids = []
+    now = datetime.now(timezone.utc)
     for p in products:
         if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
         offs = _series_offers(p, offers_by.get(p.id, []))
-        best = best_buyable_offer(offs)
+        best = best_buyable_offer(offs, product=p)
         if not best or best.in_stock is False:
             continue
         pending.append((p, offs, best))
         offer_ids.extend(o.id for o in offs)
-    by_pts = load_points_for_offers(db, offer_ids)
-    now = datetime.now(timezone.utc)
+    by_pts = load_points_for_offers(db, offer_ids, since=now - timedelta(days=90))
     rows = []
     for p, offs, best in pending:
         pts, saw_demo = points_from_map(offs, by_pts, allow)
@@ -257,17 +273,24 @@ def _full_payload(db) -> tuple[dict, bool, tuple[list, list] | None]:
         hit = _deals_cache.get(key)
         if hit and hit[1] == stamp and now - hit[0] < _DEALS_TTL_S:
             return hit[2], allow, None
-    rows = product_rows(db, allow_demo=allow)
-    buys = sorted((r for r in rows if r.verdict.code == "buy"),
-                  key=lambda r: (r.savings_czk, r.savings_pct), reverse=True)
-    fakes = [r for r in rows if r.verdict.code == "fake"]
-    payload = {
-        "buys": [_row_payload(r) for r in buys],
-        "fakes": [_row_payload(r) for r in fakes],
-    }
-    with _deals_lock:
-        _deals_cache[key] = (now, stamp, payload)
-    return payload, allow, (buys, fakes)
+    with _deals_compute_lock:
+        stamp = catalog_stamp(db)
+        now = time.monotonic()
+        with _deals_lock:
+            hit = _deals_cache.get(key)
+            if hit and hit[1] == stamp and now - hit[0] < _DEALS_TTL_S:
+                return hit[2], allow, None
+        rows = product_rows(db, allow_demo=allow)
+        buys = sorted((r for r in rows if r.verdict.code == "buy"),
+                      key=lambda r: (r.savings_czk, r.savings_pct), reverse=True)
+        fakes = [r for r in rows if r.verdict.code == "fake"]
+        payload = {
+            "buys": [_row_payload(r) for r in buys],
+            "fakes": [_row_payload(r) for r in fakes],
+        }
+        with _deals_lock:
+            _deals_cache[key] = (now, stamp, payload)
+        return payload, allow, (buys, fakes)
 
 
 def real_deals(db, *, top: int = 40, fake_limit: int = 20) -> dict:
@@ -306,23 +329,41 @@ def near_minima(db, *, limit: int = 12, max_over: float = 0.12) -> list[DealRow]
         out = _rehydrate(db, cached)[:limit]
         _name_rows(out)
         return out
+    with _deals_compute_lock:
+        stamp = catalog_stamp(db)
+        now_m = time.monotonic()
+        with _deals_lock:
+            hit = _deals_cache.get(key)
+            if hit and hit[1] == stamp and now_m - hit[0] < _DEALS_TTL_S:
+                cached = hit[2]
+            else:
+                cached = None
+        if cached is not None:
+            out = _rehydrate(db, cached)[:limit]
+            _name_rows(out)
+            return out
+        return _near_minima_scan(db, limit=limit, max_over=max_over, allow=allow, key=key, stamp=stamp, now_m=now_m)
+
+
+def _near_minima_scan(db, *, limit, max_over, allow, key, stamp, now_m) -> list[DealRow]:
     from .offer_trust import use_cutoffs
     use_cutoffs(db)
     products = public_products(db)
     offers_by = load_offers_for(db, products)
+    _pin_products(products, offers_by)
     pending = []
     offer_ids = []
     for p in products:
         if is_accessory_text(p.name or "", p.category) or not decent_title(p.name or ""):
             continue
         offs = _series_offers(p, offers_by.get(p.id, []))
-        best = best_buyable_offer(offs)
+        best = best_buyable_offer(offs, product=p)
         if not best or best.in_stock is False:
             continue
         pending.append((p, offs, best))
         offer_ids.extend(o.id for o in offs)
-    by_pts = load_points_for_offers(db, offer_ids)
     now = datetime.now(timezone.utc)
+    by_pts = load_points_for_offers(db, offer_ids, since=now - timedelta(days=90))
     scored: list[tuple[float, DealRow]] = []
     for p, offs, best in pending:
         pts, saw_demo = points_from_map(offs, by_pts, allow)
