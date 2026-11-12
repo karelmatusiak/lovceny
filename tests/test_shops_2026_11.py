@@ -71,8 +71,8 @@ def test_new_shops_registry_and_tracking(monkeypatch):
 
 
 def test_feed_byte_cap_covers_bscom():
-    """BScom XML mělo 472 MB. Strop musí být nad tím, jinak se feed zahodí."""
-    assert feed.FEED_MAX_BYTES >= 520 * 1024 * 1024
+    """BScom XML mělo 903 MiB. Strop musí být nad tím, jinak se feed zahodí."""
+    assert feed.FEED_MAX_BYTES >= 1000 * 1024 * 1024
 
 
 def test_delonghi_content_campaign_stays_unwired():
