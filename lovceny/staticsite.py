@@ -253,7 +253,7 @@ def write_redirects(root: Path, book: _Redirects, *, static_limit: int) -> str:
 
 
 def _write_product_function(root: Path, book: _Redirects) -> None:
-    """Jen /produkt/*. Kanonická stránka se dál servíruje jako soubor (přes ASSETS)."""
+    """Jen /produkt/*. Přesná vyřazená adresa 301 dřív, než ASSETS vrátí staré HTML."""
     fn = root / "functions" / "produkt" / "[[path]].js"
     fn.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -262,18 +262,24 @@ def _write_product_function(root: Path, book: _Redirects) -> None:
     }
     fn.write_text(
         "/* Vygenerováno build_static.py. 301 vyřazených a holých /produkt/ID, když _redirects nestačí.\n"
-        "   Existující HTML se vrací dřív než mapa, ať živá stránka nikdy nepřesměruje. */\n"
+        "   Na lovceny.cz ASSETS.fetch umí vrátit smazané HTML z cache nasazení (Age roste,\n"
+        "   purge zóny ho nesmaže, ?query se ignoruje). Přesný klíč v map.gone proto 301\n"
+        "   dřív. Živá kanonická adresa v mapě není, takže její soubor se dál vrací. */\n"
         "export async function onRequest(context) {\n"
         f"  const map = {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))};\n"
         "  const url = new URL(context.request.url);\n"
         "  let path = url.pathname.replace(/\\/+$/, \"\") || \"/\";\n"
         "  const m = path.match(/^\\/produkt\\/(\\d+)(?:-([a-z0-9-]*))?$/);\n"
-        "  if (!m) return context.env.ASSETS.fetch(context.request);\n"
-        "  const asset = await fetchAsset(context, path);\n"
-        "  if (asset && asset.status !== 404) return asset;\n"
+        "  if (!m) return context.env.ASSETS.fetch(new Request(url));\n"
         "  const id = m[1];\n"
         "  const key = m[2] ? id + \"-\" + m[2] : id;\n"
-        "  const target = map.gone[key] || map.gone[id];\n"
+        "  const exact = map.gone[key];\n"
+        "  if (exact && exact.startsWith(\"/\") && !exact.startsWith(\"//\") && exact !== path) {\n"
+        "    return Response.redirect(new URL(exact, url.origin), 301);\n"
+        "  }\n"
+        "  const asset = await fetchAsset(context, path);\n"
+        "  if (asset && asset.status !== 404) return asset;\n"
+        "  const target = map.gone[id];\n"
         "  if (target && target.startsWith(\"/\") && !target.startsWith(\"//\") && target !== path) {\n"
         "    return Response.redirect(new URL(target, url.origin), 301);\n"
         "  }\n"
@@ -294,7 +300,7 @@ def _write_product_function(root: Path, book: _Redirects) -> None:
         "  let last = null;\n"
         "  for (const candidate of candidates) {\n"
         "    url.pathname = candidate;\n"
-        "    last = await context.env.ASSETS.fetch(new Request(url, context.request));\n"
+        "    last = await context.env.ASSETS.fetch(new Request(url));\n"
         "    if (last.status !== 404) return last;\n"
         "  }\n"
         "  return last;\n"

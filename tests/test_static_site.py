@@ -68,7 +68,8 @@ def test_redirect_overflow_uses_a_pages_function(tmp_path):
     assert "/produkt/0 " not in text
     script = (tmp_path / "functions" / "produkt" / "[[path]].js").read_text()
     assert '"0":"/kategorie/telefony"' in script or '"0": "/kategorie/telefony"' in script
-    assert script.index("fetchAsset(context, path)") < script.index("map.gone")
+    assert script.index("map.gone[key]") < script.index("fetchAsset(context, path)")
+    assert "new Request(url, context.request)" not in script
     routes = json.loads((tmp_path / "_routes.json").read_text())
     assert routes["include"] == ["/produkt/*"]
 
