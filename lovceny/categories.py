@@ -551,11 +551,168 @@ def category_url_conflict(slug: str | None, name: str, url: str | None = None) -
     return False
 
 
+# Obchody napojené v listopadu 2026. O kategorii rozhoduje jen cesta ve feedu.
+# Bscom, Xupe a Amazestore mají široké rodiče, proto nepoužívají obecný prefix.
+CATALOG_RULE_SHOPS = frozenset({
+    "tesla", "xupe", "tera", "amazestore", "misura",
+    "bscom", "dronpro", "iphonemarket", "promobily",
+})
+
+_BSCOM_VACUUM_LEAVES = frozenset({
+    "tycove vysavace",
+    "roboticke vysavace",
+    "sackove a bezsackove vysavace",
+    "rucni vysavace",
+})
+# Jen list. Rodič „Mobilní telefony a příslušenství“ nesmí vtáhnout skla a kryty.
+_XUPE_LEAVES = {
+    "mobilni telefony": "telefony",
+    "sluchatka": "sluchatka",
+    "sluchatko": "sluchatka",
+    "dratova sluchatka": "sluchatka",
+    "chytre hodinky": "chytre-hodinky",
+    "kavovar na espresso": "kavovary",
+    "automaticke kavovary": "kavovary",
+    "kavovar na kapsle": "kavovary",
+    "roboticke vysavace": "vysavace",
+    "stojaci vysavace": "vysavace",
+    "televize": "televize",
+    "fotoaparaty": "fotoaparaty",
+}
+
+
+def _leaf_name_accessory(name: str, parts: list[str]) -> bool:
+    """Příslušenství podle názvu a listu cesty. Rodič „… a příslušenství“ list neshodí."""
+    if is_accessory_text(name, None):
+        return True
+    if not parts:
+        return False
+    leaf = " " + parts[-1] + " "
+    return any(_stem_at_word(leaf, stem) for stem in _ACCESSORY_CATEGORY)
+
+
+def _bscom_slug(parts: list[str]) -> str | None:
+    """Listy Bscom. Rodič „Sluchátka, repro & Hi-Fi“ a „Vysavače a úklid“ sám nestačí."""
+    if not parts:
+        return None
+    segs = set(parts)
+    leaf = parts[-1]
+    headphone_leaf = leaf in {"dratova sluchatka", "bezdratova sluchatka", "herni sluchatka"} or any(
+        s in {"dratova sluchatka", "bezdratova sluchatka", "herni sluchatka"}
+        or s.startswith("bezdratova sluchatka ")
+        or s.startswith("dratova sluchatka ")
+        for s in parts
+    )
+    if "sluchatka" in segs or headphone_leaf:
+        return "sluchatka"
+    if leaf in _BSCOM_VACUUM_LEAVES:
+        blob = " ".join(parts)
+        if any(w in blob for w in ("listi", "bazen", "parni", "oken", "prumys", "fukary")):
+            return None
+        return "vysavace"
+    if "notebooky" in segs or "repasovane notebooky" in segs:
+        return "notebooky"
+    if "stolni pocitace" in segs or "repasovane pocitace" in segs or "repasovane pocitce" in segs:
+        return "pocitace"
+    if leaf in {"smartwatch", "chytre hodinky"} or "chytre hodinky" in segs:
+        return "chytre-hodinky"
+    if "mobilni telefony" in segs or "mobilni telefon" in segs or "smartphony" in segs:
+        return "telefony"
+    if any(s in {"televize", "televizory", "televizor", "led televize"} for s in parts):
+        return "televize"
+    if (
+        leaf.startswith("kavovar")
+        or leaf in {"automaticke kavovary", "kapslove kavovary", "kavovary na espresso"}
+    ) and "kapsle" not in leaf:
+        return "kavovary"
+    return None
+
+
+def _xupe_slug(parts: list[str]) -> str | None:
+    if not parts:
+        return None
+    return _XUPE_LEAVES.get(parts[-1])
+
+
+def _amaze_slug(parts: list[str]) -> str | None:
+    if not parts:
+        return None
+    leaf = " " + parts[-1] + " "
+    if re.search(r"(^| )sluchatk", leaf):
+        return "sluchatka"
+    return None
+
+
+def _extra_slug(shop: str, parts: list[str]) -> str | None:
+    if not parts:
+        return None
+    segs = set(parts)
+    if shop == "tera":
+        if "nove mobily" in segs or "repasovane mobily" in segs:
+            return "telefony"
+        if "herni sluchatka" in segs:
+            return "sluchatka"
+    if shop == "iphonemarket" and (
+        parts[0] == "zanovni a pouzite iphony" or parts[0].startswith("zanovni a pouzite iphony")
+    ):
+        return "telefony"
+    return None
+
+
+def classify_feed_item(
+    shop: str,
+    name: str,
+    shop_category: str | None,
+    price: float | None,
+    url: str | None = None,
+) -> tuple[str | None, str]:
+    """(slug, důvod) pro nově napojené feedy.
+
+    Důvod: ok, accessory, uncategorized, excluded, price, conflict.
+    Co pravidlo nezařadí, na web nepatří. Název kategorii neurčuje.
+    """
+    from .exclusions import is_excluded_brand
+    if is_excluded_brand(name):
+        return None, "excluded"
+    parts = _path_segments(shop_category)
+    if shop == "xupe":
+        if _leaf_name_accessory(name, parts):
+            return None, "accessory"
+        slug = _xupe_slug(parts)
+    elif shop == "bscom":
+        if is_accessory_text(name, shop_category):
+            return None, "accessory"
+        slug = _bscom_slug(parts)
+    elif shop == "amazestore":
+        if is_accessory_text(name, shop_category):
+            return None, "accessory"
+        slug = _amaze_slug(parts)
+    elif shop == "tera" and "herni konzole" in parts:
+        # „Herní zóna | Herní konzole“ jsou doky a periferie, ne konzole.
+        if is_accessory_text(name, shop_category):
+            return None, "accessory"
+        return None, "uncategorized"
+    else:
+        if is_accessory_text(name, shop_category):
+            return None, "accessory"
+        slug = _extra_slug(shop, parts)
+        if slug is None:
+            slug = feed_category_slug(shop_category)
+    if slug is None:
+        return None, "uncategorized"
+    if category_url_conflict(slug, name, url):
+        return None, "conflict"
+    if price is None or price <= 0 or price < MIN_PRICE_CZK.get(slug, 0):
+        return None, "price"
+    return slug, "ok"
+
+
 def accept_feed_item(
     name: str,
     shop_category: str | None,
     price: float | None,
     url: str | None = None,
+    shop: str | None = None,
 ) -> str | None:
     """Vrátí category_slug, když cesta kategorie obchodu je ve whitelistu.
 
@@ -563,6 +720,9 @@ def accept_feed_item(
     spor adresy (čistič oken ≠ vysavač, displej ≠ sluchátka) položku odmítnou.
     Gigabyte a Karl Lagerfeld se nezakládají.
     """
+    if shop in CATALOG_RULE_SHOPS:
+        slug, reason = classify_feed_item(shop, name, shop_category, price, url)
+        return slug if reason == "ok" else None
     from .exclusions import is_excluded_brand
     if is_excluded_brand(name):
         return None

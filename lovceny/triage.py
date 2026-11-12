@@ -13,12 +13,14 @@ from sqlalchemy.orm import Session
 
 from .categories import (
     BY_SLUG,
+    CATALOG_RULE_SHOPS,
     FEED_CATEGORY_WHITELIST,
     MIN_PRICE_CZK,
     _ALLEGRO_SUFFIXES,
     _path_segments,
     _stem_at_word,
     category_url_conflict,
+    classify_feed_item,
     is_accessory_text,
     jbl_catalog_category,
 )
@@ -209,7 +211,16 @@ def resolve_category(db: Session, shop: str, name: str, shop_category: str | Non
 
     JBL feed nemá cestu kategorie. Známé řady sluchátek dostanou cestu „Sluchátka“
     a dál rozhodne stejná tabulka. Obecný odhad z názvu se nepoužívá.
+    Nové feedy (Dognet/eHUB 2026-11) rozhoduje classify_feed_item: co pravidlo
+    nezařadí, se nezaloží a nečeká ve frontě.
     """
+    if shop in CATALOG_RULE_SHOPS:
+        slug, reason = classify_feed_item(shop, name, shop_category, price, url)
+        if reason == "accessory":
+            return Resolved("accessory")
+        if reason == "ok" and slug:
+            return Resolved("high", slug)
+        return Resolved("skip")
     if is_accessory_text(name, shop_category):
         return Resolved("accessory")
     raw = shop_category

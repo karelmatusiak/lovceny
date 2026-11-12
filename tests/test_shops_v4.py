@@ -76,7 +76,7 @@ def test_robots_rules_v4():
 
 
 def test_blocked_shops_not_searched():
-    for slug in ("istores", "czc", "conrad", "eberry", "bscom", "tsbohemia", "smarty"):
+    for slug in ("istores", "czc", "conrad", "eberry", "tsbohemia", "smarty"):
         assert SHOPS[slug].status == "blocked" and not SHOPS[slug].searcher and not SHOPS[slug].can_scrape
 
 

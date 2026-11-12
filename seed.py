@@ -215,7 +215,7 @@ def _round_robin(items, key_fn, order=()):
 def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter=None,
                            max_per_brand_cat: int = FEED_MAX_PER_BRAND_CAT,
                            prefer_ean: bool = False, spread_categories: bool = False,
-                           family_key=None, spread_by=None):
+                           family_key=None, spread_by=None, shop: str | None = None):
     """1 produkt na barevnou rodinu (nejlevnější skladem) + max N na značku/kategorii (vyšší cena).
 
     prefer_ean: při shodě rodiny nechá položku s GTIN/EAN (párování nabídek).
@@ -229,7 +229,7 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
     key_fn = family_key or variant_family_key
     families: dict[tuple, object] = {}
     for it in items:
-        cat = accept_feed_item(it.name, it.category, it.price, url=it.url)
+        cat = accept_feed_item(it.name, it.category, it.price, url=it.url, shop=shop)
         if cat not in allowed_cats:
             continue
         if brand_filter is not None and not brand_filter(it.name):
@@ -268,7 +268,7 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
     buckets: dict[str, list] = {c: [] for c in allowed_cats}
     rest = []
     for it in picked:
-        cat = accept_feed_item(it.name, it.category, it.price, url=it.url)
+        cat = accept_feed_item(it.name, it.category, it.price, url=it.url, shop=shop)
         if cat in buckets:
             buckets[cat].append(it)
         else:
@@ -288,6 +288,8 @@ def pick_feed_create_items(items, allowed_cats: tuple[str, ...], *, brand_filter
 FEED_CATALOG_SHOPS = (
     "istyle", "sencor", "xm", "evolveo", "pocitace24", "jbl",
     "electronicstar", "4home", "electrolux", "dyson", "allegro",
+    "tesla", "xupe", "tera", "amazestore", "misura",
+    "bscom", "dronpro", "iphonemarket", "promobily",
 )
 
 # Barvy z JBL feedu, které obecný klíč rodiny nezná (latte, squad…). Jinak by cap
@@ -349,6 +351,9 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
                     pocitace24_limit=25, jbl_limit=25,
                     electronicstar_limit=25, fourhome_limit=25, electrolux_limit=25, dyson_limit=25,
                     allegro_limit=ALLEGRO_SEED_LIMIT,
+                    tesla_limit=25, xupe_limit=25, tera_limit=25, amazestore_limit=25, misura_limit=25,
+                    bscom_limit=25, dronpro_limit=25, iphonemarket_limit=25, promobily_limit=25,
+                    only: set[str] | None = None,
                     dry_run=False) -> dict:
     """Konzervativně přidá produkty z Heureka, eHUB a Dognet feedů.
 
@@ -379,7 +384,18 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             "telefony", "notebooky", "pocitace", "televize", "pracky", "lednice",
             "kavovary", "vysavace", "sluchatka", "chytre-hodinky", "konzole",
         )),
+        ("tesla", tesla_limit, ("sluchatka", "vysavace", "kavovary", "chytra-domacnost")),
+        ("xupe", xupe_limit, ("telefony", "sluchatka", "chytre-hodinky", "kavovary", "vysavace", "televize", "fotoaparaty")),
+        ("tera", tera_limit, ("notebooky", "pocitace", "telefony", "sluchatka", "chytre-hodinky")),
+        ("amazestore", amazestore_limit, ("sluchatka",)),
+        ("misura", misura_limit, ("sluchatka", "telefony", "notebooky")),
+        ("bscom", bscom_limit, ("notebooky", "pocitace", "sluchatka", "vysavace", "chytre-hodinky", "telefony", "televize", "kavovary")),
+        ("dronpro", dronpro_limit, ("fotoaparaty",)),
+        ("iphonemarket", iphonemarket_limit, ("telefony",)),
+        ("promobily", promobily_limit, ("sluchatka", "chytre-hodinky", "telefony")),
     ]
+    if only:
+        targets = [row for row in targets if row[0] in only]
 
     def _apple_only(name: str) -> bool:
         n = (name or "").lower()
@@ -411,14 +427,24 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             bf = is_known_brand
         else:
             bf = None
+        if slug == "allegro":
+            cap = ALLEGRO_BRAND_CAP
+        elif slug == "iphonemarket":
+            # Jedna značka (Apple). Strop 6 by nechal jen pár kapacit.
+            cap = max(limit, FEED_MAX_PER_BRAND_CAT)
+        elif slug in {"bscom", "tera", "xupe"}:
+            cap = 10
+        else:
+            cap = FEED_MAX_PER_BRAND_CAT
         picked = pick_feed_create_items(
             items, cats, brand_filter=bf,
-            max_per_brand_cat=ALLEGRO_BRAND_CAP if slug == "allegro" else FEED_MAX_PER_BRAND_CAT,
+            max_per_brand_cat=cap,
             prefer_ean=slug == "allegro",
             spread_categories=slug == "allegro",
             family_key=_jbl_family_key if slug == "jbl" else None,
             # Jedna značka: strop 6 by nechal jen nejdražší Quantum. Řady se střídají, max_create drží ~25.
             spread_by=_jbl_line if slug == "jbl" else None,
+            shop=slug,
         )
         st_create = apply_feed(db, slug, picked, create_missing=True, max_create=limit)
         st = {
@@ -429,7 +455,11 @@ def seed_from_feeds(db, *, istyle_limit=25, sencor_limit=25, xm_limit=25, evolve
             "created": st_create.get("created", 0),
             "skipped": st_attach.get("skipped", 0),
         }
-        print(f"Feed seed {slug}: loaded={len(items)} picked={len(picked)} → {st}")
+        from lovceny.shops.feed import FILTER_STATS
+        filt = FILTER_STATS.get(slug)
+        if filt:
+            st["filter"] = dict(filt)
+        print(f"Feed seed {slug}: loaded={len(items)} picked={len(picked)} filtr={filt} → {st}")
         stats[slug] = st
     return stats
 
@@ -440,8 +470,8 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
     Soft-retire: nabídky smažeme, produktový řádek zůstane s retired_at (301 /produkt → kategorie).
     """
     from lovceny.categories import (
-        MIN_PRICE_CZK, accept_feed_item, category_url_conflict, is_accessory_text,
-        is_computer_display,
+        CATALOG_RULE_SHOPS, MIN_PRICE_CZK, accept_feed_item, category_url_conflict,
+        classify_feed_item, is_accessory_text, is_computer_display,
     )
     from lovceny.models import Product
     from lovceny.shops import SHOPS, feed as feedmod
@@ -464,11 +494,18 @@ def retire_bad_feed_items(db, dry_run=False) -> dict:
             clean = strip_tracking(it.url)
             # Monitor v listu „Sluchátka“ není příslušenství. Nabídku nemažeme –
             # kategorii srovná repair_display_headphones, historie ceny zůstane.
-            if is_computer_display(it.name) and not is_accessory_text(it.name, it.category):
+            if slug in CATALOG_RULE_SHOPS:
+                _slug, reason = classify_feed_item(slug, it.name, it.category, it.price, url=it.url)
+                reject = reason != "ok"
+                accessory = reason == "accessory"
+            else:
+                accessory = is_accessory_text(it.name, it.category)
+                reject = accessory or accept_feed_item(
+                    it.name, it.category, it.price, url=it.url
+                ) is None
+            if is_computer_display(it.name) and not accessory:
                 continue
-            if is_accessory_text(it.name, it.category) or accept_feed_item(
-                it.name, it.category, it.price, url=it.url
-            ) is None:
+            if reject:
                 bad_urls.add(clean)
                 url_meta[clean] = it.name
                 if it.ean:
@@ -682,6 +719,22 @@ def repair_display_headphones(db, dry_run=True) -> dict:
     return stats
 
 
+def _run_feed_seed(db, args):
+    only = {s.strip() for s in (args.shops or "").split(",") if s.strip()} or None
+    limit = args.feed_limit
+    return seed_from_feeds(
+        db, istyle_limit=limit, sencor_limit=limit, xm_limit=limit,
+        evolveo_limit=limit, pocitace24_limit=limit, jbl_limit=limit,
+        electronicstar_limit=limit, fourhome_limit=limit,
+        electrolux_limit=limit, dyson_limit=limit,
+        allegro_limit=allegro_seed_limit(limit),
+        tesla_limit=limit, xupe_limit=limit, tera_limit=limit, amazestore_limit=limit,
+        misura_limit=limit, bscom_limit=limit, dronpro_limit=limit,
+        iphonemarket_limit=limit, promobily_limit=limit,
+        only=only, dry_run=args.dry_run,
+    )
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-demo", action="store_true")
@@ -690,7 +743,9 @@ def main(argv=None):
     ap.add_argument("--category")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--from-feeds", action="store_true",
-                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, JBL, Electronic-star, 4Home, Electrolux, Dyson, Allegro)")
+                    help="doplnit katalog z Heureka/eHUB/Dognet feedů (včetně Počítače24, JBL, Dognet a eHUB obchodů z listopadu 2026)")
+    ap.add_argument("--shops", default="",
+                    help="s --from-feeds jen tyto slugy (čárkou), bez seedu katalogu z JSON")
     ap.add_argument("--feed-limit", type=int, default=25,
                     help="max. nových produktů na obchod při --from-feeds")
     ap.add_argument("--retire-bad-feeds", action="store_true",
@@ -731,13 +786,12 @@ def main(argv=None):
         for line in st.get("reasons", [])[:100]:
             print(" ", line)
         if a.from_feeds:
-            fs = seed_from_feeds(
-                db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-                evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit, jbl_limit=a.feed_limit,
-                electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
-                electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
-                allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
+            fs = _run_feed_seed(db, a)
             print(f"Feed seed: {fs}")
+        return
+    if a.from_feeds and a.shops.strip():
+        fs = _run_feed_seed(db, a)
+        print(f"Feed seed: {fs}")
         return
     items = [i for i in load_catalog() if not a.category or i["cat"] == a.category][:a.limit]
     print(f"Katalog: {len(items)} položek")
@@ -746,12 +800,7 @@ def main(argv=None):
     retired = retire_vestavne(db, dry_run=a.dry_run)
     print(f"Vestavné nabídky pryč: {retired}")
     if a.from_feeds:
-        fs = seed_from_feeds(
-            db, istyle_limit=a.feed_limit, sencor_limit=a.feed_limit, xm_limit=a.feed_limit,
-            evolveo_limit=a.feed_limit, pocitace24_limit=a.feed_limit, jbl_limit=a.feed_limit,
-            electronicstar_limit=a.feed_limit, fourhome_limit=a.feed_limit,
-            electrolux_limit=a.feed_limit, dyson_limit=a.feed_limit,
-            allegro_limit=allegro_seed_limit(a.feed_limit), dry_run=a.dry_run)
+        fs = _run_feed_seed(db, a)
         print(f"Feed seed: {fs}")
     if a.dry_run or a.category or a.limit:
         return
