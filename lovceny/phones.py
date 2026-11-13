@@ -528,6 +528,41 @@ def brands_in(models: list[PhoneModel]) -> list[str]:
     return sorted(found, key=str.casefold)
 
 
+def offer_color(model: PhoneModel, offer: Offer) -> str:
+    for product in model.products:
+        if product.id == offer.product_id:
+            labels = sorted(color_labels(product.name or ""))
+            return labels[0] if labels else ""
+    return ""
+
+
+def shop_offer_rows(model: PhoneModel, offers: list[Offer]) -> list[dict]:
+    """Jedna nejlevnější skladová nabídka na obchod.
+
+    Když jsou obchody aspoň tři, další barvy téhož obchodu se neopakují.
+    Když je obchodů míň, další řádky zůstanou a nesou barvu, ať to není
+    třikrát stejný název bez rozdílu.
+    """
+    chosen: dict[str, Offer] = {}
+    for offer in offers:
+        if offer.shop not in chosen:
+            chosen[offer.shop] = offer
+    rows = [{"offer": offer, "color": ""} for offer in chosen.values()]
+    rows.sort(key=lambda row: (not offer_is_buyable(row["offer"]), float(row["offer"].price)))
+    if len(rows) != 1:
+        return rows
+    seen = {rows[0]["offer"].id}
+    extra = []
+    for offer in offers:
+        if offer.id in seen:
+            continue
+        seen.add(offer.id)
+        extra.append({"offer": offer, "color": offer_color(model, offer)})
+    if extra:
+        rows[0]["color"] = offer_color(model, rows[0]["offer"])
+    return rows + extra
+
+
 def select_variant(model: PhoneModel, storage: str = "", color: str = "") -> list[Product]:
     chosen = model.products
     if storage:

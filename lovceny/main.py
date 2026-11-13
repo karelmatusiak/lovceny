@@ -506,7 +506,7 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
     compare_href = ""
     if len(compare_products) >= 2:
         compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
-    from .phones import storage_label
+    from .phones import shop_offer_rows, storage_label
     active_storage = pamet.strip()
     if not active_storage and shown is not None:
         for product in model.products:
@@ -518,6 +518,7 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
         "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
         "active_storage": active_storage,
         "shown_price": current, "buyable": bool(buyable), "verdict": verdict, "v": verdict,
+        "offer_rows": shop_offer_rows(model, offers),
         "storage_deals": deals, "compare_href": compare_href,
         "chart_ranges": ranges, "chart_note": verdict_note(verdict, ranges), "crumbs": crumbs,
         "canonical_path": f"/telefon/{model.slug}", "get_shop": get_shop,

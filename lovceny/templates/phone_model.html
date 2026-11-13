@@ -25,12 +25,13 @@
         {% endfor %}
       </div>
       {% endif %}
-      {% if offers %}
+      {% if offer_rows %}
       <ol class="offer-table offer-top">
-        {% for offer in offers[:3] %}
+        {% for row in offer_rows[:3] %}
+        {% set offer = row.offer %}
         {% set shop = get_shop(offer.shop) %}
         <li class="{% if loop.first and offer.in_stock is not false %}is-best{% endif %}">
-          <span class="offer-shop">{{ shop.name if shop else offer.shop }}</span>
+          <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
           <span class="offer-price">{{ offer.price|czk }}</span>
           {% if offer.in_stock is false %}
           <span class="offer-oos">Není skladem</span>
@@ -50,23 +51,24 @@
   {% if model.colors %}
   <section class="model-block" aria-labelledby="color-h">
     <h2 id="color-h">Barva</h2>
-    <div class="phone-scroll"><div class="phone-filter-row">
-      <a href="/telefon/{{ model.slug }}{% if storage %}?pamet={{ storage|urlencode }}{% endif %}"{% if not color %} aria-current="true"{% endif %}>Vše</a>
+    <div class="phone-scroll"><div class="color-row">
+      <a class="storage-chip{% if not color %} is-on{% endif %}" href="/telefon/{{ model.slug }}{% if storage %}?pamet={{ storage|urlencode }}{% endif %}"{% if not color %} aria-current="true"{% endif %}>Vše</a>
       {% for label in model.colors %}
-      <a href="/telefon/{{ model.slug }}?barva={{ label|urlencode }}{% if storage %}&pamet={{ storage|urlencode }}{% endif %}"{% if color == label %} aria-current="true"{% endif %}>{{ label }}</a>
+      <a class="storage-chip{% if color == label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?barva={{ label|urlencode }}{% if storage %}&pamet={{ storage|urlencode }}{% endif %}"{% if color == label %} aria-current="true"{% endif %}>{{ label }}</a>
       {% endfor %}
     </div></div>
   </section>
   {% endif %}
 
-  {% if offers|length > 3 %}
+  {% if offer_rows|length > 3 %}
   <section class="model-block" aria-labelledby="offers-h">
     <h2 id="offers-h">Další obchody</h2>
     <ol class="offer-table">
-      {% for offer in offers[3:] %}
+      {% for row in offer_rows[3:] %}
+      {% set offer = row.offer %}
       {% set shop = get_shop(offer.shop) %}
       <li>
-        <span class="offer-shop">{{ shop.name if shop else offer.shop }}</span>
+        <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
         <span class="offer-price">{{ offer.price|czk }}</span>
         {% if offer.in_stock is false %}
         <span class="offer-oos">Není skladem</span>

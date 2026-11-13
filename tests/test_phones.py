@@ -36,6 +36,23 @@ def test_tablet_stays_off_the_phone_site_and_names_drop_specs():
         db.close()
 
 
+def test_offer_rows_keep_one_cheapest_per_shop():
+    init_db()
+    db = SessionLocal()
+    try:
+        from lovceny.phones import shop_offer_rows
+        black = _phone(db, "Apple iPhone 16 128GB černá", 18000, shop="tera", slug="ip16-cerna")
+        white = _phone(db, "Apple iPhone 16 128GB bílá", 18100, shop="tera", slug="ip16-bila")
+        other = _phone(db, "Apple iPhone 16 128GB černá", 19000, shop="alza", slug="ip16-alza")
+        model = group_phones([black, white, other])[0]
+        rows = shop_offer_rows(model, model.offers)
+        assert [row["offer"].shop for row in rows] == ["tera", "alza"]
+        assert rows[0]["offer"].price == 18000
+        assert rows[0]["color"] == ""
+    finally:
+        db.close()
+
+
 def test_storage_variants_are_one_model():
     init_db()
     db = SessionLocal()
