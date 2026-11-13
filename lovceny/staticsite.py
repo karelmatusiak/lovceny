@@ -461,9 +461,13 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 dest = _location(response)
                 code = _status(response)
                 book.add(path, dest, code)
-                bare = f"/produkt/{item.id}"
-                if path != bare:
-                    book.add(bare, dest, code)
+                # add() na /produkt/ se do _redirects nepropíše. gone ano.
+                book.gone[str(item.id)] = dest
+                if public_slug:
+                    book.gone[f"{item.id}-{public_slug}"] = dest
+                stored = (item.slug or "").strip("-")
+                if stored and stored != public_slug:
+                    book.gone[f"{item.id}-{stored}"] = dest
                 continue
             write_html(path, response)
             book.add_live_id(item)
