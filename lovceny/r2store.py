@@ -165,8 +165,14 @@ def download(key: str, path: Path) -> None:
         raise R2Error(f"R2 GET {key} vrátilo {status}.")
 
 
+def _is_sqlite_file(path: Path) -> bool:
+    return path.suffix.lower() in {".db", ".sqlite"}
+
+
 def upload(path: Path, key: str) -> None:
-    _checkpoint(path)
+    # Značka migration-complete je text. Checkpoint na ní spadne: file is not a database.
+    if _is_sqlite_file(path):
+        _checkpoint(path)
     status, _ = _request("PUT", key, body_path=path, payload_hash=_hash_file(path))
     if status not in (200, 201):
         raise R2Error(f"R2 PUT {key} vrátilo {status}.")
