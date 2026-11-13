@@ -389,6 +389,7 @@ def _model_name(names: list[str]) -> str:
                 kept.append(word)
             index += 1
         text = re.sub(r"\s+", " ", " ".join(kept)).strip(" -/,")
+        text = _fix_casing(text)
         if codes and text.casefold() in {"samsung galaxy", "samsung", "galaxy"}:
             text = f"{text} {codes[0]}".strip()
         if text and (not best or (len(text), text.casefold()) < (len(best), best.casefold())):
@@ -399,6 +400,69 @@ def _model_name(names: list[str]) -> str:
 def _family_key(name: str, product_id: int):
     key = model_family(name or "", PHONE)
     return key if key is not None else ("solo", product_id)
+
+
+def _fix_casing(text: str) -> str:
+    """FOLD8 → Fold8. iPhone, Pro Max, FE a 5G necháváme."""
+    keep = {
+        "iphone": "iPhone", "ipad": "iPad", "macbook": "MacBook", "oneplus": "OnePlus",
+        "pro": "Pro", "max": "Max", "fe": "FE", "se": "SE", "5g": "5G", "4g": "4G",
+        "lte": "LTE", "usb": "USB", "nfc": "NFC", "oled": "OLED", "xr": "XR", "xs": "XS",
+        "air": "Air", "ultra": "Ultra", "plus": "Plus", "mini": "mini", "note": "Note",
+        "galaxy": "Galaxy", "pixel": "Pixel", "redmi": "Redmi", "poco": "Poco",
+        "samsung": "Samsung", "xiaomi": "Xiaomi", "google": "Google", "apple": "Apple",
+        "honor": "Honor", "motorola": "Motorola", "nothing": "Nothing", "oppo": "Oppo",
+        "vivo": "Vivo", "nokia": "Nokia", "huawei": "Huawei", "sony": "Sony", "asus": "Asus",
+        "zte": "ZTE", "tcl": "TCL", "lg": "LG", "htc": "HTC", "edge": "Edge",
+    }
+    out = []
+    for word in text.split():
+        key = word.casefold()
+        if key in keep:
+            out.append(keep[key])
+        elif "-" not in word and any(ch.isalpha() for ch in word) and word == word.upper() and len(word) > 1:
+            out.append(word[:1] + word[1:].lower())
+        else:
+            out.append(word)
+    return " ".join(out)
+
+
+def credible_offers(products: list[Product], offers: list[Offer]) -> list[Offer]:
+    """Veřejná cena. Jiná kapacita se sem nedostane — volající už filtruje.
+
+    V rámci jedné kapacity schováme obchod, který je o víc než 35 % pod mediánem
+    ostatních, když jsou ostatní aspoň dva. Řádek v databázi zůstane.
+    """
+    from statistics import median
+    by_storage: dict[str, list[Offer]] = {}
+    product_storage = {product.id: storage_label(product.name or "") or "" for product in products}
+    for offer in offers:
+        by_storage.setdefault(product_storage.get(offer.product_id, ""), []).append(offer)
+    flagged: set[str] = set()
+    for group in by_storage.values():
+        shop_price: dict[str, float] = {}
+        for offer in group:
+            price = float(offer.price)
+            current = shop_price.get(offer.shop)
+            if current is None or price < current:
+                shop_price[offer.shop] = price
+        if len(shop_price) < 3:
+            continue
+        for shop, price in shop_price.items():
+            others = [other for name, other in shop_price.items() if name != shop]
+            if len(others) < 2:
+                continue
+            mid = float(median(others))
+            if mid > 0 and price < mid * 0.65:
+                flagged.add(f"{product_storage.get(group[0].product_id, '')}|{shop}")
+    if not flagged:
+        return list(offers)
+    kept = []
+    for offer in offers:
+        key = f"{product_storage.get(offer.product_id, '')}|{offer.shop}"
+        if key not in flagged:
+            kept.append(offer)
+    return kept
 
 
 def _visible_offers(product: Product) -> list[Offer]:
@@ -438,6 +502,7 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
         offers: list[Offer] = []
         for product in group:
             offers.extend(_visible_offers(product))
+        offers = credible_offers(group, offers)
         buyable = [offer for offer in offers if offer_is_buyable(offer)]
         priced = buyable or offers
         lowest = min((float(offer.price) for offer in priced), default=None)
@@ -565,10 +630,15 @@ def shop_offer_rows(model: PhoneModel, offers: list[Offer]) -> list[dict]:
 
 def select_variant(model: PhoneModel, storage: str = "", color: str = "") -> list[Product]:
     chosen = model.products
+    filtered = False
     if storage:
+        filtered = True
         wanted = storage.casefold()
         chosen = [product for product in chosen if (storage_label(product.name or "") or "").casefold() == wanted]
     if color:
+        filtered = True
         wanted = color.casefold()
         chosen = [product for product in chosen if wanted in {item.casefold() for item in color_labels(product.name or "")}]
-    return chosen or model.products
+    if filtered:
+        return chosen
+    return model.products

@@ -143,6 +143,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .pcmp-price.is-best{color:var(--brand)}
 .pcmp-store{display:block;font-size:13px;line-height:1.35}
 @media (max-width:900px){
+  .phone-hero .phone-hero-grid{padding-left:16px;padding-right:16px}
+  .phone-hero .phone-hero-grid > *{min-width:0}
+  .phone-hero .search{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+  .phone-hero .search label,.phone-hero .search input{min-width:0}
   .phone-hero-grid{grid-template-columns:1fr;gap:0;padding-left:16px;padding-right:16px}
   .phone-hero .search{max-width:100%;box-sizing:border-box}
   .phone-board-head{display:block}
@@ -174,7 +178,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
   .phone-lead{display:none}
   .phone-hero h1{font-size:22px;line-height:1.15;margin-bottom:8px}
   .phone-board-head h2{font-size:18px}
-  .phone-grid{grid-template-columns:1fr}
+  .phone-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .phone-card-main{padding:8px}
+  .phone-card h3{font-size:13px}
+  .phone-card-price{font-size:16px}
   .offer-table li{grid-template-columns:1fr auto}
   .offer-table .btn,.offer-table .offer-oos{grid-column:1 / -1;justify-self:start}
   .wrap{padding:0 16px}

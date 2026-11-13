@@ -36,6 +36,28 @@ def test_tablet_stays_off_the_phone_site_and_names_drop_specs():
         db.close()
 
 
+def test_same_storage_only_and_a_far_outlier_stays_out_of_the_price():
+    init_db()
+    db = SessionLocal()
+    try:
+        from lovceny.phones import _fix_casing, _model_name, credible_offers
+        assert _model_name(["Samsung Galaxy Z FOLD8 256GB černá"]) == "Samsung Galaxy Z Fold8"
+        assert _fix_casing("iPhone 16 Pro Max FE 5G") == "iPhone 16 Pro Max FE 5G"
+        cheap = _phone(db, "Apple iPhone Air 256GB černá", 10000, shop="tera", slug="air-tera")
+        _phone(db, "Apple iPhone Air 256GB bílá", 32000, shop="alza", slug="air-alza")
+        _phone(db, "Apple iPhone Air 256GB modrá", 33000, shop="datart", slug="air-datart")
+        _phone(db, "Apple iPhone Air 1TB černá", 40000, shop="istyle", slug="air-istyle")
+        model = group_phones(db.query(Product).all())[0]
+        assert model.name == "Apple iPhone Air"
+        assert model.lowest == 32000
+        assert "tera" not in {offer.shop for offer in model.offers if offer.product_id == cheap.id}
+        kept = credible_offers(model.products, [offer for product in model.products for offer in product.offers])
+        assert cheap.offers[0].id not in {offer.id for offer in kept}
+        assert any(offer.shop == "istyle" for offer in kept)
+    finally:
+        db.close()
+
+
 def test_offer_rows_keep_one_cheapest_per_shop():
     init_db()
     db = SessionLocal()

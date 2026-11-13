@@ -9,7 +9,7 @@
       {% if model.brand %}<p class="kicker">{{ model.brand }}</p>{% endif %}
       <h1>{{ model.name }}</h1>
       <p class="model-price">{% if shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
-      <p class="model-price-note">{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+      <p class="model-price-note">{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if offers %} · {{ cz_count(offers|map(attribute='shop')|unique|list|length, "obchod", "obchody", "obchodů") }}{% endif %}</p>
       {% if verdict and verdict.code == 'none' %}
       <p class="history-note">Historie ceny se právě tvoří. Doporučení Kupuj nebo Počkej ukážeme po 7 dnech měření.</p>
       {% elif verdict %}

@@ -466,28 +466,30 @@ def phones_page(request: Request, znacka: str = "", pasmo: str = "", db=Depends(
 
 @app.get("/telefon/{slug}", response_class=HTMLResponse)
 def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = "", db=Depends(get_db)):
-    from .phones import find_model, select_variant
+    from .phones import find_model, select_variant, storage_label
     model = find_model(db, slug)
     if model is None:
         raise HTTPException(404)
-    products = select_variant(model, storage=pamet.strip(), color=barva.strip())
-    offers = []
-    points = []
-    for product in products:
-        for offer in model.offers:
-            if offer.product_id == product.id:
-                offers.append(offer)
-                points.extend(offer.points)
-    if not offers:
-        offers = list(model.offers)
-        points = [point for offer in offers for point in offer.points]
+    storage_query = pamet.strip()
+    if not storage_query:
+        pool = [offer for offer in model.offers if offer_is_buyable(offer)] or list(model.offers)
+        if pool:
+            cheapest = min(pool, key=lambda offer: float(offer.price))
+            for product in model.products:
+                if product.id == cheapest.product_id:
+                    storage_query = storage_label(product.name or "") or ""
+                    break
+    products = select_variant(model, storage=storage_query, color=barva.strip())
+    product_ids = {product.id for product in products}
+    offers = [offer for offer in model.offers if offer.product_id in product_ids]
+    points = [point for offer in offers for point in offer.points]
     offers.sort(key=lambda offer: (not offer_is_buyable(offer), float(offer.price)))
     buyable = [offer for offer in offers if offer_is_buyable(offer)]
     shown = buyable[0] if buyable else (offers[0] if offers else None)
     current = float(shown.price) if shown is not None and shown.price is not None else None
     verdict = compute(points, current, getattr(shown, "original_price", None) if shown else None)
     ranges = build_chart(points, verdict=verdict, live_price=current)
-    from .phones import anchor_product, phone_models, storage_deals
+    from .phones import anchor_product, phone_models, shop_offer_rows, storage_deals
     deals = storage_deals(model)
     peers = []
     for item in phone_models(db):
@@ -506,13 +508,7 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
     compare_href = ""
     if len(compare_products) >= 2:
         compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
-    from .phones import shop_offer_rows, storage_label
-    active_storage = pamet.strip()
-    if not active_storage and shown is not None:
-        for product in model.products:
-            if product.id == shown.product_id:
-                active_storage = storage_label(product.name or "") or ""
-                break
+    active_storage = storage_query
     crumbs = [("Lovceny", "/"), ("Telefony", "/telefony"), (model.name, f"/telefon/{model.slug}")]
     return tpl.TemplateResponse(request, "phone_model.html", {
         "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
