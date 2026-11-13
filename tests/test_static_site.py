@@ -215,6 +215,8 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert alza["wrapper"] == "ALZA_AFFILIATE_ID" and alza["wrapped"] >= 1 and alza["plain"] == 0
     assert report["search_index_bytes"] < 200_000
     assert report["url_changes"]
+    assert not (out / "docs").exists()
+    assert not (out / "preview").exists()
     assert any("Hlídání ceny" in line for line in report["not_published"])
 
     good_path = out / "produkt" / f"{good.id}-{good.slug}.html"

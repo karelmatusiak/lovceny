@@ -348,10 +348,15 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
+    # docs/preview jsou jen snímky v pull requestu. Do nasazení nepatří
+    # a složka se před sloučením smaže.
     shutil.copytree(Path(__file__).parent / "static", root / "static")
     fav = Path(__file__).parent / "static" / "brand" / "favicon.ico"
     if fav.exists():
         shutil.copyfile(fav, root / "favicon.ico")
+    for leftover in (root / "docs", root / "preview"):
+        if leftover.exists():
+            shutil.rmtree(leftover)
 
     catcache.clear()
     clear_display_names_cache()
