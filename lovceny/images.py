@@ -5,7 +5,7 @@ max. MAX_BYTES, timeout, redirect jen opět na povolený host, jen obrázky (Pil
 ochrana proti „dekompresní bombě“ (MAX_PIXELS). Při chybě endpoint nevrátí 200 s obrázkem
 (karta by ho brala jako úspěch a onerror by nespustil) a nikdy 302 na originál
 (Planeo/Fast JPEG bývá i >3 MB).
-Paměť (Render free 512 MiB): najednou jen IMG_CONCURRENCY resize (výchozí 1), download max 8 MB
+Paměť: najednou jen IMG_CONCURRENCY resize (výchozí 1), download max 8 MB
 (JPEG dekód přes Image.draft v měřítku cílové šířky), close(), semafor kolem miss cesty.
 Souběžné šířky stejné URL sdílejí jedno stažení. Cache na disku IMG_CACHE_MAX_MB (výchozí 40).
 """
@@ -319,7 +319,7 @@ def local_proxy_url(url: str | None, w: int) -> str:
 
 
 def wsrv_url(url: str, w: int) -> str:
-    """Free image CDN: resize + WebP, edge cache u wsrv (nebudí Render)."""
+    """Free image CDN: resize + WebP, edge cache u wsrv."""
     return f"{WSRV_BASE}?url={quote(url, safe='')}&w={w}&output=webp&q={QUALITY}&we"
 
 
