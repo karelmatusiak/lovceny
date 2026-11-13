@@ -7,12 +7,50 @@ status (výsledek testu z 14. 10. 2026):
   ok       – funguje
   blocked  – obchod vrací ochranu proti botům (Cloudflare/F5/DataDome). NEOBCHÁZÍME.
 """
+import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 from .feed import ALLEGRO_TD_PAGE_CAP, ALLEGRO_TD_QUERIES, ALLEGRO_TD_TOTAL_CAP, strip_junk_query
+
+log = logging.getLogger("lovceny.shops")
+_CACHE_MISS = object()
+_feed_urls_raw: object = _CACHE_MISS
+_feed_urls_map: dict[str, str] = {}
+
+
+def feed_urls_map() -> dict[str, str]:
+    """JSON z FEED_URLS: {\"ISTYLE_FEED_URL\": \"https://…\"}.
+
+    Neplatný JSON se zaloguje bez hodnoty a bere se jako prázdná mapa.
+    """
+    global _feed_urls_raw, _feed_urls_map
+    raw = os.environ.get("FEED_URLS")
+    if raw == _feed_urls_raw:
+        return _feed_urls_map
+    _feed_urls_raw = raw
+    if raw is None or not raw.strip():
+        _feed_urls_map = {}
+        return _feed_urls_map
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        log.error("FEED_URLS není platný JSON, feedy bez vlastní proměnné přeskakuji")
+        _feed_urls_map = {}
+        return _feed_urls_map
+    if not isinstance(data, dict):
+        log.error("FEED_URLS není JSON objekt, feedy bez vlastní proměnné přeskakuji")
+        _feed_urls_map = {}
+        return _feed_urls_map
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+    _feed_urls_map = out
+    return out
 
 
 @dataclass
@@ -54,31 +92,36 @@ class Shop:
         return u
     search_note: str = ""
 
-    @property
-    def feed_url(self) -> str:
-        """URL feedu z env. Veřejný default v extra se použije jen když tam je.
+    def _resolved_feed(self) -> tuple[str, str]:
+        """(url, zdroj). Zdroj je env, json, default, nebo prázdný řetězec.
 
-        Prázdný nebo chybějící env (GitHub Actions secret) default neschovává,
-        ale u obchodů bez defaultu vrátí prázdný řetězec. Fetch takový obchod přeskočí.
+        Vlastní proměnná má přednost. Pak klíč se stejným jménem v FEED_URLS.
+        Pak veřejný default v extra. Jinak nic a fetch obchod přeskočí.
         """
         if not self.feed_url_env:
-            return ""
+            return "", ""
         env = os.environ.get(self.feed_url_env)
         if env is not None and env.strip():
-            return env.strip()
-        return (self.extra.get("feed_url_default") or "").strip()
+            return env.strip(), "env"
+        mapped = feed_urls_map().get(self.feed_url_env, "")
+        if mapped:
+            return mapped, "json"
+        default = (self.extra.get("feed_url_default") or "").strip()
+        if default:
+            return default, "default"
+        return "", ""
+
+    @property
+    def feed_url(self) -> str:
+        return self._resolved_feed()[0]
 
     def feed_sources(self) -> list[str]:
-        """Primární URL a případná veřejná záloha. Env override zálohu nepoužije."""
-        primary = self.feed_url
+        """Primární URL a případná veřejná záloha. Vlastní URL zálohu nepoužije."""
+        primary, source = self._resolved_feed()
         if not primary:
             return []
-        explicit = False
-        if self.feed_url_env:
-            env = os.environ.get(self.feed_url_env)
-            explicit = bool(env and env.strip())
         out = [primary]
-        if not explicit:
+        if source == "default":
             fb = (self.extra.get("feed_url_fallback") or "").strip()
             if fb and fb not in out:
                 out.append(fb)

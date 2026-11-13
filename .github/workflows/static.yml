@@ -48,21 +48,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PUBLIC_URL: https://lovceny.cz
           LOVCENY_SKIP_DATA_FIXES: "1"
-          # Štítek na /obchody čte adresu feedu. Prázdný secret = „feed URL chybí“.
-          ISTYLE_FEED_URL: ${{ secrets.ISTYLE_FEED_URL }}
-          SENCOR_FEED_URL: ${{ secrets.SENCOR_FEED_URL }}
-          XM_FEED_URL: ${{ secrets.XM_FEED_URL }}
-          EVOLVEO_FEED_URL: ${{ secrets.EVOLVEO_FEED_URL }}
-          TESLA_FEED_URL: ${{ secrets.TESLA_FEED_URL }}
-          XUPE_FEED_URL: ${{ secrets.XUPE_FEED_URL }}
-          TERA_FEED_URL: ${{ secrets.TERA_FEED_URL }}
-          AMAZESTORE_FEED_URL: ${{ secrets.AMAZESTORE_FEED_URL }}
-          MISURA_FEED_URL: ${{ secrets.MISURA_FEED_URL }}
-          DYSON_FEED_URL: ${{ secrets.DYSON_FEED_URL }}
-          ALLEGRO_FEED_URL: ${{ secrets.ALLEGRO_FEED_URL }}
-          BSCOM_FEED_URL: ${{ secrets.BSCOM_FEED_URL }}
-          DRONPRO_FEED_URL: ${{ secrets.DRONPRO_FEED_URL }}
-          IPHONEMARKET_FEED_URL: ${{ secrets.IPHONEMARKET_FEED_URL }}
+          # Štítek na /obchody čte FEED_URLS. Prázdný secret = „feed URL chybí“.
+          FEED_URLS: ${{ secrets.FEED_URLS }}
         run: |
           extra=()
           if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then

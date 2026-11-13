@@ -39,15 +39,10 @@ services:
         sync: false
       - key: LOVCENY_AFFILIATE
         sync: false
-      - key: ISTYLE_FEED_URL
+      # Jedno JSON se soukromými feed URL. Klíče jsou jména proměnných obchodů. Prázdné = přeskočit.
+      - key: FEED_URLS
         sync: false
-      - key: SENCOR_FEED_URL
-        sync: false
-      - key: XM_FEED_URL
-        sync: false
-      - key: EVOLVEO_FEED_URL
-        sync: false
-      # Dognet (Electronic-star, 4Home, Electrolux, Dyson, Allegro). Prázdné DOGNET_CHID = vypnuto; jinak výchozí chid v kódu.
+      # Dognet (Electronic-star, 4Home, Electrolux). Prázdné DOGNET_CHID = vypnuto; jinak výchozí chid v kódu.
       - key: DOGNET_CHID
         sync: false
       - key: ELECTRONICSTAR_FEED_URL
@@ -55,27 +50,6 @@ services:
       - key: FOURHOME_FEED_URL
         sync: false
       - key: ELECTROLUX_FEED_URL
-        sync: false
-      - key: DYSON_FEED_URL
-        sync: false
-      - key: ALLEGRO_FEED_URL
-        sync: false
-      # Soukromé feedy bez defaultu v gitu. Prázdné = obchod se přeskočí.
-      - key: TESLA_FEED_URL
-        sync: false
-      - key: XUPE_FEED_URL
-        sync: false
-      - key: TERA_FEED_URL
-        sync: false
-      - key: AMAZESTORE_FEED_URL
-        sync: false
-      - key: MISURA_FEED_URL
-        sync: false
-      - key: BSCOM_FEED_URL
-        sync: false
-      - key: DRONPRO_FEED_URL
-        sync: false
-      - key: IPHONEMARKET_FEED_URL
         sync: false
       - key: POCITACE24_FEED_URL
         sync: false

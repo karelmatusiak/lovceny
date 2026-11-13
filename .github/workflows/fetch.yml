@@ -88,25 +88,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
           DATART_FEED_URL: ${{ secrets.DATART_FEED_URL }}
-          ISTYLE_FEED_URL: ${{ secrets.ISTYLE_FEED_URL }}
-          SENCOR_FEED_URL: ${{ secrets.SENCOR_FEED_URL }}
-          XM_FEED_URL: ${{ secrets.XM_FEED_URL }}
-          EVOLVEO_FEED_URL: ${{ secrets.EVOLVEO_FEED_URL }}
+          FEED_URLS: ${{ secrets.FEED_URLS }}
           ELECTRONICSTAR_FEED_URL: ${{ secrets.ELECTRONICSTAR_FEED_URL }}
           FOURHOME_FEED_URL: ${{ secrets.FOURHOME_FEED_URL }}
           ELECTROLUX_FEED_URL: ${{ secrets.ELECTROLUX_FEED_URL }}
-          DYSON_FEED_URL: ${{ secrets.DYSON_FEED_URL }}
-          ALLEGRO_FEED_URL: ${{ secrets.ALLEGRO_FEED_URL }}
           POCITACE24_FEED_URL: ${{ secrets.POCITACE24_FEED_URL }}
           JBL_FEED_URL: ${{ secrets.JBL_FEED_URL }}
-          TESLA_FEED_URL: ${{ secrets.TESLA_FEED_URL }}
-          XUPE_FEED_URL: ${{ secrets.XUPE_FEED_URL }}
-          TERA_FEED_URL: ${{ secrets.TERA_FEED_URL }}
-          AMAZESTORE_FEED_URL: ${{ secrets.AMAZESTORE_FEED_URL }}
-          MISURA_FEED_URL: ${{ secrets.MISURA_FEED_URL }}
-          BSCOM_FEED_URL: ${{ secrets.BSCOM_FEED_URL }}
-          DRONPRO_FEED_URL: ${{ secrets.DRONPRO_FEED_URL }}
-          IPHONEMARKET_FEED_URL: ${{ secrets.IPHONEMARKET_FEED_URL }}
           PROMOBILY_FEED_URL: ${{ secrets.PROMOBILY_FEED_URL }}
           EHUB_AID: ${{ secrets.EHUB_AID }}
           DOGNET_CHID: ${{ secrets.DOGNET_CHID }}
