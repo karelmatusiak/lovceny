@@ -44,7 +44,16 @@ def _name_from_url(url: str) -> str:
 
 def record_price(db: Session, offer: Offer, price: float, original: float | None, in_stock: bool | None,
                  source: str, when: datetime | None = None):
-    """Uloží aktuální cenu. price<=0 / None nepatří do historie (graf by jinak šel na 0 Kč)."""
+    """Uloží aktuální cenu. Nový bod jen když se změní cena nebo sklad.
+
+    price<=0 / None nepatří do historie (graf by jinak šel na 0 Kč). Stejná cena
+    a stejný sklad jen posunou last_checked, aby nabídka nezestárla.
+    """
+    try:
+        prev = float(offer.price) if offer.price is not None else None
+    except (TypeError, ValueError):
+        prev = None
+    prev_stock = offer.in_stock
     offer.last_checked = when or datetime.now(timezone.utc)
     offer.last_ok_at = offer.last_checked
     offer.status, offer.last_error = "ok", None
@@ -61,10 +70,6 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
         # Sklad/URL můžou zůstat, ale nulovou cenu do historie nepisujeme
         return
     # Glitch / špatný match (999 Kč u 36k MacBooku): nepisuj pád pod 25 % stávající ceny
-    try:
-        prev = float(offer.price) if offer.price is not None else None
-    except (TypeError, ValueError):
-        prev = None
     if prev and prev > 0 and price_f < prev * 0.25:
         return
     offer.price = price_f
@@ -74,6 +79,8 @@ def record_price(db: Session, offer: Offer, price: float, original: float | None
             offer.original_price = orig_f if orig_f > 0 else None
         except (TypeError, ValueError):
             pass
+    if prev is not None and round(prev, 2) == round(price_f, 2) and prev_stock == in_stock:
+        return
     db.add(PricePoint(offer=offer, price=price_f, original_price=offer.original_price, in_stock=in_stock,
                       captured_at=offer.last_checked, is_demo=False, source=source))
 
@@ -251,6 +258,30 @@ def single_part_code(name: str):
     return key
 
 
+def catalog_products(db: Session) -> list[Product]:
+    """Produkty jednou na session. Obchody pak párují podle URL, GTIN a kódu výrobce.
+
+    Dřív každý obchod stáhl celou tabulku znovu. Po rollbacku je mezipaměť
+    neplatná a načte se znovu. Ceny nabídek se nenačítají.
+    """
+    from sqlalchemy import func
+    from sqlalchemy import inspect as sa_inspect
+
+    cached = db.info.get("catalog_products")
+    # Počet je jeden integer. Nový produkt mimo téhle mezipaměti (nebo expire_all)
+    # ji zahodí. Stejný počet a živé objekty znamenají, že tabulku znovu nestahujeme.
+    current = db.scalar(select(func.count()).select_from(Product)) or 0
+    if cached is not None and len(cached) == current and any(
+        sa_inspect(row).expired or sa_inspect(row).detached or sa_inspect(row).deleted
+        for row in cached
+    ):
+        cached = None
+    if cached is None or len(cached) != current:
+        cached = list(db.scalars(select(Product)).all())
+        db.info["catalog_products"] = cached
+    return cached
+
+
 def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missing: bool = False,
                max_create: int | None = None, create_identified: bool = False,
                commit: bool = True) -> dict:
@@ -287,7 +318,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     offers = db.scalars(select(Offer).where(Offer.shop == shop_slug)).all()
     by_url = {clean_url(o.url): o for o in offers}
     by_id = {o.external_id: o for o in offers if o.external_id}
-    products = list(db.scalars(select(Product)).all())
+    # Jednou na běh, ne na obchod. Párování jde přes URL tohoto obchodu, GTIN a kód.
+    products = catalog_products(db)
     # Jednou, ne na položku. Allegro-only neznámá značka se nesmí vrátit do výpisu.
     other_shop_ids: set[int] = set()
     if shop_slug == "allegro":
