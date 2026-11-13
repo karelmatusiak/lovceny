@@ -213,7 +213,7 @@ def itemlist_ld(rows, path: str, start: int = 0) -> dict:
                                 for i, (p, _b, _v) in enumerate(rows[:50])]}
 
 
-STATIC_PAGES = ["/", "/slevy", "/kategorie", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday", "/black-friday/skutecna-sleva"]
+STATIC_PAGES = ["/", "/telefony", "/pruvodce", "/slevy", "/obchody", "/o-nas", "/ochrana-osobnich-udaju", "/cookies", "/jak-radime", "/pro-obchody", "/podminky", "/kdy-nakupovat", "/over-slevu", "/rozsireni", "/prehled", "/hlidat-rozpocet", "/black-friday", "/black-friday/skutecna-sleva"]
 
 
 def indexable_static_pages() -> list[str]:
@@ -243,12 +243,9 @@ def sitemap_xml(db) -> str:
     from .offer_trust import offer_is_promoted, use_cutoffs
     base = public_url()
     urls = [(base + p, None) for p in indexable_static_pages()]
-    sale_slugs = _sale_category_slugs(db)
-    for c in CATEGORIES:
-        urls.append((f"{base}/kategorie/{c.slug}", None))
-        urls.append((f"{base}/kategorie/{c.slug}/nejlevnejsi", None))
-        if c.slug in sale_slugs:
-            urls.append((f"{base}/kategorie/{c.slug}/ve-sleve", None))
+    from .phones import GUIDES, PHONE, phone_models
+    for guide in GUIDES:
+        urls.append((f"{base}/pruvodce/{guide.slug}", None))
     cutoffs = use_cutoffs(db)
     products = db.execute(
         select(Product.id, Product.slug, Product.created_at, Product.name, Product.category)
@@ -256,7 +253,7 @@ def sitemap_xml(db) -> str:
             Product.retired_at.is_(None),
             Product.catalog_hidden.is_(False),
             Product.needs_review.is_(False),
-            Product.category_slug.isnot(None),
+            Product.category_slug == PHONE,
         )
         .order_by(Product.id)
     ).all()
@@ -264,14 +261,18 @@ def sitemap_xml(db) -> str:
     if products:
         for offer in db.scalars(select(Offer).where(Offer.product_id.in_([row[0] for row in products]))).all():
             offers_by[offer.product_id].append(offer)
-    from .categories import is_non_new
+    from .categories import is_accessory_text, is_non_new
     from .exclusions import is_excluded_brand
     from .landings import published_paths
     from .names import canonical_slug
     for path in published_paths(db):
+        if path.startswith("/kategorie/") and not path.startswith("/kategorie/telefony"):
+            continue
         urls.append((base + path, None))
+    for model in phone_models(db):
+        urls.append((f"{base}/telefon/{model.slug}", None))
     for pid, slug, created, name, category in products:
-        if is_excluded_brand(name or "") or is_non_new(name or "", shop_category=category):
+        if is_excluded_brand(name or "") or is_accessory_text(name or "") or is_non_new(name or "", shop_category=category):
             continue
         holder = type("P", (), {"name": name})()
         if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ guide.title }} | Lovceny{% endblock %}
+{% block description %}{{ guide.lead }}{% endblock %}
+{% block body %}
+<div class="wrap phone-page">
+  <p class="eyebrow">Průvodce</p>
+  <h1>{{ guide.title }}</h1>
+  <p class="phone-lead">{{ guide.lead }}</p>
+  {% if guide.versus %}
+    {% for brand, rows in columns %}
+    <h2>{{ brand }}</h2>
+    {% if rows %}
+    <ol class="guide-list">
+      {% for model in rows %}
+      <li><a href="/telefon/{{ model.slug }}">{{ model.name }}</a> <b>{% if model.lowest is not none %}{{ model.lowest|czk }}{% else %}bez ceny{% endif %}</b></li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="phone-empty">V tomhle pásmu teď {{ brand }} nemáme.</p>
+    {% endif %}
+    {% endfor %}
+  {% elif models %}
+  <ol class="guide-list">
+    {% for model in models %}
+    <li><a href="/telefon/{{ model.slug }}">{{ model.name }}</a> <b>{% if model.lowest is not none %}{{ model.lowest|czk }}{% else %}bez ceny{% endif %}</b>{% if model.shops %} <span>{{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="phone-empty">V tomhle výběru teď žádný telefon nemáme. Až se objeví v katalogu, průvodce ho zařadí sám podle ceny.</p>
+  {% endif %}
+</div>
+{% endblock %}

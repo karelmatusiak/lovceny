@@ -1,195 +1,74 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard, badge, shop_img, img_missing, ico %}
-{% block description %}Lovceny srovnává ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy. Bez placených pozic.{% endblock %}
-{% macro pick_card(h, extra=false, priority=false) -%}
-{%- set hs = get_shop(h.best.shop) -%}
-{%- set shop_name = (hs.name if hs else h.best.shop) -%}
-<article class="hero-pick"{% if h.category_slug %} data-cat="{{ h.category_slug }}"{% endif %}{% if extra %} data-extra="1" hidden{% endif %}>
-  {% if h.badge == "Nejnižší cena" %}<span class="hero-pick-badge">Nejnižší za 90 dní</span>{% endif %}
-  <a class="hero-pick-main" href="/produkt/{{ h.product.id }}-{{ pslug(h.product) }}">
-    <div class="hero-pick-img">{{ shop_img(h.product.image_url, 180, priority=priority, alt=dname(h.product), sizes="(min-width:960px) 240px, 45vw") }}</div>
-    {% if h.category_name %}<div class="hero-pick-cat">{{ h.category_name }}</div>{% endif %}
-    <div class="hero-pick-name" title="{{ h.product.name }}">{{ dname(h.product) }}{% if dname(h.product) != h.product.name %}<span class="sr-only">. Celý název: {{ h.product.name }}</span>{% endif %}</div>
-    <div class="hero-pick-price-row">
-      <b class="hero-pick-price">{{ h.best.price|czk }}</b>
-      {% if h.discount_pct and h.usual %}<span class="hero-pick-off">−{{ h.discount_pct }}&nbsp;%</span>{% endif %}
-    </div>
-    {% if h.discount_pct and h.usual %}<p class="hero-pick-was">obvykle <s>{{ h.usual|czk }}</s></p>{% endif %}
-    {% if shop_name and h.n_shops %}<p class="hero-pick-where">Nejlevněji v {{ shop_name }} · srovnáno {{ cz_count(h.n_shops, "obchod", "obchody", "obchodů") }}</p>{% elif shop_name %}<p class="hero-pick-where">Nejlevněji v {{ shop_name }}</p>{% endif %}
-  </a>
-  {% if hs and h.best.in_stock is not false %}
-  <a class="btn btn-shop-sm hero-pick-buy" href="{{ go_href(h.best) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ shop_name }} (otevře se v novém okně)</span></a>
-  {% endif %}
-</article>
-{%- endmacro %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img %}
+{% block title %}Lovceny – poctivý specialista na mobilní telefony{% endblock %}
+{% block description %}Lovceny je specialista na mobilní telefony. U každého modelu ukážeme nejnižší cenu, obchody a jestli je sleva opravdu výhodná.{% endblock %}
 {% block body %}
-<header class="hero" id="hledat"><div class="wrap">
-  <h1 class="sr-only">Hlídáme ceny. Řekneme na rovinu.</h1>
+<header class="phone-hero" id="hledat"><div class="wrap">
+  <p class="phone-kicker">Specialista na mobilní telefony</p>
+  <h1>Co koupit, kde je to nejlevnější a jestli je sleva opravdová.</h1>
+  <p class="phone-lead">Nejnižší cena z českých e-shopů a verdikt, jestli je teď dobrá doba na nákup. Nikdo za pořadí neplatí.</p>
   <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
-    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input id="home-q" name="q" type="text" required placeholder="Zadej název nebo vlož odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
+    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="home-q" name="q" type="text" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu"></label>
     <button class="btn btn-primary" type="submit">Hledat</button>
   </form>
-  <p class="search-note">Poctivý hlídač cen elektroniky, bez placených pozic</p>
-</div>
-{% if AI_SEARCH_ON() %}<p class="ai-hint wrap">{{ ico('spark') }} Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
-</header>
-{% if home_picks %}
-<section class="hero-picks" aria-labelledby="hero-picks-h"><div class="wrap">
-  <h2 id="hero-picks-h" class="hero-picks-title">Teď stojí za to</h2>
-  <p class="hero-picks-note">Slevu a přeškrtnutou cenu ukážeme jen proti ceně, kterou jsme sami naměřili.</p>
-  {% if pick_chips %}
-  <div class="pick-chips" role="group" aria-label="Filtrovat výběr podle kategorie">
-    <button type="button" data-pick="all" aria-pressed="true">Vše</button>
-    {% for slug, label in pick_chips %}<button type="button" data-pick="{{ slug }}" aria-pressed="false">{{ label }}</button>{% endfor %}
-  </div>
-  {% endif %}
-  <div class="hero-picks-row" id="home-picks">
-    {% for h, extra in home_picks %}{{ pick_card(h, extra, priority=(not extra and loop.index <= 4)) }}{% endfor %}
-  </div>
-</div></section>
-{% endif %}
-<div class="hero-more"><div class="wrap">
-  <p class="lead hero-lead">Vlož odkaz z e-shopu nebo název produktu – ukážeme historii a jestli se sleva vyplatí.</p>
-    {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
-    {% set n_shops = tracked|length %}
-    <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
-    <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a> · <a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
-</div></div>
+</div></header>
 
-{% if thin_history %}
-<aside class="expect-note expect-note-quiet" role="status"><div class="wrap">
-  <p><span class="expect-badge">Historie začíná</span> Web znovu od 31.&nbsp;10.&nbsp;2026 – verdikty Kupuj/Počkej doplníme po týdnu měření (ceny 3× denně).</p>
-</div></aside>
-{% endif %}
-
-{% if deals %}
-<section class="deals-teaser" style="padding-top:24px"><div class="wrap">
-  <div class="teaser-head"><div><div class="eyebrow">Slevy dne</div><h2>Skutečně u minima</h2></div><a class="btn btn-ghost" href="/slevy">Celý žebříček →</a></div>
-  <div class="teaser-grid">{% for r in deals %}
-    <a class="card teaser-card" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">
-      <div class="p-name sm" title="{{ r.product.name }}">{{ dname(r.product) }}{% if dname(r.product) != r.product.name %}<span class="sr-only">. Celý název: {{ r.product.name }}</span>{% endif %}</div>
-      {{ badge(r.verdict) }}
-      <div class="teaser-price"><b>{{ r.best.price|czk }}</b>{% if r.savings_czk > 0 %}<span class="save-pct">−{{ '%.0f'|format(r.savings_pct) }}&nbsp;%</span>{% endif %}</div>
-      {% if r.savings_czk > 0 %}<small>ušetříš {{ r.savings_czk|czk }} oproti obvyklé ceně</small>{% endif %}
-      {% if r.has_demo %}<span class="demo-tag">DEMO</span>{% endif %}
-    </a>{% endfor %}
-  </div>
-</div></section>
-{% else %}
-<section class="deals-teaser deals-teaser-quiet" style="padding-top:24px" aria-label="Slevy dne"><div class="wrap">
-  <p class="teaser-empty-quiet"><span class="expect-badge">Slevy dne</span> Až budeme mít aspoň týden historie, ukážeme nejlepší skutečné slevy. <a href="/slevy">Skutečné slevy →</a></p>
-</div></section>
-{% endif %}
-
-<section class="home-cats" aria-labelledby="home-cats-h"><div class="wrap">
-  <div class="teaser-head"><div><div class="eyebrow">Kategorie</div><h2 id="home-cats-h">Co hlídáme</h2></div>
-    <a class="btn btn-ghost" href="/kategorie">Všechny kategorie →</a></div>
-  <ul class="cat-cards home-cat-cards">
-  {% for c in CATEGORIES %}
-    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ ico(c.slug) }}</span>
-      <span><b>{{ c.name }}</b><small>{% set n = cat_counts.get(c.slug, 0) %}{{ cz_count(n, "produkt", "produkty", "produktů") }}</small></span></a></li>
-  {% endfor %}
-  </ul>
-</div></section>
-
-{% if landings %}
-<section class="home-landings" aria-labelledby="home-land-h"><div class="wrap">
-  <div class="teaser-head"><div><div class="eyebrow">Často hledané</div><h2 id="home-land-h">Nejlevnější a do rozpočtu</h2></div></div>
-  <ul class="landing-links">{% for item in landings %}<li><a href="{{ item.path }}">{{ item.h1 }}</a></li>{% endfor %}</ul>
-</div></section>
-{% endif %}
-
-{% if popular %}
-<section class="home-popular" aria-labelledby="popular-h"><div class="wrap">
-  <div class="eyebrow">Napříč kategoriemi</div>
-  <h2 id="popular-h">Nejoblíbenější s nejlepší cenou</h2>
-  <p class="hero-picks-note">Skladem, s fotkou a cenou aspoň ve dvou obchodech. Pořadí podle sledovanosti – když ta chybí, podle počtu obchodů.</p>
-  <div class="hero-picks-row">
-    {% for h in popular %}{{ pick_card(h, false, priority=false) }}{% endfor %}
-  </div>
-</div></section>
-{% endif %}
-
-<section class="how-brief" aria-labelledby="how-h"><div class="wrap">
-  <div class="eyebrow">Jak to funguje</div>
-  <h2 id="how-h" class="how-h">Tři kroky, žádná instalace</h2>
-  <ol class="how-steps">
-    <li class="how-step"><span class="how-num" aria-hidden="true">1</span><div><h3>Vlož odkaz nebo název</h3><p>Z e-shopu zkopíruj odkaz na produkt, nebo napiš, co hledáš.</p></div></li>
-    <li class="how-step"><span class="how-num" aria-hidden="true">2</span><div><h3>Podívej se na historii</h3><p>Uvidíš ceny v obchodech, graf a verdikt – kupovat, nebo počkat.</p></div></li>
-    <li class="how-step"><span class="how-num" aria-hidden="true">3</span><div><h3>Otevři nejlevnější nabídku</h3><p>Pořadí je jen podle ceny. Odkaz vede do obchodu, kde je produkt nejlevnější.</p></div></li>
-  </ol>
-</div></section>
-
-<section class="home-verify" aria-labelledby="hv-h"><div class="wrap"><div class="card hv-card">
-  <div><div class="eyebrow">Katalog</div><h2 id="hv-h">Ověř slevu z našeho katalogu</h2>
-    <p class="ov-muted">Vlož odkaz na produkt, který už v katalogu máme. Ukážeme historii a nejnižší cenu za 30 dní. Odkaz, který v katalogu není, načíst neumíme.</p></div>
-  <form class="search ov-form" action="/over-slevu" method="get" autocomplete="off">
-    <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
-      <input name="url" type="url" inputmode="url" required maxlength="2000" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu pro ověření slevy"></label>
-    <button class="btn btn-primary" type="submit"><span aria-hidden="true">{{ ico('search') }}</span> Ověřit slevu</button>
-  </form>
-</div></div></section>
-
-<section id="nezavislost"><div class="wrap"><div class="promise" id="metodika">
-  <div><div class="eyebrow">Proč nám věřit</div><h2>Pořadí si nikdo nekoupí.</h2>
-    <p>Obchody řadíme výhradně podle ceny. Ceny si ověřujeme sami nebo z oficiálních feedů obchodů.</p>
-    <p style="margin-top:12px"><a href="/jak-radime">Celá metodika: Jak řadíme a hodnotíme</a></p></div>
-  <div class="promise-side">
-    <div class="verdicts" aria-label="Možné verdikty">
-      <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('buy') }}</span>Kupuj</span></div>
-      <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('wait') }}</span>Počkej</span></div>
-      <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('fake') }}</span>Za 30 dní bylo levněji</span></div>
+<section class="phone-board" aria-labelledby="phone-board-h"><div class="wrap">
+  <div class="phone-board-head">
+    <div>
+      <p class="eyebrow">Nejvíc nabízené modely</p>
+      <h2 id="phone-board-h">Nejnižší cena hned na první pohled</h2>
     </div>
-  <ul>
-    <li>{{ ico('buy') }} <span><b>Kupuj:</b> cena do 3 % nad minimem za 90 dní.</span></li>
-    <li>{{ ico('wait') }} <span><b>Počkej:</b> cena je nad obvyklou úrovní (mediánem).</span></li>
-    <li>{{ ico('fake') }} <span><b>Za 30 dní bylo levněji:</b> sleva se počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí, nebo cena krátce před slevou vzrostla o ≥ 12 %. U štítku vždy ukážeme naměřenou cenu a datum.</span></li>
-  </ul>
+    <a class="btn btn-ghost" href="/telefony">Všechny telefony</a>
   </div>
-</div></div></section>
-<section id="vydelavame"><div class="wrap"><div class="card zasady">
-  <div class="eyebrow">Naše zásady</div><h2>Jak vyděláváme</h2>
-  <ul>
-    {% if AFFILIATE_ON() %}
-    <li><b>Affiliate (provizní) odkazy:</b> u některých obchodů (eHUB a Dognet, např. iStyle, Počítače24, JBL, Electronic-star, TESLA, Tera, BScom; případně Alza/Datart) můžeme dostat malou provizi, když přes náš odkaz nakoupíš. Cena pro tebe je stejná. Takové odkazy vždy označíme.</li>
-    {% else %}
-    <li><b>Zatím nevyděláváme:</b> affiliate odkazy teď nejsou zapnuté (chybí konfigurace). Až je spustíme, vždy je označíme.</li>
-    {% endif %}
-    <li><b>Žádné placené pozice:</b> pořadí obchodů je jen podle ceny a verdikt počítáme z historie cen –{% if AFFILIATE_ON() %} provize na ně nemá vliv{% else %} budoucí provize na ně nebude mít vliv{% endif %}.</li>
-    <li><b>Žádné reklamy ani sledovací cookies.</b> Podrobnosti: <a href="/ochrana-osobnich-udaju">Ochrana osobních údajů</a>, <a href="/cookies">Cookies</a>.</li>
+  <div class="phone-filters" aria-label="Filtrovat telefony">
+    <div class="phone-filter-row">
+      <span>Značka</span>
+      <a href="/telefony"{% if not brand %} aria-current="true"{% endif %}>Vše</a>
+      {% for name in brands %}<a href="/telefony?znacka={{ name|urlencode }}">{{ name }}</a>{% endfor %}
+    </div>
+    <div class="phone-filter-row">
+      <span>Cena</span>
+      {% for slug, label, low, high in bands %}<a href="/telefony?pasmo={{ slug }}">{{ label }}</a>{% endfor %}
+    </div>
+  </div>
+  {% if models %}
+  {% if drops %}
+  <aside class="phone-drops" aria-label="Ceny u minima">
+    <p class="eyebrow">Kde je cena u minima</p>
+    <ul>
+      {% for model, verdict in drops %}
+      <li><a href="/telefon/{{ model.slug }}">{{ model.name }}</a> <b>{{ model.lowest|czk }}</b> <span>{{ verdict.headline }}</span></li>
+      {% endfor %}
+    </ul>
+  </aside>
+  {% endif %}
+  <div class="phone-grid">
+    {% for model in models %}
+    <article class="phone-card">
+      <a class="phone-card-main" href="/telefon/{{ model.slug }}">
+        {% if model.brand %}<p class="phone-card-brand">{{ model.brand }}</p>{% endif %}
+        <h3>{{ model.name }}</h3>
+        <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
+        <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+        <div class="phone-card-img">{{ shop_img(model.image, 160, priority=loop.index <= 4, alt="", sizes="(min-width:960px) 180px, 40vw") }}</div>
+      </a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="phone-empty">Zatím tu nemáme telefon, který bychom mohli férově ukázat. Ceny doplní další stažení.</p>
+  {% endif %}
+</div></section>
+
+<section class="phone-guides" aria-labelledby="guides-h"><div class="wrap">
+  <div class="phone-board-head">
+    <div><p class="eyebrow">Průvodci</p><h2 id="guides-h">Vyber podle rozpočtu</h2></div>
+    <a class="btn btn-ghost" href="/pruvodce">Všechny průvodce</a>
+  </div>
+  <ul class="guide-links">
+    {% for guide in guides %}<li><a href="/pruvodce/{{ guide.slug }}">{{ guide.title }}</a></li>{% endfor %}
   </ul>
-</div></div></section>
-{% endblock %}
-{% block scripts %}
-<script>
-(function () {
-  document.querySelectorAll(".hero-pick").forEach(function (card) {
-    var img = card.querySelector("img");
-    if (!img) return;
-    function broken() {
-      card.setAttribute("data-broken", "1");
-      card.hidden = true;
-    }
-    img.addEventListener("error", broken);
-    if (img.complete && img.naturalWidth === 0) broken();
-  });
-  var row = document.getElementById("home-picks");
-  if (!row) return;
-  var chips = document.querySelectorAll(".pick-chips [data-pick]");
-  function apply(slug) {
-    chips.forEach(function (b) {
-      b.setAttribute("aria-pressed", b.getAttribute("data-pick") === slug ? "true" : "false");
-    });
-    row.querySelectorAll(".hero-pick").forEach(function (card) {
-      if (card.getAttribute("data-broken") === "1") { card.hidden = true; return; }
-      var extra = card.hasAttribute("data-extra");
-      var cat = card.getAttribute("data-cat") || "";
-      card.hidden = slug === "all" ? extra : cat !== slug;
-    });
-  }
-  chips.forEach(function (b) {
-    b.addEventListener("click", function () { apply(b.getAttribute("data-pick")); });
-  });
-})();
-</script>
+  <p class="phone-note">Průvodce řadí jen podle ceny, kterou jsme sami naměřili. Specifikace si nevymýšlíme.</p>
+</div></section>
 {% endblock %}

@@ -18,7 +18,7 @@ def test_retired_product_redirects_to_category(client_db):
     db.commit()
     r = c.get(f"/produkt/{p.id}-{p.slug}", follow_redirects=False)
     assert r.status_code == 301
-    assert r.headers["location"] == "/kategorie/telefony"
+    assert r.headers["location"] == "/telefony"
     # kategorie žije
     assert c.get("/kategorie/telefony").status_code == 200
 

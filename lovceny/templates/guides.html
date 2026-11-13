@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Průvodci výběrem telefonu | Lovceny{% endblock %}
+{% block description %}Průvodci podle rozpočtu a značky. Pořadí je jen nejnižší naměřená cena.{% endblock %}
+{% block body %}
+<div class="wrap phone-page">
+  <p class="eyebrow">Průvodci</p>
+  <h1>Jak vybrat telefon podle toho, co opravdu víme</h1>
+  <p class="phone-lead">Každý průvodce bere telefony z našeho katalogu a seřadí je podle nejnižší ceny. Nepíšeme testy, které nemáme, a nevymýšlíme parametry.</p>
+  <ul class="guide-links">
+    {% for guide in guides %}<li><a href="/pruvodce/{{ guide.slug }}">{{ guide.title }}</a></li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

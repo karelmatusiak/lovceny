@@ -1,0 +1,109 @@
+/* Lovceny telefony. Stupnice: 4 8 12 16 24 32 48. Písmo 13 / 16 / 22 / 32 / 44. */
+:root{
+  --brand:#1F4D3A; --brand-600:#173C2D; --brand-50:#E7F2EC; --brand-100:#D3E6DB;
+  --accent:#8C4A1F; --accent-50:#F8EFE6;
+  --ink:#1C1917; --muted:#5E5852; --line:#E6E0D6; --bg:#F4F1EA; --soft:#FFFcf7;
+  --buy:#E5F4EB; --wait:#F8F0DE;
+  --shadow:0 1px 0 rgba(28,25,23,.04), 0 18px 40px -28px rgba(28,25,23,.45);
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
+}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",ui-sans-serif,system-ui,sans-serif}
+.site-head{background:var(--soft);border-bottom:1px solid var(--line)}
+.logo-slogan{font-size:14px;color:var(--muted)}
+.logo-slogan .hl{color:var(--brand)}
+.logo-specialty{margin-left:10px;padding:4px 8px;border-radius:999px;background:var(--brand);color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.btn-primary{background:var(--brand);box-shadow:none}
+.btn-primary:hover{background:var(--brand-600)}
+.kicker,.eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.phone-hero{padding:12px 0 0}
+.phone-hero h1{font-size:clamp(28px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:700;max-width:20ch;margin:4px 0 8px}
+.phone-lead{max-width:62ch;color:var(--muted);font-size:15px;line-height:1.45;margin:0 0 12px}
+.phone-hero .search{background:var(--soft);border:1px solid var(--line);border-radius:16px}
+.phone-board,.phone-guides,.phone-page{padding:12px 0 var(--space-6)}
+.phone-hero .search{margin-top:0}
+@media (max-width:700px){
+  .bf-banner a{font-size:13px;line-height:1.3;min-height:40px;padding:6px 0}
+  .phone-hero .search{flex-wrap:wrap}
+  .phone-hero .search .btn-primary{width:100%;height:44px}
+  .phone-hero .search input{height:44px;font-size:16px}
+}
+.phone-board-head{display:flex;justify-content:space-between;gap:var(--space-4);align-items:end;margin-bottom:var(--space-4)}
+.phone-board-head h2,.phone-page h1{letter-spacing:-.03em;line-height:1.15;font-size:28px}
+.phone-filters{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
+.phone-filter-row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.phone-filter-row span{font-size:13px;font-weight:700;color:var(--muted)}
+.phone-filter-row a,.storage-chip{text-decoration:none;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:999px;min-height:44px;display:inline-flex;align-items:center;padding:0 14px;font-size:14px;font-weight:650}
+.phone-filter-row a[aria-current="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.phone-drops{background:var(--buy);border-radius:16px;padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4)}
+.phone-drops ul{list-style:none;padding:0;margin:var(--space-2) 0 0;display:grid;gap:var(--space-2)}
+.phone-drops li{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline}
+.phone-drops a{font-weight:700;text-decoration:none}
+.phone-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-4)}
+.phone-card{background:var(--soft);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.phone-card-main{display:flex;flex-direction:column;gap:2px;text-decoration:none;padding:12px 12px 16px;color:inherit;height:100%}
+.phone-card-img,.model-photo{color:var(--muted)}
+.phone-card-img{height:128px;display:grid;place-items:center;background:var(--bg);border-radius:12px;overflow:hidden;margin-bottom:8px}
+.phone-card-img .img-missing,.model-photo .img-missing{min-height:100%}
+.phone-card-img img,.model-photo img{width:100%;height:100%;object-fit:contain}
+.phone-card-brand{margin:0;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.phone-card h3{margin:0 0 8px;font-size:16px;line-height:1.3;letter-spacing:-.02em}
+.phone-card-price{margin:auto 0 0;font-size:22px;letter-spacing:-.03em}
+.phone-card-price b{font-weight:750}
+.phone-card-meta,.phone-note,.phone-count,.phone-empty,.model-note{color:var(--muted);font-size:14px;line-height:1.45}
+.guide-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);list-style:none;padding:0;margin:0}
+.guide-links a{display:flex;align-items:flex-end;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:16px;text-decoration:none;font-weight:700;min-height:88px;line-height:1.3}
+.phone-filter-form{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:end;margin:var(--space-4) 0}
+.phone-filter-form label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+.phone-filter-form select{min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;color:var(--ink);background:var(--soft)}
+.model{padding:var(--space-5) 0 var(--space-7)}
+.model-hero{display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:var(--space-6);align-items:center}
+.model-photo{background:var(--soft);border:1px solid var(--line);border-radius:24px;aspect-ratio:1;display:grid;place-items:center;padding:var(--space-4)}
+.model-buybox h1{font-size:clamp(28px,3vw,40px);line-height:1.1;letter-spacing:-.03em;margin:4px 0 8px}
+.model-price{font-size:44px;line-height:1;font-weight:750;letter-spacing:-.04em;margin:0}
+.model-price-note{margin:8px 0 0;color:var(--muted)}
+.verdict{margin-top:var(--space-4);padding:12px 14px;border-radius:14px;background:var(--soft);border:1px solid var(--line);display:grid;gap:4px}
+.verdict b{font-size:16px}
+.verdict span{color:var(--muted);font-size:14px}
+.verdict-buy{background:var(--buy)}
+.verdict-wait{background:var(--wait)}
+.model-compare{display:inline-flex;margin-top:var(--space-3);font-weight:700;color:var(--brand)}
+.model-block{margin-top:var(--space-6)}
+.model-block h2{font-size:22px;letter-spacing:-.02em;margin:0 0 var(--space-3)}
+.storage-row{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.storage-chip{flex-direction:column;align-items:flex-start;justify-content:center;border-radius:16px;min-width:132px;padding:10px 14px;gap:2px}
+.storage-chip b{font-size:15px}
+.storage-chip span{font-size:13px;font-weight:650;color:var(--muted)}
+.storage-chip.is-on,.storage-chip[aria-current="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.storage-chip.is-on span,.storage-chip[aria-current="true"] span{color:#E7E2D8}
+.offer-table{list-style:none;padding:0;margin:0;display:grid;gap:var(--space-2)}
+.offer-table li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:12px 14px;min-height:64px}
+.offer-table .is-best{border-color:var(--brand);box-shadow:inset 3px 0 0 var(--brand)}
+.offer-shop{font-weight:700}
+.offer-price{font-size:20px;font-weight:750;letter-spacing:-.03em}
+.offer-oos{color:var(--muted);font-size:14px;font-weight:700}
+.guide-list{list-style:none;padding:0;margin:12px 0 20px;display:grid;gap:8px;counter-reset:guide}
+.guide-list li{display:flex;gap:12px;align-items:baseline;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px;counter-increment:guide}
+.guide-list li::before{content:counter(guide);font-weight:750;color:var(--brand);min-width:1.4em}
+.guide-list a{text-decoration:none;font-weight:700;margin-right:auto}
+.guide-list b{font-size:18px;letter-spacing:-.03em}
+@media (max-width:900px){
+  .phone-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .guide-links{grid-template-columns:1fr 1fr}
+  .model-hero{grid-template-columns:1fr}
+  .model-price{font-size:36px}
+}
+@media (max-width:400px){
+  .phone-lead{display:none}
+  .phone-hero h1{font-size:24px;line-height:1.15;margin-bottom:8px}
+  .phone-board-head h2{font-size:22px}
+  .phone-filters{margin-bottom:8px}
+  .phone-filter-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+  .phone-filter-row a,.phone-filter-row span{flex:none}
+}
+@media (max-width:390px){
+  .phone-grid,.guide-links{grid-template-columns:1fr}
+  .offer-table li{grid-template-columns:1fr auto}
+  .offer-table .btn,.offer-table .offer-oos{grid-column:1 / -1;justify-self:start}
+  .wrap{padding:0 16px}
+  .phone-hero h1{font-size:30px}
+}

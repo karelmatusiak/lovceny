@@ -417,7 +417,19 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         _render_404(root, tpl)
         pages += 1
 
+        from .main import guide_page, guides_page, phone_model_page, phones_page
+        from .phones import GUIDES, phone_models
+        call("/telefony", phones_page, request_for("/telefony"), db=db)
+        call("/pruvodce", guides_page, request_for("/pruvodce"))
+        for guide in GUIDES:
+            call(f"/pruvodce/{guide.slug}", guide_page, request_for(f"/pruvodce/{guide.slug}"), guide.slug, db=db)
+        for model in phone_models(db):
+            call(f"/telefon/{model.slug}", phone_model_page, request_for(f"/telefon/{model.slug}"), model.slug, db=db)
         for cat in CATEGORIES:
+            if cat.slug != "telefony":
+                book.add(f"/kategorie/{cat.slug}", "/telefony", 301)
+                book.add(f"/kategorie/{cat.slug}/*", "/telefony", 301, dynamic=True)
+                continue
             pages += _render_category(root, db, cat)
 
         public_rows = []

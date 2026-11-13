@@ -244,8 +244,9 @@ def _catalog_redirect(db, p: Product) -> str:
     if target is not None and target.catalog_hidden is not True:
         if not is_non_new(target.name or "", shop_category=target.category):
             return f"/produkt/{target.id}-{pslug(target)}"
-    cat = BY_SLUG.get(p.category_slug or "")
-    return f"/kategorie/{cat.slug}" if cat else "/"
+    if p.category_slug == "telefony":
+        return "/telefony"
+    return "/"
 
 
 def product_summary(p: Product):
@@ -414,25 +415,125 @@ def _drop_broken_home_images(featured, extras, popular):
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
-    from .offer_trust import use_cutoffs
-    use_cutoffs(db)
-    from .hero import home_board
-    from .images import has_working_image
-    from .popular import popular_picks
-    featured, extras, chips = home_board(db)
-    popular = popular_picks(db, limit=8)
-    featured, extras, popular = _drop_broken_home_images(featured, extras, popular)
-    deals = [r for r in real_deals(db, top=12)["buys"] if has_working_image(r.product.image_url)][:3]
-    cat_counts = listing_category_counts(db)
+    from .phones import BANDS, GUIDES, brands_in, buying_signal, phone_models
+    models = phone_models(db)
+    drops = []
+    for model in models:
+        verdict = buying_signal(model)
+        if verdict is not None and verdict.code == "buy":
+            drops.append((model, verdict))
+        if len(drops) == 3:
+            break
     return tpl.TemplateResponse(request, "index.html", {
-        "deals": deals,
-        "thin_history": price_history_thin(db),
-        "home_picks": [(h, False) for h in featured] + [(h, True) for h in extras],
-        "pick_chips": chips,
-        "popular": popular,
-        "cat_counts": cat_counts,
-        "landings": _home_landings(db),
+        "models": models[:8],
+        "drops": drops,
+        "brands": brands_in(models),
+        "bands": BANDS,
+        "guides": GUIDES,
+        "brand": "",
         "ld": [seo.website_ld(), seo.organization_ld()],
+    })
+
+
+def _phone_or_home(product: Product):
+    """Cizí kategorie na webu nezůstane. Data v databázi se nemažou."""
+    if product.category_slug and product.category_slug != "telefony":
+        return RedirectResponse("/", status_code=301)
+    from .categories import is_accessory_text
+    from .exclusions import is_excluded_brand
+    if product.category_slug == "telefony" and (
+        is_accessory_text(product.name or "") or is_excluded_brand(product.name or "")
+    ):
+        return RedirectResponse("/telefony", status_code=301)
+    return None
+
+
+@app.get("/telefony", response_class=HTMLResponse)
+def phones_page(request: Request, znacka: str = "", pasmo: str = "", db=Depends(get_db)):
+    from .phones import BANDS, brands_in, filter_models, phone_models
+    models = phone_models(db)
+    shown = filter_models(models, brand=znacka.strip(), band=pasmo.strip())
+    crumbs = [("Lovceny", "/"), ("Telefony", "/telefony")]
+    return tpl.TemplateResponse(request, "phones.html", {
+        "models": shown, "brands": brands_in(models), "bands": BANDS,
+        "brand": znacka.strip(), "band": pasmo.strip(), "crumbs": crumbs,
+        "canonical_path": "/telefony",
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/telefon/{slug}", response_class=HTMLResponse)
+def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = "", db=Depends(get_db)):
+    from .phones import find_model, select_variant
+    model = find_model(db, slug)
+    if model is None:
+        raise HTTPException(404)
+    products = select_variant(model, storage=pamet.strip(), color=barva.strip())
+    offers = []
+    points = []
+    for product in products:
+        for offer in model.offers:
+            if offer.product_id == product.id:
+                offers.append(offer)
+                points.extend(offer.points)
+    if not offers:
+        offers = list(model.offers)
+        points = [point for offer in offers for point in offer.points]
+    offers.sort(key=lambda offer: (not offer_is_buyable(offer), float(offer.price)))
+    buyable = [offer for offer in offers if offer_is_buyable(offer)]
+    shown = buyable[0] if buyable else (offers[0] if offers else None)
+    current = float(shown.price) if shown is not None and shown.price is not None else None
+    verdict = compute(points, current, getattr(shown, "original_price", None) if shown else None)
+    ranges = build_chart(points, verdict=verdict, live_price=current)
+    from .phones import anchor_product, phone_models, storage_deals
+    deals = storage_deals(model)
+    peers = [item for item in phone_models(db) if item.slug != model.slug and item.lowest is not None]
+    peers.sort(key=lambda item: abs(item.lowest - (model.lowest or item.lowest)))
+    compare_products = []
+    for item in [model, *peers[:2]]:
+        product = anchor_product(item)
+        if product is not None:
+            compare_products.append(product)
+    compare_href = ""
+    if len(compare_products) >= 2:
+        compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
+    crumbs = [("Lovceny", "/"), ("Telefony", "/telefony"), (model.name, f"/telefon/{model.slug}")]
+    return tpl.TemplateResponse(request, "phone_model.html", {
+        "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
+        "shown_price": current, "buyable": bool(buyable), "verdict": verdict, "v": verdict,
+        "storage_deals": deals, "compare_href": compare_href,
+        "chart_ranges": ranges, "chart_note": verdict_note(verdict, ranges), "crumbs": crumbs,
+        "canonical_path": f"/telefon/{model.slug}", "get_shop": get_shop,
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/pruvodce", response_class=HTMLResponse)
+def guides_page(request: Request):
+    from .phones import GUIDES
+    crumbs = [("Lovceny", "/"), ("Průvodci", "/pruvodce")]
+    return tpl.TemplateResponse(request, "guides.html", {
+        "guides": GUIDES, "crumbs": crumbs, "canonical_path": "/pruvodce",
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/pruvodce/{slug}", response_class=HTMLResponse)
+def guide_page(request: Request, slug: str, db=Depends(get_db)):
+    from .phones import GUIDE_BY_SLUG, guide_models, phone_models
+    guide = GUIDE_BY_SLUG.get(slug)
+    if guide is None:
+        raise HTTPException(404)
+    models = guide_models(guide, phone_models(db))
+    columns = []
+    if guide.versus:
+        for brand in guide.brands:
+            columns.append((brand, [model for model in models if model.brand == brand]))
+    crumbs = [("Lovceny", "/"), ("Průvodci", "/pruvodce"), (guide.title, f"/pruvodce/{guide.slug}")]
+    return tpl.TemplateResponse(request, "guide.html", {
+        "guide": guide, "models": models, "columns": columns, "crumbs": crumbs,
+        "canonical_path": f"/pruvodce/{guide.slug}",
+        "ld": [seo.breadcrumb_ld(crumbs)],
     })
 
 
@@ -450,7 +551,10 @@ def kontakt_get():
 
 @app.get("/slevy", response_class=HTMLResponse)
 def deals_page(request: Request, db=Depends(get_db)):
+    from .phones import is_public_phone
     data = real_deals(db)
+    for key in ("buys", "fakes"):
+        data[key] = [row for row in data.get(key, []) if getattr(row, "product", None) and is_public_phone(row.product)]
     assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
     # Karty a „blízko minima“ jsou jen prázdný stav. Když Kupuj existuje, šablona je nečte
     # a jejich selectinload historie by zbytečně držel TTFB.
@@ -626,6 +730,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     p = db.get(Product, pid)
     if not p:
         raise HTTPException(404)
+    away = _phone_or_home(p)
+    if away is not None:
+        return away
     from .exclusions import is_excluded_brand
     if is_excluded_brand(p.name or ""):
         return RedirectResponse(_catalog_redirect(db, p), status_code=301)
@@ -1127,16 +1234,15 @@ CAT_VIEWS = {
 
 @app.get("/kategorie", response_class=HTMLResponse)
 def categories_index(request: Request, db=Depends(get_db)):
-    counts = listing_category_counts(db)
-    crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
-    return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
-                                                             "ld": [seo.breadcrumb_ld(crumbs)]})
+    return RedirectResponse("/telefony", status_code=301)
 
 
 @app.get("/kategorie/{slug}", response_class=HTMLResponse)
 @app.get("/kategorie/{slug}/{view}", response_class=HTMLResponse)
 def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
              znacka: str = "", od: str = "", do: str = "", skladem: str = "", strana: str = ""):
+    if slug != "telefony":
+        return RedirectResponse("/telefony", status_code=301)
     c = _cat_or_404(slug)
     if view not in CAT_VIEWS:
         raise HTTPException(404)

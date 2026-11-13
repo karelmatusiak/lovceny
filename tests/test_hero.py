@@ -120,20 +120,15 @@ def test_home_renders_hero_picks():
     clear_cache()
     init_db()
     db = SessionLocal()
-    _seed(db, name="Hero na homepage", prices=[3000] * 9 + [2100],
-          category_slug="notebooky", category="Notebooky")
+    _seed(db, name="Apple iPhone 16 128GB", prices=[3000] * 9 + [2100],
+          category_slug="telefony", category="Mobilní telefony")
     html = TestClient(app).get("/").text
-    assert "Teď stojí za to" in html
-    assert "hero-picks" in html
-    assert "Hero na homepage" in html
-    assert 'class="hero-pick-cat">Notebooky' in html
-    assert html.find('action="/hledat"') < html.find('class="hero-picks"')
+    assert "Nejnižší cena hned na první pohled" in html
+    assert "phone-card" in html
+    assert "Apple iPhone 16" in html
+    assert "Notebooky" not in html
+    assert html.find('action="/hledat"') < html.find("phone-grid")
     assert "Naposledy přidané" not in html
-    assert "Nejlevněji v" in html and "srovnáno" in html
-    assert 'rel="nofollow sponsored noopener"' in html
-    assert 'href="/go/' in html
-    assert 'target="_blank"' in html
-    assert "hero-art" not in html
     db.close()
 
 

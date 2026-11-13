@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img %}
+{% block title %}Mobilní telefony – nejnižší ceny{% if brand %} {{ brand }}{% endif %} | Lovceny{% endblock %}
+{% block description %}Telefony v českých e-shopech seřazené podle nejnižší ceny. Filtr podle značky a cenového pásma.{% endblock %}
+{% block body %}
+<div class="wrap phone-page">
+  <p class="eyebrow">Katalog</p>
+  <h1>Mobilní telefony</h1>
+  <p class="phone-lead">Každý řádek je jeden model. Úložiště a barvu vybereš na stránce modelu. Cena je nejnižší nabídka, kterou teď máme.</p>
+  <form class="phone-filter-form" method="get" action="/telefony">
+    <label>Značka
+      <select name="znacka">
+        <option value="">Všechny</option>
+        {% for name in brands %}<option value="{{ name }}"{% if name == brand %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Cena
+      <select name="pasmo">
+        <option value="">Všechna pásma</option>
+        {% for slug, label, low, high in bands %}<option value="{{ slug }}"{% if slug == band %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary btn-sm" type="submit">Filtrovat</button>
+  </form>
+  <p class="phone-count">{{ cz_count(models|length, "model", "modely", "modelů") }}</p>
+  {% if models %}
+  <div class="phone-grid">
+    {% for model in models %}
+    <article class="phone-card">
+      <a class="phone-card-main" href="/telefon/{{ model.slug }}">
+        {% if model.brand %}<p class="phone-card-brand">{{ model.brand }}</p>{% endif %}
+        <h3>{{ model.name }}</h3>
+        <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
+        <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+        <div class="phone-card-img">{{ shop_img(model.image, 160, alt="", sizes="(min-width:960px) 180px, 40vw") }}</div>
+      </a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="phone-empty">V tomhle výběru teď žádný telefon nemáme. Zkus jiné pásmo nebo <a href="/telefony">celý katalog</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}
