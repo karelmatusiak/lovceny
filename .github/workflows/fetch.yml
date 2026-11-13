@@ -88,12 +88,22 @@ jobs:
             tests/test_feed.py \
             tests/test_dognet.py \
             tests/test_ehub.py
-      - name: Stáhnout ceny
-        # Prázdný secret u soukromého feedu obchod přeskočí. Veřejné defaulty v kódu zůstávají.
-        id: download
+      - name: Stáhnout databázi z R2
+        id: r2
         if: steps.gate.outputs.skip != 'true'
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store download --out db/lovceny.db --counts db/counts-before.txt
+      - name: Stáhnout ceny
+        # Prázdný secret u soukromého feedu obchod přeskočí. Veřejné defaulty v kódu zůstávají.
+        # Databáze je SQLite stažená z R2. Neon se nevolá.
+        id: download
+        if: steps.gate.outputs.skip != 'true' && steps.r2.outcome == 'success'
+        env:
+          DATABASE_URL: sqlite:///db/lovceny.db
           ALZA_FEED_URL: ${{ secrets.ALZA_FEED_URL }}
           DATART_FEED_URL: ${{ secrets.DATART_FEED_URL }}
           FEED_URLS: ${{ secrets.FEED_URLS }}
@@ -126,6 +136,39 @@ jobs:
             args+=(--create-cap "$cap")
           fi
           python fetch_prices.py "${args[@]}"
+      - name: Nahrát databázi do R2
+        if: steps.download.outcome == 'success' && github.event.inputs.dry_run != 'true' && github.event.client_payload.dry_run != 'true'
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store publish --path db/lovceny.db --before db/counts-before.txt
+      - name: Vygenerovat web ze SQLite
+        if: steps.download.outcome == 'success' && github.event.inputs.dry_run != 'true' && github.event.client_payload.dry_run != 'true'
+        env:
+          DATABASE_URL: sqlite:///db/lovceny.db
+          PUBLIC_URL: https://lovceny.cz
+          LOVCENY_SKIP_DATA_FIXES: "1"
+          FEED_URLS: ${{ secrets.FEED_URLS }}
+        run: python build_static.py --out dist --report build-report.json
+      - name: Nasadit na Cloudflare Pages
+        if: github.ref == 'refs/heads/main' && steps.download.outcome == 'success' && github.event.inputs.dry_run != 'true' && github.event.client_payload.dry_run != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Chybí CLOUDFLARE_API_TOKEN nebo CLOUDFLARE_ACCOUNT_ID, nasazení přeskakuji."
+            exit 0
+          fi
+          cd dist
+          out=$(npx --yes wrangler@4 pages deploy . --project-name=lovceny --branch=main --commit-dirty)
+          printf '%s\n' "$out"
+          if [ -d functions ] && ! printf '%s\n' "$out" | grep -q 'Uploading Functions bundle'; then
+            echo "dist/functions existuje, ale Wrangler nenahrál Functions bundle." >&2
+            exit 1
+          fi
       - name: Hlídání obchodů (GitHub issue při blokaci / starých cenách)
         if: always()
         env:

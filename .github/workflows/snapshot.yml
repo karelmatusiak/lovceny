@@ -1,29 +1,15 @@
 name: Snapshot katalogu
+# Kanónická databáze je lovceny.db v R2. Tenhle workflow už Neon nečte
+# a nic nenahrává. Zůstává, aby starý odkaz v Actions nespadl na chybějící soubor.
 on:
-  # Před denním statickým webem (ten běží v 6:30 UTC). Jen main, nikdy pull request.
-  schedule:
-    - cron: "15 6 * * *"
   workflow_dispatch: {}
 permissions:
   contents: read
-  actions: write
 jobs:
   snapshot:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip }
-      - run: pip install -r requirements.txt
-      - name: Exportovat snapshot
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python -m lovceny.snapshot --out snapshot/lovceny.sqlite
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lovceny-snapshot
-          path: snapshot/lovceny.sqlite
-          if-no-files-found: error
-          retention-days: 14
+      - name: Snímek z Neonu se nedělá
+        run: echo "Databáze je soubor lovceny.db v R2. Neon se nevolá."
