@@ -1,7 +1,6 @@
 name: Stažení cen
 on:
-  schedule:
-    - cron: "17 5,11,17 * * *"   # záloha, 3× denně (UTC). Primární budík je repository_dispatch.
+  # Jediné hodiny jsou cron-job.org (repository_dispatch). GitHub schedule tu není.
   workflow_dispatch:
     inputs:
       dry_run:
@@ -35,9 +34,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Přeskočit, pokud už nedávno doběhlo
         id: gate
-        # Ruční Run workflow a budík s client_payload.force=true vždy stáhnou.
-        # Cron a běžný externí budík ne, když úspěch není starší než 3 h.
-        if: github.event_name != 'workflow_dispatch' && github.event.client_payload.force != 'true' && github.event.client_payload.dry_run != 'true'
+        # Ruční Run workflow stáhne vždy. Běžný repository_dispatch ne, když úspěch
+        # není starší než 3 h.
+        if: github.event_name != 'workflow_dispatch' && github.event.client_payload.dry_run != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -136,8 +135,3 @@ jobs:
             exit 0
           fi
           python shop_health_issues.py health.json
-  site:
-    needs: fetch
-    if: always() && needs.fetch.outputs.ran == 'true' && github.event.inputs.dry_run != true && github.event.client_payload.dry_run != 'true'
-    uses: ./.github/workflows/static.yml
-    secrets: inherit
