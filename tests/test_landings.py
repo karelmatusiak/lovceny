@@ -93,7 +93,7 @@ def test_series_and_price_caps_need_real_stock(client_db):
     vac_page = client.get("/kategorie/vysavace", follow_redirects=False)
     assert vac_page.status_code == 301 and vac_page.headers["location"] == "/telefony"
     home = client.get("/").text
-    assert "Nejvíc nabízené modely" in home
+    assert "Potvrzená cena" in home
     assert 'href="/pruvodce/' in home
     assert 'href="/kategorie/vysavace/do/5000"' not in home
     assert "SearchAction" not in home

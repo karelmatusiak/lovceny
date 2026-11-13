@@ -51,7 +51,7 @@ def test_single_shop_coverage_copy(client_db):
     about = c.get("/o-nas").text
     assert "Nepokrýváme celý trh" in about
     home = c.get("/").text
-    assert "Nejvíc nabízené modely" in home
+    assert "Potvrzená cena" in home
     assert "Pokrytí roste" not in home
 
 
@@ -73,7 +73,7 @@ def test_quiet_slevy_dne_kept(client_db):
     css = open("lovceny/static/app.css", encoding="utf8").read()
     assert "expect-note-quiet" in css and "teaser-empty-quiet" in css
     index = open("lovceny/templates/index.html", encoding="utf8").read()
-    assert "Nejvíc nabízené modely" in index
+    assert "Potvrzená cena" in index
     assert "ukážeme nejlepší skutečné slevy" not in index
 
 

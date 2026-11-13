@@ -25,8 +25,8 @@
 {% macro guide_rows(rows) %}
 <ol class="guide-list">
   {% for model in rows %}
-  {% set offer = model.offers[0] if model.offers else none %}
-  {% set shop = get_shop(offer.shop) if offer else none %}
+  {% set offer = model.price_offer %}
+  {% set shop = get_shop(model.price_shop) if model.price_shop else none %}
   <li class="{% if loop.index <= 3 %}is-top{% endif %}">
     <span class="guide-rank">{{ loop.index }}</span>
     <a class="guide-photo" href="/telefon/{{ model.slug }}" tabindex="-1" aria-hidden="true">{% if model.image %}{{ shop_img(model.image, 72, alt="") }}{% else %}{{ img_missing() }}{% endif %}</a>

@@ -70,7 +70,7 @@ def test_slevy_page_and_home_teaser():
     home = c.get("/").text
     assert "Slevy dne" not in home
     assert 'href="/slevy"' in home and "Jak vyděláváme" in home
-    assert "Nejvíc nabízené modely" in home
+    assert "Potvrzená cena" in home
 
 
 def test_slevy_empty_state(monkeypatch):

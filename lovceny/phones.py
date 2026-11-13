@@ -86,6 +86,9 @@ class PhoneModel:
     shops: int = 0
     image: str | None = None
     disputed: set[str] = field(default_factory=set)
+    price_shops: int = 0
+    price_shop: str | None = None
+    price_offer: Offer | None = None
 
     @property
     def storages(self) -> list[str]:
@@ -182,13 +185,17 @@ def is_phone_category(slug: str | None) -> bool:
     return slug == PHONE
 
 
-_TABLET_WORD = re.compile(r"\b(ipad|tablet)\b", re.I)
+_TABLET_WORD = re.compile(r"\b(ipad|tablet|tab)\b", re.I)
+_TABLET_LINE = re.compile(r"\bdrive\s+1[0-3]\b", re.I)
 _INCH = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:\"|″|”|''|palc)", re.I)
 
 
 def is_tablet_text(name: str) -> bool:
-    """Tablet v kategorii telefonů na web nepatří. Skládací telefon do 9\" ano."""
-    if _TABLET_WORD.search(name or ""):
+    """Tablet v kategorii telefonů na web nepatří. Skládací telefon do 9\" ano.
+
+    Kruger&Matz Drive 10–13 je řada tabletů, i když feed napíše 6,56\" a „smartphone“.
+    """
+    if _TABLET_WORD.search(name or "") or _TABLET_LINE.search(name or ""):
         return True
     for match in _INCH.finditer(name or ""):
         size = float(match.group(1).replace(",", "."))
@@ -525,7 +532,16 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
         priced = [offer for offer in offers if product_storage.get(offer.product_id, "") not in disputed]
         buyable = [offer for offer in priced if offer_is_buyable(offer)]
         pool = buyable or priced
-        lowest = min((float(offer.price) for offer in pool), default=None)
+        winner = min(pool, key=lambda offer: float(offer.price)) if pool else None
+        lowest = float(winner.price) if winner is not None else None
+        price_label = product_storage.get(winner.product_id, "") if winner is not None else ""
+        same_price = [
+            offer for offer in pool
+            if product_storage.get(offer.product_id, "") == price_label
+        ] if winner is not None else []
+        price_shops = len({offer.shop for offer in same_price})
+        price_shop = winner.shop if winner is not None else None
+        in_stock = any(offer_is_buyable(offer) for offer in same_price)
         image = next((product.image_url for product in group if product.image_url), None)
         brand = next((guess_brand(product.name or "") for product in group if guess_brand(product.name or "")), None)
         if brand is None and any("iphone" in (product.name or "").casefold() for product in group):
@@ -540,10 +556,13 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
             products=group,
             offers=sorted(offers, key=lambda offer: (not offer_is_buyable(offer), float(offer.price))),
             lowest=lowest,
-            in_stock=bool(buyable),
+            in_stock=in_stock,
             shops=len({offer.shop for offer in offers}),
             image=image,
             disputed=disputed,
+            price_shops=price_shops,
+            price_shop=price_shop,
+            price_offer=winner,
         ))
     models.sort(key=lambda model: (-model.shops, model.lowest if model.lowest is not None else 10**12, model.name.casefold()))
     return models

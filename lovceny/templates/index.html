@@ -13,24 +13,22 @@
       <button class="btn btn-primary" type="submit">Hledat</button>
     </form>
   </div>
-  {% if models %}
-  {% set featured = models[0] %}
-  <a class="hero-feature" href="/telefon/{{ featured.slug }}">
-    <div class="phone-card-img">{% if featured.image %}{{ shop_img(featured.image, 120, priority=true, alt="", sizes="96px") }}{% else %}{{ img_missing() }}{% endif %}</div>
-    <div>
-      <p class="eyebrow">Nejnižší teď</p>
-      <strong>{{ featured.name }}</strong>
-      <b>{% if featured.lowest is not none %}{{ featured.lowest|czk }}{% else %}Cenu zjišťujeme{% endif %}</b>
-    </div>
-  </a>
-  {% endif %}
+  <aside class="hero-trust" aria-label="Jak ceny hlídáme">
+    <p class="eyebrow">Jak to hlídáme</p>
+    <ul>
+      <li>{{ cz_count(model_count, "model", "modely", "modelů") }}</li>
+      <li>{{ cz_count(shop_count, "obchod", "obchody", "obchodů") }}</li>
+      <li>Cenu kontrolujeme denně</li>
+      <li>Nikdo neplatí za pořadí</li>
+    </ul>
+  </aside>
 </div></header>
 
 <section class="phone-board" aria-labelledby="phone-board-h"><div class="wrap">
   <div class="phone-board-head">
     <div>
-      <p class="eyebrow">Nejvíc nabízené modely</p>
-      <h2 id="phone-board-h">Nejnižší cena hned na první pohled</h2>
+      <p class="eyebrow">Potvrzená cena</p>
+      <h2 id="phone-board-h">Aspoň dva obchody, stejné úložiště</h2>
     </div>
     <a class="phone-more" href="/telefony">Všechny telefony</a>
   </div>

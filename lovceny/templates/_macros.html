@@ -74,7 +74,7 @@
     <div class="phone-card-img">{% if model.image %}{{ shop_img(model.image, 160, priority=priority, alt="", sizes="(min-width:960px) 220px, 70vw") }}{% else %}{{ img_missing() }}{% endif %}</div>
     <h3>{{ model.name }}</h3>
     <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
-    <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+    <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.price_shops %} · {{ cz_count(model.price_shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
   </a>
 </article>
 {%- endmacro %}

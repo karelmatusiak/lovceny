@@ -417,20 +417,23 @@ def _drop_broken_home_images(featured, extras, popular):
 def home(request: Request, db=Depends(get_db)):
     from .phones import BANDS, GUIDES, brands_in, buying_signal, phone_models
     models = phone_models(db)
+    confirmed = [model for model in models if model.price_shops >= 2 and model.lowest is not None]
     drops = []
-    for model in models:
+    for model in confirmed:
         verdict = buying_signal(model)
         if verdict is not None and verdict.code == "buy":
             drops.append((model, verdict))
         if len(drops) == 3:
             break
     return tpl.TemplateResponse(request, "index.html", {
-        "models": models[:8],
+        "models": confirmed[:8],
         "drops": drops,
         "brands": brands_in(models),
         "bands": BANDS,
         "guides": GUIDES,
         "brand": "",
+        "model_count": len(models),
+        "shop_count": len({offer.shop for model in models for offer in model.offers}),
         "ld": [seo.website_ld(), seo.organization_ld()],
     })
 
@@ -627,8 +630,9 @@ def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
     results = []
     from .categories import is_non_new
     from .exclusions import is_excluded_brand
+    from .phones import is_tablet_text
     for p in products:
-        if is_excluded_brand(p.name or "") or is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
+        if is_excluded_brand(p.name or "") or is_accessory_text(p.name or "", p.category) or is_tablet_text(p.name or "") or is_non_new(p.name, shop_category=p.category):
             continue
         best, v = product_summary(p)
         # Do výsledků i OOS (poslední cena) – bez CTA „Do obchodu“ v šabloně.
@@ -977,7 +981,7 @@ def _phone_compare_rows(db, products: list) -> list[dict] | None:
         if model is None or model.slug in seen:
             continue
         seen.add(model.slug)
-        offer = next((item for item in model.offers if offer_is_buyable(item)), None)
+        offer = model.price_offer
         if offer is None and model.offers:
             offer = model.offers[0]
         rows.append({

@@ -38,12 +38,12 @@
       </div>
       <div class="pcmp-row">
         <div class="pcmp-label">Počet obchodů</div>
-        {% for row in rows %}<div class="pcmp-cell">{{ row.model.shops }}</div>{% endfor %}
+        {% for row in rows %}<div class="pcmp-cell">{{ row.model.price_shops }}</div>{% endfor %}
       </div>
       <div class="pcmp-row">
         <div class="pcmp-label">Úložiště</div>
         {% for row in rows %}
-        <div class="pcmp-cell">{% if row.deals %}{% for deal in row.deals %}<span class="pcmp-store">{{ deal.label }} · {{ deal.price|czk }}</span>{% endfor %}{% else %}–{% endif %}</div>
+        <div class="pcmp-cell">{% if row.deals %}{% for deal in row.deals %}<span class="pcmp-store">{% if deal.unconfirmed %}{{ deal.label }} · nepotvrzeno{% elif deal.price is not none %}{{ deal.label }} · {{ deal.price|czk }}{% else %}{{ deal.label }}{% endif %}</span>{% endfor %}{% else %}–{% endif %}</div>
         {% endfor %}
       </div>
       <div class="pcmp-row">

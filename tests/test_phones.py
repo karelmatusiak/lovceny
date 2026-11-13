@@ -72,6 +72,32 @@ def test_two_shops_far_apart_do_not_claim_a_lowest_price():
         db.close()
 
 
+def test_kruger_drive_11_is_a_tablet_everywhere():
+    from lovceny.phones import GUIDE_BY_SLUG, guide_models, is_tablet_text
+    name = "Smartphone Kruger&Matz Drive 11 6,56'' 4/64 Gb Lte Nfc eSIM 6500 mAh IP68"
+    assert is_tablet_text(name)
+    assert is_tablet_text('Kruger&Matz Drive 11 6 56" 4/64 Gb Lte eSIM 6500 mAh IP68')
+    assert not is_tablet_text('Apple iPhone 16 6,1" 128GB černá')
+    init_db()
+    db = SessionLocal()
+    try:
+        tablet = _phone(db, name, 3351, shop="allegro", slug="drive-11")
+        _phone(db, "Samsung Galaxy A16 128GB černá", 3930, shop="alza", slug="a16")
+        models = group_phones(db.query(Product).all())
+        assert all("Kruger" not in model.name and "Drive" not in model.name for model in models)
+        guide = guide_models(GUIDE_BY_SLUG["nejlepsi-do-15-tisic"], models)
+        assert all("Drive" not in model.name for model in guide)
+        client = TestClient(app)
+        home = client.get("/").text
+        guide_html = client.get("/pruvodce/nejlepsi-do-15-tisic").text
+        found = client.get("/hledat?q=Kruger").text
+        assert "Kruger" not in home and "Drive 11" not in guide_html and "Drive 11" not in found
+        assert "/telefon/" + "drive" not in client.get("/sitemap.xml").text
+        assert client.get(f"/produkt/{tablet.id}", follow_redirects=False).headers["location"] == "/telefony"
+    finally:
+        db.close()
+
+
 def test_offer_rows_keep_one_cheapest_per_shop():
     init_db()
     db = SessionLocal()
@@ -85,6 +111,31 @@ def test_offer_rows_keep_one_cheapest_per_shop():
         assert [row["offer"].shop for row in rows] == ["tera", "alza"]
         assert rows[0]["offer"].price == 18000
         assert rows[0]["color"] == ""
+    finally:
+        db.close()
+
+
+def test_card_shop_count_matches_the_shown_price():
+    init_db()
+    db = SessionLocal()
+    try:
+        _phone(db, "Apple iPhone Air 256GB černá", 22227, shop="tera", slug="air-256")
+        _phone(db, "Apple iPhone Air 512GB černá", 28341, shop="xm", slug="air-512")
+        _phone(db, "Apple iPhone Air 1TB zlatá", 40490, shop="istyle", slug="air-1tb")
+        model = group_phones(db.query(Product).all())[0]
+        assert model.lowest == 22227
+        assert model.price_shops == 1
+        assert model.shops == 3
+        client = TestClient(app)
+        catalog = client.get("/telefony").text
+        card = catalog.split("iPhone Air", 1)[1].split("</article>", 1)[0]
+        assert "1\xa0obchod" in card
+        assert "3\xa0obchody" not in card
+        home = client.get("/").text
+        assert "Nejnižší teď" not in home
+        assert "22\xa0227" not in home
+        assert "Cenu kontrolujeme denně" in home
+        assert "Nikdo neplatí za pořadí" in home
     finally:
         db.close()
 
@@ -134,7 +185,9 @@ def test_public_site_hides_other_categories_and_accessories():
         client = TestClient(app)
         home = client.get("/")
         assert home.status_code == 200
-        assert "Samsung Galaxy A55" in home.text
+        catalog = client.get("/telefony").text
+        assert "Samsung Galaxy A55" in catalog
+        assert "Samsung Galaxy A55" not in home.text
         assert "IdeaPad" not in home.text
         assert "Pouzdro" not in home.text
         assert "Repas" not in home.text

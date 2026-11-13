@@ -144,7 +144,9 @@ def test_excluded_brands_stay_out_of_import_listing_and_sitemap(client_db):
 
 def test_category_counts_use_the_listing_filter(client_db):
     client, db, make = client_db
-    make([8990], name="Samsung Galaxy A55 128GB", category="telefony")
+    a55 = make([8990], name="Samsung Galaxy A55 128GB", category="telefony")
+    db.add(Offer(product=a55, shop="alza", url="https://www.alza.cz/a55-count", price=9100, status="ok", in_stock=True))
+    db.commit()
     make([299], name="Samsung Galaxy A55 silikonový kryt", category="telefony")
     make([], name="Samsung Galaxy A35 bez ceny", category="telefony")
     make([24990], name="Gigabyte GAMING A16 PRO", category="notebooky")
@@ -153,7 +155,7 @@ def test_category_counts_use_the_listing_filter(client_db):
     listing = client.get("/kategorie/telefony").text
     total = re.search(r"z (\d+)\s", listing.replace("\xa0", " "))
     assert total and total.group(1) == "1"
-    assert "Nejvíc nabízené modely" in home
+    assert "Potvrzená cena" in home
     assert "Galaxy A55" in home
     assert "1\xa0produkt" not in home
     assert index.status_code == 301 and index.headers["location"] == "/telefony"
