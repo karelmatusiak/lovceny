@@ -79,7 +79,8 @@ class FetchStats:
 
 
 def _aware(d: datetime | None) -> datetime | None:
-    return d if d is None or d.tzinfo else d.replace(tzinfo=timezone.utc)
+    from .db import as_utc
+    return as_utc(d)
 
 
 def monitored_shops():

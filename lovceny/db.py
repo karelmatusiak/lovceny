@@ -1,6 +1,38 @@
 import os
-from sqlalchemy import create_engine
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, TypeDecorator, create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+
+
+def as_utc(value):
+    """Naivní čas ze SQLite je UTC. Řetězec i aware hodnota se sjednotí na UTC."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if not isinstance(value, datetime):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+class UtcDateTime(TypeDecorator):
+    """Jedno místo: každý čas načtený z databáze je aware UTC.
+
+    SQLite část řádků uloží bez zóny a část s posunem. Porovnání těch dvou
+    jinak spadne (offset-naive vs offset-aware).
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return as_utc(value)
+
+    def process_result_value(self, value, dialect):
+        return as_utc(value)
 
 
 def _url() -> str:
