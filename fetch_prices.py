@@ -185,7 +185,7 @@ def main(argv=None):
             checkpoint()
     for s in SHOPS.values():
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
-            log.info("%s: feed URL není nastaven (%s) – nabídky zůstávají 'cena bude doplněna'", s.name, s.feed_url_env)
+            log.info("%s: feed URL není nastavená (%s), obchod přeskakuji", s.name, s.feed_url_env or s.slug)
 
     # Kryty a pouzdra, které už v DB visí na sluchátkách nebo telefonech.
     try:

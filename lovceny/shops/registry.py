@@ -7,12 +7,50 @@ status (výsledek testu z 14. 10. 2026):
   ok       – funguje
   blocked  – obchod vrací ochranu proti botům (Cloudflare/F5/DataDome). NEOBCHÁZÍME.
 """
+import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 from .feed import ALLEGRO_TD_PAGE_CAP, ALLEGRO_TD_QUERIES, ALLEGRO_TD_TOTAL_CAP, strip_junk_query
+
+log = logging.getLogger("lovceny.shops")
+_CACHE_MISS = object()
+_feed_urls_raw: object = _CACHE_MISS
+_feed_urls_map: dict[str, str] = {}
+
+
+def feed_urls_map() -> dict[str, str]:
+    """JSON z FEED_URLS: {\"ISTYLE_FEED_URL\": \"https://…\"}.
+
+    Neplatný JSON se zaloguje bez hodnoty a bere se jako prázdná mapa.
+    """
+    global _feed_urls_raw, _feed_urls_map
+    raw = os.environ.get("FEED_URLS")
+    if raw == _feed_urls_raw:
+        return _feed_urls_map
+    _feed_urls_raw = raw
+    if raw is None or not raw.strip():
+        _feed_urls_map = {}
+        return _feed_urls_map
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        log.error("FEED_URLS není platný JSON, feedy bez vlastní proměnné přeskakuji")
+        _feed_urls_map = {}
+        return _feed_urls_map
+    if not isinstance(data, dict):
+        log.error("FEED_URLS není JSON objekt, feedy bez vlastní proměnné přeskakuji")
+        _feed_urls_map = {}
+        return _feed_urls_map
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+    _feed_urls_map = out
+    return out
 
 
 @dataclass
@@ -54,28 +92,36 @@ class Shop:
         return u
     search_note: str = ""
 
+    def _resolved_feed(self) -> tuple[str, str]:
+        """(url, zdroj). Zdroj je env, json, default, nebo prázdný řetězec.
+
+        Vlastní proměnná má přednost. Pak klíč se stejným jménem v FEED_URLS.
+        Pak veřejný default v extra. Jinak nic a fetch obchod přeskočí.
+        """
+        if not self.feed_url_env:
+            return "", ""
+        env = os.environ.get(self.feed_url_env)
+        if env is not None and env.strip():
+            return env.strip(), "env"
+        mapped = feed_urls_map().get(self.feed_url_env, "")
+        if mapped:
+            return mapped, "json"
+        default = (self.extra.get("feed_url_default") or "").strip()
+        if default:
+            return default, "default"
+        return "", ""
+
     @property
     def feed_url(self) -> str:
-        """URL feedu z env; pokud chybí, použije se extra[feed_url_default] (veřejné Heureka feedy)."""
-        if not self.feed_url_env:
-            return ""
-        env = os.environ.get(self.feed_url_env)
-        # Empty string (e.g. unset GitHub Actions secret) must not block feed_url_default.
-        if env is not None and env.strip():
-            return env.strip()
-        return (self.extra.get("feed_url_default") or "").strip()
+        return self._resolved_feed()[0]
 
     def feed_sources(self) -> list[str]:
-        """Primární URL a případná veřejná záloha. Env override zálohu nepoužije."""
-        primary = self.feed_url
+        """Primární URL a případná veřejná záloha. Vlastní URL zálohu nepoužije."""
+        primary, source = self._resolved_feed()
         if not primary:
             return []
-        explicit = False
-        if self.feed_url_env:
-            env = os.environ.get(self.feed_url_env)
-            explicit = bool(env and env.strip())
         out = [primary]
-        if not explicit:
+        if source == "default":
             fb = (self.extra.get("feed_url_fallback") or "").strip()
             if fb and fb not in out:
                 out.append(fb)
@@ -222,23 +268,19 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
     Shop("istyle", "iStyle", ["istyle.cz"], source="feed", status="ok", color="#000000",
          note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
          search_note="Hledáme v importovaném feedu (DB).",
-         feed_url_env="ISTYLE_FEED_URL", ehub_bid="92ecd9a4",
-         extra={"feed_url_default": "https://storage.feedyio.com/istyle-cz.myshopify.com/68b6d626f576022fbe107ccf.xml"}),
+         feed_url_env="ISTYLE_FEED_URL", ehub_bid="92ecd9a4"),
     Shop("sencor", "Sencor", ["sencor.cz"], source="feed", status="ok", color="#E30613",
          note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
          search_note="Hledáme v importovaném feedu (DB).",
-         feed_url_env="SENCOR_FEED_URL", ehub_bid="67b5afc3",
-         extra={"feed_url_default": "https://intranet.fastplus.sk/easyfeed/easyfeed/cz/heureka_RF4xDM0vDlB9/OUT/sencor_heureka.xml"}),
+         feed_url_env="SENCOR_FEED_URL", ehub_bid="67b5afc3"),
     Shop("xm", "XM.cz", ["xm.cz"], source="feed", status="ok", color="#1565C0",
          note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
          search_note="Hledáme v importovaném feedu (DB).",
-         feed_url_env="XM_FEED_URL", ehub_bid="0ff74973",
-         extra={"feed_url_default": "https://xm.cz/feed/25/fbae531dd043143e1e6f08e3025781c1f334cb9f"}),
+         feed_url_env="XM_FEED_URL", ehub_bid="0ff74973"),
     Shop("evolveo", "EVOLVEO", ["eshop.evolveo.cz", "evolveo.cz"], source="feed", status="ok", color="#5FB232",
          note="Ceny z oficiálního Heureka XML feedu; odkazy přes eHUB (affiliate).",
          search_note="Hledáme v importovaném feedu (DB).",
-         feed_url_env="EVOLVEO_FEED_URL", ehub_bid="f89ce7c7",
-         extra={"feed_url_default": "https://feeds.mergado.com/evolveo-cz-heureka-cz-cz-ehub-affiliate-31bf20ac5bdad01b32f5bc782bcfb82e.xml"}),
+         feed_url_env="EVOLVEO_FEED_URL", ehub_bid="f89ce7c7"),
     Shop("electronicstar", "Electronic-star", ["electronic-star.cz", "elestar.eu"], source="feed", status="ok",
          color="#E4572E",
          note="Ceny z Heureka XML feedu (Dognet); odkazy přes Dognet.",
@@ -257,14 +299,12 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="Ceny z XML feedu Dyson (Dognet); odkazy přes Dognet.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="DYSON_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://api.tradedoubler.com/1.0/products.xml;page=1;pageSize=100;fid=50990?token=0BF566CB031EDE04D2B0CE7B72A50F5B081B0944",
-                "dognet_campaign": "429"}),
+         extra={"dognet_campaign": "429"}),
     Shop("allegro", "Allegro", ["allegro.cz"], source="feed", status="ok", color="#FF5A00",
          note="Ceny z feedu Dognet/TradeDoubler; odkazy jdou přes Dognet. Katalog srovnávače, ne reklama.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="ALLEGRO_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://api.tradedoubler.com/1.0/products.xml;page=1;pageSize=100;fid=257027?token=0BF566CB031EDE04D2B0CE7B72A50F5B081B0944",
-                "dognet_campaign": "493",
+         extra={"dognet_campaign": "493",
                 "td_queries": ALLEGRO_TD_QUERIES,
                 "td_page_cap": ALLEGRO_TD_PAGE_CAP,
                 "td_total_cap": ALLEGRO_TD_TOTAL_CAP}),
@@ -282,44 +322,37 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="Ceny z Google XML feedu TESLA (Dognet); odkazy přes Dognet. Katalog srovnávače, ne reklama.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="TESLA_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://feeds.mergado.com/tesla-electronics-eu-google-nakupy-cz-1-c9562002e37d4da3aff516b049a22d22.xml",
-                "dognet_campaign": "1215"}),
+         extra={"dognet_campaign": "1215"}),
     Shop("xupe", "Xupe", ["xupe.cz"], source="feed", status="ok", color="#146CDA",
          note="Ceny z XML feedu Xupe (Dognet); odkazy přes Dognet. Bereme jen listy, které sedí na naše kategorie.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="XUPE_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://www.xupe.cz/api/v3/feeds/1fb49b8d-eb53-45ac-9a42-4554131b03fb",
-                "dognet_campaign": "5649"}),
+         extra={"dognet_campaign": "5649"}),
     Shop("tera", "Tera", ["tera.cz"], source="feed", status="ok", color="#F58220",
          note="Ceny z Google XML feedu Tera (Dognet); odkazy přes Dognet. Katalog srovnávače, ne reklama.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="TERA_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://www.tera.cz/shopItemFeed.asp?File=GoCZ3003GCo.xml",
-                "dognet_campaign": "2207"}),
+         extra={"dognet_campaign": "2207"}),
     Shop("amazestore", "Amazestore", ["amazestore.cz"], source="feed", status="ok", color="#111111",
          note="Ceny z Google XML feedu Amazestore (Dognet); odkazy přes Dognet. Bereme jen sluchátka.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="AMAZESTORE_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://storage.feedyio.com/xaaetz-pv.myshopify.com/6a38f9b00be5bd1e82ea1c5f.xml",
-                "dognet_campaign": "6425"}),
+         extra={"dognet_campaign": "6425"}),
     Shop("misura", "Misura", ["misura.shop"], source="feed", status="ok", color="#6B4C9A",
          note="Ceny z Google XML feedu Misura (Dognet); odkazy přes Dognet. Feed nemá cesty kategorií, které umíme, takže se na web nedostane.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="MISURA_FEED_URL", dognet_chid="9CFqgvpQ",
-         extra={"feed_url_default": "https://www.misura.shop/feed-google-merchant-rdrpg2bypf.xml",
-                "dognet_campaign": "6271"}),
+         extra={"dognet_campaign": "6271"}),
     Shop("dronpro", "DronPro", ["dronpro.cz"], source="feed", status="ok", color="#1B3A4B",
          note="Ceny z Heureka XML feedu DronPro; odkazy přes eHUB. Drony a příslušenství do katalogu nepatří.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="DRONPRO_FEED_URL", ehub_bid="5889edbd",
-         extra={"feed_url_default": "https://feeds.mergado.com/dronpro-www5-superkoderi-cz-heureka-cz-f3a6350d4000723c182059807175d61f.xml",
-                "ehub_campaign": "a309dd83"}),
+         extra={"ehub_campaign": "a309dd83"}),
     Shop("iphonemarket", "iPhoneMarket", ["iphonemarket.cz"], source="feed", status="ok", color="#222222",
          note="Ceny z Heureka XML feedu iPhoneMarket; odkazy přes eHUB. Jen telefony, ne kryty a skla.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="IPHONEMARKET_FEED_URL", ehub_bid="2bcd6f9d",
-         extra={"feed_url_default": "https://www.iphonemarket.cz/heureka/export/products.xml?hash=jrc1IMxLqglvYjmK5UW6vy60",
-                "ehub_campaign": "ff360e3f"}),
+         extra={"ehub_campaign": "ff360e3f"}),
     Shop("promobily", "ProMobily", ["promobily.cz"], source="feed", status="ok", color="#E85D04",
          note="Ceny z Heureka XML feedu ProMobily (záloha Google); odkazy přes eHUB. Jen listy, které sedí na naše kategorie.",
          search_note="Hledáme v importovaném feedu (DB).",
@@ -341,8 +374,7 @@ SHOPS: dict[str, Shop] = {s.slug: s for s in [
          note="Ceny z XML feedu BScom; odkazy přes eHUB. Bereme jen listy notebooků, počítačů, sluchátek, vysavačů a hodinek.",
          search_note="Hledáme v importovaném feedu (DB).",
          feed_url_env="BSCOM_FEED_URL", ehub_bid="f4a2088a",
-         extra={"feed_url_default": "https://www.bscom.cz/exchange/7813c634-8c47-47b7-8d5e-e01fbce7451b/xml/ehub.xml",
-                "ehub_campaign": "b454f836"}),
+         extra={"ehub_campaign": "b454f836"}),
 ]}
 
 

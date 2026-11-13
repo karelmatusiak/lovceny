@@ -25,4 +25,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ARGS: ${{ github.event.client_payload.args || inputs.args || '--no-demo' }}
+          # --from-feeds čte FEED_URLS. Prázdný nebo rozbitý JSON dané obchody přeskočí.
+          FEED_URLS: ${{ secrets.FEED_URLS }}
         run: python seed.py $ARGS

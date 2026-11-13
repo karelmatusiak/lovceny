@@ -64,19 +64,20 @@ def test_shop_affiliate_link_dognet(monkeypatch):
 def test_status_and_feed_defaults(monkeypatch):
     for key in ("ELECTRONICSTAR_FEED_URL", "FOURHOME_FEED_URL", "ELECTROLUX_FEED_URL", "DYSON_FEED_URL", "ALLEGRO_FEED_URL"):
         monkeypatch.delenv(key, raising=False)
-    for slug in ("electronicstar", "4home", "electrolux", "dyson", "allegro"):
+    for slug in ("electronicstar", "4home", "electrolux"):
         st, label = get_shop(slug).status_label()
         assert st == "ok" and label == "oficiální feed", (slug, st, label)
+    for slug in ("dyson", "allegro"):
+        st, label = get_shop(slug).status_label()
+        assert st == "wait" and "feed URL chybí" in label, (slug, st, label)
+        assert get_shop(slug).feed_url == ""
     star = get_shop("electronicstar")
     assert star.feed_url.startswith("http://feedy.elestar.eu/data/dognet_elstar_cz.xml")
     assert any("mergado.com" in u for u in star.feed_sources())
     assert "google-products.xml" in get_shop("4home").feed_url
     assert get_shop("4home").trailing_slash
     assert "feedoptimise.com" in get_shop("electrolux").feed_url
-    assert "tradedoubler.com" in get_shop("dyson").feed_url and "fid=50990" in get_shop("dyson").feed_url
     allegro = get_shop("allegro")
-    assert "tradedoubler.com" in allegro.feed_url and "fid=257027" in allegro.feed_url
-    assert "pageSize=100" in allegro.feed_url and ";q=" not in allegro.feed_url
     queries = list(allegro.extra["td_queries"])
     assert len(queries) >= 8
     assert all("q=" in q and "minPrice=" in q for q in queries)
@@ -89,7 +90,8 @@ def test_status_and_feed_defaults(monkeypatch):
     monkeypatch.setenv("ALLEGRO_FEED_URL", "")
     assert get_shop("electronicstar").feed_url.startswith("http://feedy.elestar.eu/")
     assert "4home.cz" in get_shop("4home").feed_url
-    assert "fid=257027" in get_shop("allegro").feed_url
+    assert get_shop("allegro").feed_url == ""
+    assert get_shop("dyson").feed_url == ""
     monkeypatch.setenv("ELECTRONICSTAR_FEED_URL", "https://example.test/star.xml")
     assert get_shop("electronicstar").feed_sources() == ["https://example.test/star.xml"]
     monkeypatch.setenv("DYSON_FEED_URL", "https://example.test/dyson.xml")

@@ -188,7 +188,8 @@ def test_offers_sort_by_price_and_card_ignores_hidden(client_db):
     assert "Seřazeno výhradně podle ceny" in page
 
 
-def test_shop_name_links_to_status_block_when_it_exists(client_db):
+def test_shop_name_links_to_status_block_when_it_exists(client_db, monkeypatch):
+    monkeypatch.setenv("TESLA_FEED_URL", "https://example.test/tesla.xml")
     c, db, make = client_db
     make([1000], name="TESLA Sound EB10", shop="tesla", category="sluchatka")
     html = c.get("/obchody").text
