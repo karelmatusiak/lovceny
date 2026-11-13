@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, Index, UniqueConstraint, text
+from sqlalchemy import String, Integer, Numeric, Boolean, ForeignKey, Text, Index, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .db import Base
+from .db import Base, UtcDateTime
 
 
 def now():
@@ -19,14 +19,14 @@ class Product(Base):
     # slug z lovceny/categories.py (SEO stránky /kategorie/…); None = nezařazeno
     category_slug: Mapped[str | None] = mapped_column(String(40), index=True)
     # soft-retire: řádek zůstane kvůli 301 /produkt/<id> → kategorie; None = aktivní
-    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None, index=True)
+    retired_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True, default=None, index=True)
     # Po sloučení duplicit: 301 na tenhle produkt (přeživší). NULL = 301 na kategorii.
     redirect_product_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     # Nový produkt z nemapované / málo jisté kategorie zůstane skrytý, dokud ho někdo neschválí.
     catalog_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     # Bez kategorie nebo s názvem z adresy: ve výpisech není, dokud to /admin/trideni neschválí.
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     offers: Mapped[list["Offer"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     watches: Mapped[list["Watch"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
@@ -49,16 +49,16 @@ class Offer(Base):
     # ok | pending (cena bude doplněna) | blocked | error | unavailable (vyřazen z nabídky)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
-    last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_checked: Mapped[datetime | None] = mapped_column(UtcDateTime())
     # Poslední úspěšně zapsaná cena (ne blokace). NULL u starých řádků = last_checked, pokud status je ok.
-    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_ok_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     # Varianta modelu (barva, paměť). NULL = ještě nepřiřazeno.
     variant_id: Mapped[int | None] = mapped_column(ForeignKey("variants.id"), nullable=True, index=True)
     # Sporná nabídka: řádek a historie cen zůstávají, na webu se neukáže a nemá Koupit.
     withheld: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     # Poslední dva běhy, ve kterých tahle nabídka byla na řadě (ne celý obchod).
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    due_prev: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    due_prev: Mapped[datetime | None] = mapped_column(UtcDateTime())
     product: Mapped[Product] = relationship(back_populates="offers")
     variant: Mapped["Variant | None"] = relationship(back_populates="offers")
     points: Mapped[list["PricePoint"]] = relationship(back_populates="offer", cascade="all, delete-orphan",
@@ -74,7 +74,7 @@ class Variant(Base):
     source_product_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     signature: Mapped[str] = mapped_column(String(200))
     label: Mapped[str] = mapped_column(String(200))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     product: Mapped[Product] = relationship()
     offers: Mapped[list["Offer"]] = relationship(back_populates="variant")
     __table_args__ = (UniqueConstraint("product_id", "signature", name="ux_variant_signature"),)
@@ -87,7 +87,7 @@ class PricePoint(Base):
     price: Mapped[float] = mapped_column(Numeric(12, 2))
     original_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
     in_stock: Mapped[bool | None] = mapped_column(Boolean)
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    captured_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source: Mapped[str] = mapped_column(String(20), default="scrape")  # scrape | feed | demo
     offer: Mapped[Offer] = relationship(back_populates="points")
@@ -105,10 +105,10 @@ class Watch(Base):
     token: Mapped[str] = mapped_column(String(64), unique=True)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notified_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     # cena, o které jsme naposledy psali; None = zatím nic / cena se mezitím vrátila nad cíl
     notified_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     product: Mapped[Product] = relationship(back_populates="watches")
 
 
@@ -123,9 +123,9 @@ class PushSubscription(Base):
     target_price: Mapped[float] = mapped_column(Numeric(12, 2))
     only_in_stock: Mapped[bool] = mapped_column(Boolean, default=False)
     token: Mapped[str] = mapped_column(String(64), unique=True)  # odhlášení bez účtu
-    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notified_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     notified_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     product: Mapped[Product] = relationship()
     __table_args__ = (Index("ix_push_endpoint", "endpoint"),)
 
@@ -135,7 +135,7 @@ class TrackRequest(Base):
     __tablename__ = "track_requests"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ip_hash: Mapped[str] = mapped_column(String(64), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now, index=True)
 
 
 class ShopRunStat(Base):
@@ -143,7 +143,7 @@ class ShopRunStat(Base):
     __tablename__ = "shop_run_stats"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(String(40), index=True)
-    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    run_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now, index=True)
     shop: Mapped[str] = mapped_column(String(40), index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     ok: Mapped[int] = mapped_column(Integer, default=0)
@@ -165,7 +165,7 @@ class AnalyticsEvent(Base):
     visitor = hash(denní sůl + IP + UA); po 24 h ho mažeme (NULL) a sůl zahazujeme."""
     __tablename__ = "analytics_events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now, index=True)
     day: Mapped[str] = mapped_column(String(10), index=True)          # YYYY-MM-DD (Europe/Prague)
     kind: Mapped[str] = mapped_column(String(10), default="view")     # view | search | live
     path: Mapped[str] = mapped_column(String(200))
@@ -194,7 +194,7 @@ class ContactMessage(Base):
     """Zpráva z kontaktního formuláře /o-nas (čte se v /admin)."""
     __tablename__ = "contact_messages"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now, index=True)
     name: Mapped[str | None] = mapped_column(String(100))
     reply_to: Mapped[str | None] = mapped_column(String(320))
     topic: Mapped[str] = mapped_column(String(40), default="jine")
@@ -210,8 +210,8 @@ class PushTopicSubscription(Base):
     p256dh: Mapped[str] = mapped_column(String(200))
     auth: Mapped[str] = mapped_column(String(100))
     token: Mapped[str] = mapped_column(String(64), unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     __table_args__ = (Index("ix_push_topic_endpoint", "topic", "endpoint"),)
 
 
@@ -221,11 +221,11 @@ class WeeklyDigest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     year: Mapped[int] = mapped_column(Integer)
     week: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     items: Mapped[str] = mapped_column(Text, default="[]")
-    push_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    push_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     push_sent: Mapped[int] = mapped_column(Integer, default=0)
-    email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     email_sent: Mapped[int] = mapped_column(Integer, default=0)
     __table_args__ = (Index("ux_digest_week", "year", "week", unique=True),)
 
@@ -237,8 +237,8 @@ class DigestEmail(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True)
     token: Mapped[str] = mapped_column(String(64), unique=True)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
 
 
 class BudgetWatch(Base):
@@ -257,8 +257,8 @@ class BudgetWatch(Base):
     auth: Mapped[str | None] = mapped_column(String(100))
     email: Mapped[str | None] = mapped_column(String(320))
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)   # push = hned True
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     sent_day: Mapped[str | None] = mapped_column(String(10))           # YYYY-MM-DD (Praha) – denní strop
     sent_count: Mapped[int] = mapped_column(Integer, default=0)
     hits: Mapped[list["BudgetHit"]] = relationship(back_populates="budget", cascade="all, delete-orphan")
@@ -273,7 +273,7 @@ class BudgetHit(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
     price: Mapped[float] = mapped_column(Numeric(12, 2))
     notified: Mapped[bool] = mapped_column(Boolean, default=True)     # False = jen výchozí stav při založení
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     budget: Mapped[BudgetWatch] = relationship(back_populates="hits")
     __table_args__ = (Index("ux_budget_hit", "budget_id", "product_id", unique=True),)
 
@@ -292,7 +292,7 @@ class ShopCategoryMapping(Base):
     target: Mapped[str] = mapped_column(String(40))  # slug | accessory | ignore
     leaf_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("FALSE"))
     source: Mapped[str] = mapped_column(String(16), default="seed")  # seed | admin
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     __table_args__ = (
         UniqueConstraint("shop", "match_mode", "path_key", name="ux_shop_category_map"),
     )
@@ -314,7 +314,7 @@ class TriageDecision(Base):
     summary: Mapped[str] = mapped_column(String(300))
     reason: Mapped[str] = mapped_column(Text)
     payload: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
 
 
 class TriageLog(Base):
@@ -325,7 +325,7 @@ class TriageLog(Base):
     actor: Mapped[str] = mapped_column(String(80))
     action: Mapped[str] = mapped_column(String(32))
     detail: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
 
 
 class TopicSend(Base):
@@ -333,6 +333,6 @@ class TopicSend(Base):
     __tablename__ = "topic_sends"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(60), unique=True)          # např. „black-friday:2026-11-27“
-    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    sent_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=now)
     sent: Mapped[int] = mapped_column(Integer, default=0)
     items: Mapped[str | None] = mapped_column(Text)                    # JSON snímek položek
