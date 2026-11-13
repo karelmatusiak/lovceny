@@ -1,6 +1,9 @@
+{% macro ico(name) -%}
+<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{% if name in ('buy','check') %}<path d="M5 12.5 9.2 17 19 7"/>{% elif name in ('wait','clock') %}<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/>{% elif name in ('fake','alert') %}<path d="M12 4 3 19h18L12 4z"/><path d="M12 10v4M12 16.5h.01"/>{% elif name in ('none','chart') %}<path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/>{% elif name in ('new','spark') %}<path d="M12 3v3M12 18v3M3 12h3M18 12h3M6.2 6.2l2 2M15.8 15.8l2 2M17.8 6.2l-2 2M8.2 15.8l-2 2"/>{% elif name in ('scales','compare') %}<path d="M12 4v16M7 20h10"/><path d="M12 7 6 11h6M12 7l6 4h-6"/><path d="M4.5 11h3.2a2.2 2.2 0 0 1 0 4.4H4.5M16.3 11h3.2a2.2 2.2 0 0 1 0 4.4h-3.2"/>{% elif name == 'info' %}<circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/>{% elif name == 'search' %}<circle cx="11" cy="11" r="6"/><path d="m20 20-3.5-3.5"/>{% elif name in ('bag','shop') %}<path d="M6.5 8h11l-1 12h-9l-1-12z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/>{% elif name == 'tag' %}<path d="M4 12V5h7l9 9-7 7-9-9z"/><circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/>{% elif name == 'device' %}<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>{% elif name == 'bell' %}<path d="M6 16h12l-1.2-2.2V10a4.8 4.8 0 0 0-9.6 0v3.8L6 16z"/><path d="M10 16.5a2 2 0 0 0 4 0"/>{% elif name == 'trend' %}<path d="m4 16 5-5 3 3 8-8"/><path d="M14 6h6v6"/>{% elif name == 'trophy' %}<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5.5A2.5 2.5 0 0 0 8 10M16 6h2.5A2.5 2.5 0 0 1 16 10M9 20h6M12 14v6"/>{% elif name == 'target' %}<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>{% elif name == 'coin' %}<circle cx="12" cy="12" r="8"/><path d="M12 7.5v9M9.5 9.5c.6-.7 1.5-1.1 2.5-1.1 1.5 0 2.4.8 2.4 1.9S13.5 12 12 12s-2.4.7-2.4 1.9.9 1.9 2.4 1.9c1 0 1.9-.4 2.5-1.1"/>{% elif name == 'repeat' %}<path d="M17 7H8a4 4 0 0 0-4 4v1"/><path d="M7 17h9a4 4 0 0 0 4-4v-1"/><path d="m14 4 3 3-3 3M10 20l-3-3 3-3"/>{% elif name == 'quiet' %}<path d="M5 10h3l4-3v10l-4-3H5z"/><path d="m16 10 4 4M20 10l-4 4"/>{% elif name == 'sun' %}<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/>{% elif name == 'gift' %}<rect x="4" y="10" width="16" height="9" rx="1"/><path d="M4 10h16M12 10v9"/><path d="M12 10c-2 0-3.5-1.2-3.5-2.6S10 5 12 8c2-3 3.5-1.2 3.5-.6S14 10 12 10z"/>{% elif name == 'calendar' %}<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>{% elif name in ('telefony','galaxy','iphone','phone') %}<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 18h2"/>{% elif name in ('notebooky','cyber-monday','laptop') %}<rect x="4" y="5" width="16" height="10" rx="1.5"/><path d="M3 19h18"/>{% elif name in ('pocitace','desktop') %}<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>{% elif name == 'sluchatka' %}<path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2zM20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2z"/>{% elif name == 'pracky' %}<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 6h.01M11 6h.01"/>{% elif name == 'lednice' %}<rect x="6" y="3" width="12" height="18" rx="1.5"/><path d="M6 10h12M15 6.2v1.6M15 13v2"/>{% elif name == 'kavovary' %}<path d="M6 8h9v5a4 4 0 0 1-4 4h-1a4 4 0 0 1-4-4V8z"/><path d="M15 9h2.2a2.2 2.2 0 0 1 0 4.4H15M8 21h8"/>{% elif name == 'vysavace' %}<path d="M14 3.5 18 7.5 10 15.5H7L5 20"/><path d="M14 8.5 16 6.5"/>{% elif name == 'konzole' %}<rect x="3" y="8" width="18" height="9" rx="4"/><path d="M8 11v4M6 13h4M16 12h.01M18 15h.01"/>{% elif name == 'chytre-hodinky' %}<rect x="8" y="6" width="8" height="12" rx="2"/><path d="M10 6V4h4v2M10 18v2h4v-2M12 10v2l1.5 1"/>{% elif name == 'fotoaparaty' %}<path d="M4 8h3.5L9 6h6l1.5 2H20v10H4V8z"/><circle cx="12" cy="13" r="3"/>{% elif name in ('televize','jaro-modely','tv') %}<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>{% elif name in ('chytra-domacnost','home') %}<path d="M4 11.5 12 5l8 6.5V20H4v-8.5z"/>{% elif name == 'povanocni' %}<rect x="4" y="10" width="16" height="9" rx="1"/><path d="M4 10h16M12 10v9"/><path d="M12 10c-2 0-3.5-1.2-3.5-2.6S10 5 12 8c2-3 3.5-1.2 3.5-.6S14 10 12 10z"/>{% elif name == 'leto' %}<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/>{% elif name in ('skola','singles') %}<path d="M6.5 8h11l-1 12h-9l-1-12z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/>{% elif name == 'black-friday' %}<path d="M4 12V5h7l9 9-7 7-9-9z"/><circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/>{% else %}<rect x="5" y="5" width="14" height="14" rx="2"/>{% endif %}</svg>
+{%- endmacro %}
 {% macro badge(v, big=false, link=false) -%}
 <div class="verdict v-{{ v.code }}{% if big %} verdict-lg{% endif %}"{% if v.tooltip %} title="{{ v.tooltip }}"{% endif %}>
-  <span class="verdict-badge"><span class="sr-only">Verdikt: </span><span class="verdict-ico" aria-hidden="true">{{ v.icon }}</span><span class="verdict-label">{{ v.headline }}</span></span>
+  <span class="verdict-badge"><span class="sr-only">Verdikt: </span><span class="verdict-ico" aria-hidden="true">{{ ico(v.code) }}</span><span class="verdict-label">{{ v.headline }}</span></span>
   {% if v.reason %}<span class="verdict-reason">{{ v.reason }}</span>{% endif %}
   {% if link and v.code == 'fake' %}<a class="verdict-how" href="/jak-radime#za-30-dni-levneji">Jak to počítáme?</a>{% endif %}
 </div>
@@ -9,19 +12,19 @@
 <a class="rank-link" href="/jak-radime">Jak řadíme?</a>
 {%- endmacro %}
 {% macro affiliate_note() -%}
-{%- if AFFILIATE_ON() -%}<p class="aff-note"><span aria-hidden="true">ℹ️</span> Odkaz může být provizní – na pořadí to nemá vliv. <a href="/jak-radime#provize">Více</a></p>{%- endif -%}
+{%- if AFFILIATE_ON() -%}<p class="aff-note"><span class="aff-ico" aria-hidden="true">{{ ico('info') }}</span> Odkaz může být provizní – na pořadí to nemá vliv. <a href="/jak-radime#provize">Více</a></p>{%- endif -%}
 {%- endmacro %}
 {% macro badge_new() -%}
 <div class="verdict v-new">
-  <span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">🆕</span><span class="verdict-label">Zatím bez historie</span></span>
+  <span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('new') }}</span><span class="verdict-label">Zatím bez historie</span></span>
   <span class="verdict-reason">Klikni na Sledovat a začneme ukládat historii ceny</span>
 </div>
 {%- endmacro %}
 {% macro cmp_button(p, cls="btn-cmp-quiet") -%}
-<button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false"><span aria-hidden="true">⚖️</span> <span class="cmp-txt">Přidat do srovnání</span></button>
+<button type="button" class="{{ cls }}" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false"><span aria-hidden="true">{{ ico('scales') }}</span> <span class="cmp-txt">Přidat do srovnání</span></button>
 {%- endmacro %}
 {% macro cmp_icon(p) -%}
-<button type="button" class="btn-cmp-icon" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false" aria-label="Přidat do srovnání"><span aria-hidden="true">⚖️</span></button>
+<button type="button" class="btn-cmp-icon" data-cmp-id="{{ p.id }}" data-cmp-slug="{{ pslug(p) }}" aria-pressed="false" aria-label="Přidat do srovnání"><span aria-hidden="true">{{ ico('scales') }}</span></button>
 {%- endmacro %}
 {% macro img_missing(hidden=false) -%}
 <span class="img-missing"{% if hidden %} hidden{% endif %} role="img" aria-label="Fotka produktu chybí"><svg viewBox="0 0 48 48" width="36" height="36" aria-hidden="true" focusable="false"><rect x="7" y="11" width="34" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="20" r="2.2" fill="currentColor"/><path d="M7 31.5 16.5 23l7 6.2 5.2-4.2L41 33" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
@@ -59,7 +62,7 @@
 <div class="pcard-buttons">
 {% if not compact %}{{ cmp_button(p) }}{% endif %}
 {% if best and best.in_stock is not false %}{% set s = get_shop(best.shop) %}
-<a class="btn btn-shop-sm" href="{{ go_href(best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only">{{ s.name }} (otevře se v novém okně)</span></a>
+<span class="buy-block"><span class="buy-shop">{{ s.name }}</span><a class="btn btn-shop-sm" href="{{ go_href(best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>
 {% endif %}
 </div>
 </div>
@@ -90,5 +93,5 @@
 {%- endmacro %}
 {% macro season_hint(slug) -%}
 {%- set tip = season_tip(slug) -%}
-{%- if tip -%}<p class="season-hint"><span aria-hidden="true">🗓️</span><span><span class="sr-only">Tip, kdy nakupovat: </span>{{ tip }} <a href="/kdy-nakupovat#{{ slug }}">Kdy nakupovat →</a></span></p>{%- endif -%}
+{%- if tip -%}<p class="season-hint"><span aria-hidden="true">{{ ico('calendar') }}</span><span><span class="sr-only">Tip, kdy nakupovat: </span>{{ tip }} <a href="/kdy-nakupovat#{{ slug }}">Kdy nakupovat →</a></span></p>{%- endif -%}
 {%- endmacro %}

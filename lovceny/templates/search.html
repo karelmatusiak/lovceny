@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import pcard, rank_link, ico %}
 {% block title %}{% if STATIC_SITE %}Hledat v katalogu | Lovceny{% else %}Hledání: {{ q }} | Lovceny{% endif %}{% endblock %}
 {% block description %}{% if STATIC_SITE %}Hledání v katalogu Lovceny. Ceny, historie a verdikt bez placených pozic.{% else %}Ceny a historie pro „{{ q }}“ v českých e-shopech. Poctivé srovnání bez placených pozic – Kupuj, nebo počkat.{% endif %}{% endblock %}
 {% block body %}{% if STATIC_SITE %}<section style="padding-top:24px" id="katalog-hledani"><div class="wrap">
@@ -36,7 +36,7 @@
     <label class="filt-check"><input type="checkbox" name="skladem" value="1"{% if skladem %} checked{% endif %} onchange="this.form.submit()"> Jen skladem</label>
     <noscript><button class="btn btn-ghost btn-sm" type="submit">Použít</button></noscript>
   </form>
-  <p class="ai-hint" style="margin:0 0 24px">✨ Rozumíme i běžné řeči – napiš třeba „tichá pračka do 10 tisíc“.</p>
+  <p class="ai-hint" style="margin:0 0 24px">{{ ico('spark') }} Rozumíme i běžné řeči – napiš třeba „tichá pračka do 10 tisíc“.</p>
   {% if error %}<div class="notice warn">{{ error }} Podporujeme: {% for s in SHOPS.values() %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
   {% if results %}<h2>Sledujeme pro „{{ q }}“</h2><p class="sub rank-sub">Řazeno podle ceny, bez placených pozic. {{ rank_link() }}</p><div class="grid">{% for p, best, v in results %}{{ pcard(p, best, v) }}{% endfor %}</div>{% endif %}
   {% if want_live and not error %}

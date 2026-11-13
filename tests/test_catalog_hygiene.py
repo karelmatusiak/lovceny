@@ -299,7 +299,7 @@ def test_listing_keeps_products_classify_mislabels():
     assert "Katana" in client.get("/kategorie/notebooky").text
     assert "Quantum 910X" in client.get("/kategorie/sluchatka").text
     page = client.get("/produkt/" + str(db.query(Product).filter(Product.slug == "edge-70").one().id)).text
-    assert "Mobilní telefony" in page and "Koupit za" in page
+    assert "Mobilní telefony" in page and "Do obchodu" in page and "btn-buy" in page
     assert "EDGE 70" in client.get("/hledat", params={"q": "Motorola EDGE 70"}).text
     db.close()
 

@@ -215,7 +215,9 @@ def test_product_page_clean_category_and_buy_label(client_db, monkeypatch):
     # viditelný podtitul i JSON-LD berou čistý název kategorie, ne Heureka path
     assert "Heureka.cz |" not in html
     assert "Mobilní telefony" in html
-    assert "Koupit za" in html and ("· iStyle" in html or "· Mironet" in html)
+    buy = html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
+    shop = html.split('class="buy-shop"', 1)[1].split("</p>", 1)[0]
+    assert "Do obchodu" in buy and ("iStyle" in shop or "Mironet" in shop)
     assert "v obchodě" not in html.split("btn-buy")[1][:120]
 
 

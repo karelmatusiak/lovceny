@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, img_missing, badge, cmp_button, share, rank_link, affiliate_note %}
+{% extends "base.html" %}{% from "_macros.html" import season_hint, shop_img, img_missing, badge, cmp_button, share, rank_link, affiliate_note, ico %}
 {% block title %}{{ dname(p) }} – cena{% if best %} od {{ best.price|czk }}{% elif unverified_head %} {{ unverified_head.price|czk }} (cena neověřena){% elif last_known %} {{ last_known.price|czk }} (není skladem){% endif %}, historie a verdikt | Lovceny{% endblock %}
 {% block description %}{{ p.name }}: {% if best %}nejnižší cena {{ best.price|czk }} ({{ get_shop(best.shop).name }}){% if offers|selectattr('price')|list|length > 1 %}, srovnání {{ offers|selectattr('price')|list|length }} obchodů{% endif %}. {% elif last_known %}naposledy {{ last_known.price|czk }}, momentálně není skladem. {% endif %}Historie ceny{% if v.min90 %}, minimum za 90 dní {{ v.min90|czk }}{% endif %} a verdikt: {{ v.label }}.{% endblock %}
 {% block og_type %}product{% endblock %}
@@ -25,9 +25,12 @@
         {% if review %}
         <p class="oos-banner">Ten produkt ve srovnání neukazujeme. Historie cen zůstává uložená a odkaz na koupi tu není.</p>
         {% elif best %}{% set bs = get_shop(best.shop) %}
-        <a class="btn btn-primary btn-buy" href="{{ go_href(best) }}" rel="{{ shop_rel(bs) }}" target="_blank">Koupit za {{ best.price|czk }} · {{ bs.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <div class="buy-block">
+          <p class="buy-shop">{{ bs.name }}</p>
+          <a class="btn btn-primary btn-buy" href="{{ go_href(best) }}" rel="{{ shop_rel(bs) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        </div>
         {% elif unverified_head %}
-        <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Koupit ukážeme, až cenu znovu ověříme.</p>
+        <p class="oos-banner">{{ offer_notes[unverified_head.id] }}. Tlačítko Do obchodu ukážeme, až cenu znovu ověříme.</p>
         {% elif all_oos %}
         <p class="oos-banner">Momentálně není skladem v žádném sledovaném obchodě. Cenu dál hlídáme a historii zapisujeme.</p>
         {% endif %}
@@ -75,7 +78,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      <p class="ct-note v-{{ v.code }}"><span aria-hidden="true">{{ v.icon }}</span> {{ chart_note }}{% if v.code == 'fake' %} <a href="/jak-radime#za-30-dni-levneji">Metodika</a>{% endif %}</p>
+      <p class="ct-note v-{{ v.code }}"><span aria-hidden="true">{{ ico(v.code) }}</span> {{ chart_note }}{% if v.code == 'fake' %} <a href="/jak-radime#za-30-dni-levneji">Metodika</a>{% endif %}</p>
       <div class="offers">
         {% for o in offers %}{% set s = get_shop(o.shop) %}
         {% set is_oos = o.in_stock is false %}

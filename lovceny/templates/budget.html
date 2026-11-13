@@ -1,16 +1,16 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link, ico %}
 {% block title %}Hlídání podle rozpočtu – dáme vědět, až bude produkt pod tvou cenou | Lovceny{% endblock %}
 {% block description %}Nastav kategorii, značku a maximální cenu. Jakmile se v českých e-shopech objeví produkt v tvém rozpočtu, pošleme upozornění. Bez registrace a bez cookies.{% endblock %}
 {% block body %}
 <section class="bw-hero"><div class="wrap bw-hero-grid">
   <div>
-    <div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
+    <div class="eyebrow"><span aria-hidden="true">{{ ico('coin') }}</span> Hlídání podle rozpočtu</div>
     <h1 class="page-h1">Řekni, kolik chceš dát. <span class="hl">Ohlídáme to.</span></h1>
     <p class="lead">Nehledáš konkrétní model, jen třeba <b>pračku Bosch do 12&nbsp;000&nbsp;Kč</b> nebo <b>televizi OLED do 25&nbsp;000&nbsp;Kč</b>? Vyber kategorii a maximální cenu. Jakmile v obchodech, které sledujeme, něco takového bude, dáme vědět.</p>
     <ul class="bw-points">
-      <li><span aria-hidden="true">✅</span> Jen ceny, které jsme ověřili za poslední 3 dny</li>
-      <li><span aria-hidden="true">🔁</span> Stejný produkt podruhé jen tehdy, když ještě zlevní</li>
-      <li><span aria-hidden="true">🤫</span> Nejvýš {{ limits.day }} upozornění denně, bez účtu a bez cookies</li>
+      <li><span aria-hidden="true">{{ ico('check') }}</span> Jen ceny, které jsme ověřili za poslední 3 dny</li>
+      <li><span aria-hidden="true">{{ ico('repeat') }}</span> Stejný produkt podruhé jen tehdy, když ještě zlevní</li>
+      <li><span aria-hidden="true">{{ ico('quiet') }}</span> Nejvýš {{ limits.day }} upozornění denně, bez účtu a bez cookies</li>
     </ul>
   </div>
   <div id="nastavit">

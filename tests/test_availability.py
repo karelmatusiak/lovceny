@@ -82,7 +82,8 @@ def test_product_page_cta_uses_buyable_not_cheaper_oos(client_db):
     db.add_all([oos, buy])
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
-    assert "Koupit za" in html
+    assert "Do obchodu" in html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
+    assert "Alza" in html.split('class="buy-shop"', 1)[1].split("</p>", 1)[0]
     assert "Alza" in html
     # 12 000 Kč v CZ formátu
     assert "12" in html and "000" in html

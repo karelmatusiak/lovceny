@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, cmp_button, rank_link, pcard %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, cmp_button, rank_link, pcard, ico %}
 {% block title %}Skutečné slevy – Lovceny{% endblock %}
 {% block description %}Žebříček produktů u 90denního minima a přehled slev, u kterých jsme za 30 dní naměřili nižší cenu. Bez placených pozic.{% endblock %}
 {% block og_title %}Skutečné slevy – Lovceny{% endblock %}
@@ -43,8 +43,8 @@
       </a>
       <div class="deal-act">
       {{ cmp_button(r.product) }}
-      {% if r.best %}{% set s = get_shop(r.best.shop) %}
-      <a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+      {% if r.best and r.best.in_stock is not false %}{% set s = get_shop(r.best.shop) %}
+      <span class="buy-block"><span class="buy-shop">{{ s.name }}</span><a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>
       {% endif %}
       </div>
     </article>
@@ -84,7 +84,7 @@
         <div class="deal-act">
         {{ cmp_button(r.product) }}
         {% if r.best and r.best.in_stock is not false %}{% set s = get_shop(r.best.shop) %}
-        <a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <span class="buy-block"><span class="buy-shop">{{ s.name }}</span><a class="btn btn-shop-sm" href="{{ go_href(r.best) }}" rel="{{ shop_rel(s) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>
         {% endif %}
         </div>
       </article>
@@ -110,7 +110,7 @@
 </div></section>
 
 <section class="deals-fake"><div class="wrap">
-  <h2 id="za-30-dni-levneji"><span aria-hidden="true">⚠️</span> Za 30 dní bylo levněji</h2>
+  <h2 id="za-30-dni-levneji"><span aria-hidden="true">{{ ico('fake') }}</span> Za 30 dní bylo levněji</h2>
   <p class="sub">U těchto produktů jsme během 30 dní před akcí naměřili nižší cenu, než ze které se sleva počítá (srovnání s nejnižší cenou za 30 dní podle § 12a zákona o ochraně spotřebitele). U každého uvádíme naměřenou cenu a datum. <a href="/jak-radime#za-30-dni-levneji">Jak to počítáme</a></p>
   {% if fakes %}
   <div class="deals-list">

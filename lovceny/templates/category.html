@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import season_hint, pcard, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import season_hint, pcard, rank_link, ico %}
 {% block title %}{{ page_title }}{% if page is defined and page > 1 %} – strana {{ page }}{% endif %} | Lovceny{% endblock %}
 {% block description %}{{ page_desc }}{% endblock %}
 {% block head %}{% if page_prev %}<link rel="prev" href="{{ canonical(page_prev) }}">{% endif %}{% if page_next %}<link rel="next" href="{{ canonical(page_next) }}">{% endif %}
@@ -6,7 +6,7 @@
 {% endblock %}
 {% block body %}
 <section class="cat-hero"><div class="wrap">
-  <div class="eyebrow"><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }}</div>
+  <div class="eyebrow"><span aria-hidden="true">{{ ico(c.slug) }}</span> {{ c.name }}</div>
   <h1 class="page-h1">{{ page_title }}</h1>
   <p class="lead cat-lead">{% if view == 'nejlevnejsi' %}Nejlevnější {{ c.gen }}, které sledujeme. Nejdřív produkty s fotkou, v rámci nich jen podle aktuální nejnižší ceny napříč obchody.{% elif view == 've-sleve' %}Jen produkty, jejichž cena je teď u 90denního minima a pod obvyklou cenou. Slevy, u kterých jsme za 30 dní naměřili nižší cenu, sem nezařazujeme.{% else %}{{ c.lead }}{% endif %}</p>
   {% if season_tip(c.slug) %}
@@ -79,13 +79,13 @@
   </div>
   {% endif %}
   {% if BUDGET_ON() %}<div class="bw-cat" id="hlidat-rozpocet">
-    <div class="bw-cat-text"><div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
+    <div class="bw-cat-text"><div class="eyebrow"><span aria-hidden="true">{{ ico('coin') }}</span> Hlídání podle rozpočtu</div>
       <h2 class="h3">Nehledáš konkrétní model? Ohlídáme rozpočet.</h2>
       <p>Zadej maximální cenu (a případně značku). Jakmile bude některý produkt z kategorie {{ c.name }} na této ceně nebo pod ní, dáme vědět. <a href="/hlidat-rozpocet">Jak to funguje</a></p></div>
     {% with fixed_cat=c %}{% include "_budget_form.html" %}{% endwith %}
   </div>{% endif %}
   <h2 class="cat-other-h">Další kategorie</h2>
-  <ul class="cat-chips">{% for o in CATEGORIES if o.slug != c.slug %}<li><a href="/kategorie/{{ o.slug }}"><span aria-hidden="true">{{ o.icon }}</span> {{ o.name }}</a></li>{% endfor %}</ul>
+  <ul class="cat-chips">{% for o in CATEGORIES if o.slug != c.slug %}<li><a href="/kategorie/{{ o.slug }}"><span aria-hidden="true">{{ ico(o.slug) }}</span> {{ o.name }}</a></li>{% endfor %}</ul>
 </div></section>
 {% endblock %}
 {% block scripts %}{% if BUDGET_ON() and push_key %}<script src="{{ static('budget.js') }}" defer></script>{% endif %}{% endblock %}

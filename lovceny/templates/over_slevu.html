@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img, img_missing %}
+{% extends "base.html" %}{% from "_macros.html" import badge, share, shop_img, img_missing, ico %}
 {% block title %}{% if r %}Ověření slevy: {{ (r.name or (r.query|pretty_name) or 'produkt')[:70] }}{% else %}Ověř slevu z katalogu{% endif %} | Lovceny{% endblock %}
 {% block description %}Vlož odkaz na produkt z našeho katalogu. Ukážeme historii a nejnižší cenu za 30 dní. Odkazy mimo katalog nenačítáme.{% endblock %}
 {% block body %}
@@ -10,7 +10,7 @@
     <form class="search ov-form" action="/over-slevu" method="get" role="search" autocomplete="off">
       <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
         <input id="ov-url" name="url" type="url" inputmode="url" required maxlength="2000" value="{{ url_in }}" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu"></label>
-      <button class="btn btn-primary" type="submit"><span aria-hidden="true">🔎</span> Ověřit slevu</button>
+      <button class="btn btn-primary" type="submit"><span aria-hidden="true">{{ ico('search') }}</span> Ověřit slevu</button>
     </form>
     {% if error %}<div class="notice warn" role="alert">{{ error }}</div>{% endif %}
     {% if limited %}<div class="notice warn" role="alert">Ověřování je teď hodně, zkus to prosím za chvíli. Výsledky, které už někdo ověřil, se zobrazují bez omezení.</div>{% endif %}
@@ -39,7 +39,7 @@
         {% set c = r.check %}
         {% if c and c.enough %}
           {% if c.flag %}
-          <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span><span class="verdict-label">Za 30 dní bylo levněji</span></span></div>
+          <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('fake') }}</span><span class="verdict-label">Za 30 dní bylo levněji</span></span></div>
           <p>Obchod uvádí původní cenu <b>{{ c.claimed|czk }}</b>. Nejnižší cena, kterou jsme za posledních 30 dní naměřili, byla <b>{{ c.min30|czk }}</b> (dne {{ c.min30_date.day }}. {{ c.min30_date.month }}. {{ c.min30_date.year }}). Vůči ní je dnešní cena {% if c.current < c.min30 %}nižší o {{ ((1 - c.current/c.min30)*100)|round|int }} %{% elif c.current > c.min30 %}vyšší o {{ ((c.current/c.min30 - 1)*100)|round|int }} %{% else %}stejná{% endif %}. <a href="/jak-radime#za-30-dni-levneji">Jak to počítáme</a></p>
           {% else %}
           <p>Nejnižší cena za posledních 30 dní podle našich měření: <b>{{ c.min30|czk }}</b> (dne {{ c.min30_date.day }}. {{ c.min30_date.month }}. {{ c.min30_date.year }}).
@@ -56,7 +56,7 @@
       {% if r.product and r.verdict %}<div class="ov-verdict">{{ badge(r.verdict, link=true) }}</div>{% endif %}
       <div class="ov-actions">
         {% if r.product %}<a class="btn btn-primary" href="/produkt/{{ r.product.id }}-{{ pslug(r.product) }}">Detail produktu</a>{% endif %}
-        {% if r.can_track %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ r.url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">📈</span> Sledovat tento produkt</button></form>{% endif %}
+        {% if r.can_track %}<form method="post" action="/sledovat"><input type="hidden" name="url" value="{{ r.url }}"><button class="btn btn-primary" type="submit"><span aria-hidden="true">{{ ico('trend') }}</span> Sledovat tento produkt</button></form>{% endif %}
         {{ share(share_url, share_text, 'Ověření slevy na Lovceny') }}
       </div>
     </article>

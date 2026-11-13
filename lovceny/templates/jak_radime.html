@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import ico %}
 {% block title %}Jak řadíme a hodnotíme – Lovceny{% endblock %}
 {% block description %}Metodika Lovceny: řazení jen podle ceny, žádné placené pozice, seznam prohledávaných obchodů, aktualizace cen a přesná pravidla verdiktů Kupuj, Počkej a Za 30 dní bylo levněji.{% endblock %}
 {% block og_title %}Jak řadíme a hodnotíme – Lovceny{% endblock %}
@@ -42,10 +42,10 @@
   <p>Verdikt je <b>algoritmický odhad</b> z cen, které jsme sami naměřili (za každý den bereme nejnižší cenu napříč obchody). Není to záruka budoucího vývoje ceny.</p>
   <ul>
     <li><b>Sbíráme data:</b> máme méně než {{ cz_count(t.MIN_DAYS, "den", "dny", "dní") }} s cenou za posledních 90 dní – verdikt nedáváme.</li>
-    <li><b>✅ Kupuj:</b> dnešní nejnižší cena je nejvýš {{ pct(t.BUY_OVER_MIN) }} % nad minimem za 90 dní.</li>
-    <li><b>⏳ Počkej:</b> žádné z ostatních pravidel neplatí – za posledních 90 dní byla cena nižší.</li>
+    <li><b>{{ ico('buy') }} Kupuj:</b> dnešní nejnižší cena je nejvýš {{ pct(t.BUY_OVER_MIN) }} % nad minimem za 90 dní.</li>
+    <li><b>{{ ico('wait') }} Počkej:</b> žádné z ostatních pravidel neplatí – za posledních 90 dní byla cena nižší.</li>
   </ul>
-  <h3 id="za-30-dni-levneji">⚠️ Za 30 dní bylo levněji</h3>
+  <h3 id="za-30-dni-levneji">{{ ico('fake') }} Za 30 dní bylo levněji</h3>
   <p>Podle <b>§ 12a zákona č. 634/1992 Sb., o ochraně spotřebitele</b>, má prodávající u slevy uvádět jako původní cenu nejnižší cenu, za kterou zboží nabízel v posledních 30 dnech. Stejné srovnání děláme z cen, které jsme sami naměřili. Štítek ukážeme, když platí jedno z pravidel:</p>
   <ol>
     <li>Obchod uvádí původní (přeškrtnutou) cenu, která je o víc než {{ pct(t.REF_OVER_MIN30) }} % vyšší než nejnižší cena, kterou jsme naměřili ve dnech 3 až 33 před dneškem, a dnešní cena je nižší než ta původní.</li>

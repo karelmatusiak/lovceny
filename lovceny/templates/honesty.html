@@ -1,9 +1,9 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, cmp_button, share, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, cmp_button, share, rank_link, ico %}
 {% block title %}Je to skutečná sleva? Black Friday a historie cen | Lovceny{% endblock %}
 {% block description %}Je dnešní sleva nižší než ceny, které jsme sami naměřili? Porovnání s nejnižší cenou za 30 a 90 dní. Když je historie kratší než týden, napíšeme málo dat a verdikt nedáváme.{% endblock %}
 {% block body %}
 <section class="bf-hero"><div class="wrap">
-  <div class="eyebrow"><span aria-hidden="true">🛍️</span> Black Friday</div>
+  <div class="eyebrow"><span aria-hidden="true">{{ ico('bag') }}</span> Black Friday</div>
   <h1 class="page-h1">Je to skutečná sleva?</h1>
   <p class="lead">Dnešní nejnižší cenu porovnáme s nejnižší cenou, kterou jsme u stejného výrobku sami naměřili za 30 a za 90 dní. Když cena před slevou vystoupala, řekneme to. Když máme málo dní, verdikt nedáme. <a href="/black-friday">Přehled Black Friday</a> · {{ rank_link() }}</p>
   <div class="honest-share">{{ share(share_url, share_text, "Je to skutečná sleva?", "Sdílet přehled") }}</div>
@@ -32,7 +32,7 @@
         {% if a.code == 'skutecna' and a.real_pct %}<span class="save-pct">−{{ '%.0f'|format(a.real_pct) }}&nbsp;%</span>{% endif %}
         <span class="honest-label">{{ a.label }}</span>
         {% if sh and r.offer.in_stock is not false %}
-        <a class="btn btn-shop-sm" href="{{ go_href(r.offer) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <span class="buy-block"><span class="buy-shop">{{ sh.name }}</span><a class="btn btn-shop-sm" href="{{ go_href(r.offer) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>
         {% endif %}
         {{ cmp_button(r.product) }}
       </div>

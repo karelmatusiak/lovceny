@@ -1,4 +1,4 @@
-{# Formulář Hlídání podle rozpočtu. fixed_cat = kategorie pevně daná (stránka kategorie), jinak výběr. #}
+{% from "_macros.html" import ico %}{# Formulář Hlídání podle rozpočtu. fixed_cat = kategorie pevně daná (stránka kategorie), jinak výběr. #}
 {% set fc = fixed_cat if fixed_cat is defined else none %}
 <form class="card bw-form" id="bw-form" {% if email_on %}method="post" action="/hlidat-rozpocet/email"{% else %}method="get" action="/hlidat-rozpocet#nahled"{% endif %} data-vapid="{{ push_key }}" novalidate>
   {% if fc %}<input type="hidden" name="category" value="{{ fc.slug }}">
@@ -17,7 +17,7 @@
   <label class="check"><input type="checkbox" name="only_in_stock" value="1"> Jen produkty skladem</label>
   {% if push_key %}
   <div class="bw-push" hidden>
-    <button type="button" class="btn btn-primary bw-go" id="bw-go"><span aria-hidden="true">🔔</span> Hlídat rozpočet v prohlížeči</button>
+    <button type="button" class="btn btn-primary bw-go" id="bw-go"><span aria-hidden="true">{{ ico('bell') }}</span> Hlídat rozpočet v prohlížeči</button>
   </div>
   <p class="bw-unsupported small" hidden>Tento prohlížeč upozornění nepodporuje.{% if email_on %} Použij prosím e-mail níže.{% endif %}</p>
   <p class="bw-ios small" hidden>Na iPhonu fungují upozornění jen z webu přidaného na plochu (Sdílet → Přidat na plochu, iOS 16.4+).{% if email_on %} Nebo použij e-mail.{% endif %}</p>

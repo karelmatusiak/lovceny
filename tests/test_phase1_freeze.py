@@ -37,7 +37,8 @@ def test_mironet_captcha_offer_is_hidden_history_stays(client_db):
     # HTTP 403 a captcha jiného obchodu zůstanou v tabulce, bez tlačítka Koupit.
     assert html.count("Obchod blokuje automatické čtení") == 2
     assert "Cenu se nepodařilo ověřit" in html
-    assert "Koupit za 20\xa0000" in html
+    assert "20\xa0000" in html.split('class="price">', 1)[1].split("<", 1)[0]
+    assert "Do obchodu" in html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
     assert "Koupit za 2\xa0222" not in html
     assert "1\xa0111" not in client.get("/").text
     db.expire_all()
