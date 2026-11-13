@@ -71,14 +71,10 @@ def test_status_labels_ehub_shops(monkeypatch):
     monkeypatch.delenv("EVOLVEO_FEED_URL", raising=False)
     monkeypatch.delenv("POCITACE24_FEED_URL", raising=False)
     monkeypatch.delenv("JBL_FEED_URL", raising=False)
-    st, label = get_shop("istyle").status_label()
-    assert st == "ok" and "feed" in label
-    st, label = get_shop("sencor").status_label()
-    assert st == "ok" and "feed" in label
-    st, label = get_shop("xm").status_label()
-    assert st == "ok" and "feed" in label
-    st, label = get_shop("evolveo").status_label()
-    assert st == "ok" and "feed" in label
+    for slug in ("istyle", "sencor", "xm", "evolveo"):
+        st, label = get_shop(slug).status_label()
+        assert st == "wait" and "feed URL chybí" in label, (slug, st, label)
+        assert get_shop(slug).feed_url == ""
     st, label = get_shop("pocitace24").status_label()
     assert st == "ok" and "feed" in label
     st, label = get_shop("jbl").status_label()
@@ -95,10 +91,10 @@ def test_feed_url_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("EVOLVEO_FEED_URL", "")
     monkeypatch.setenv("POCITACE24_FEED_URL", "")
     monkeypatch.setenv("JBL_FEED_URL", "")
-    assert get_shop("istyle").feed_url.startswith("https://")
-    assert get_shop("sencor").feed_url.startswith("https://")
-    assert get_shop("xm").feed_url.startswith("https://xm.cz/")
-    assert get_shop("evolveo").feed_url.startswith("https://feeds.mergado.com/evolveo-cz-heureka")
+    assert get_shop("istyle").feed_url == ""
+    assert get_shop("sencor").feed_url == ""
+    assert get_shop("xm").feed_url == ""
+    assert get_shop("evolveo").feed_url == ""
     assert get_shop("pocitace24").feed_url == "https://www.pocitace24.cz/universal.xml"
     assert get_shop("jbl").feed_url == "https://www.jbl.cz/gmerchant-JBL-cz.xml"
     monkeypatch.setenv("ISTYLE_FEED_URL", "https://example.test/istyle.xml")
@@ -393,7 +389,8 @@ def test_xm_shop_registry_and_click_wrapper(monkeypatch):
     assert xm is not None and xm.name == "XM.cz" and xm.ehub_bid == "0ff74973"
     assert xm.source == "feed" and xm.status == "ok"
     assert "xm.cz" in xm.domains
-    assert xm.feed_url.startswith("https://xm.cz/feed/")
+    assert xm.feed_url == ""
+    assert "feed_url_default" not in xm.extra
     dest = "https://xm.cz/apple-iphone-15_z53756/?id_variation=49121"
     wrapped = xm.affiliate_link(dest)
     assert wrapped.startswith("https://ehub.cz/system/scripts/click.php?")
@@ -524,9 +521,8 @@ def test_evolveo_shop_registry_and_click_wrapper(monkeypatch):
     assert shop is not None and shop.name == "EVOLVEO" and shop.ehub_bid == "f89ce7c7"
     assert shop.source == "feed" and shop.status == "ok"
     assert "eshop.evolveo.cz" in shop.domains and "evolveo.cz" in shop.domains
-    assert shop.feed_url == (
-        "https://feeds.mergado.com/evolveo-cz-heureka-cz-cz-ehub-affiliate-31bf20ac5bdad01b32f5bc782bcfb82e.xml"
-    )
+    assert shop.feed_url == ""
+    assert "feed_url_default" not in shop.extra
     assert shop_for_url("https://eshop.evolveo.cz/evolveo-bonepro/") is shop
     assert shop_for_url("https://www.evolveo.cz/produkt") is shop
     dest = "https://eshop.evolveo.cz/evolveo-bonepro--bezdratova-sluchatka-na-licni-kosti--mp3-32gb--ip68--cerna/"

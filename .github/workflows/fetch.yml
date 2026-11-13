@@ -81,6 +81,7 @@ jobs:
             tests/test_dognet.py \
             tests/test_ehub.py
       - name: Stáhnout ceny
+        # Prázdný secret u soukromého feedu obchod přeskočí. Veřejné defaulty v kódu zůstávají.
         id: download
         if: steps.gate.outputs.skip != 'true'
         env:

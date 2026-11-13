@@ -25,36 +25,42 @@ def test_new_shops_registry_and_tracking(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
     dognet = {
-        "tesla": ("TESLA", "tesla-electronics.eu", "mergado.com", "1215"),
-        "xupe": ("Xupe", "xupe.cz", "xupe.cz/api/v3/feeds", "5649"),
-        "tera": ("Tera", "tera.cz", "shopItemFeed.asp", "2207"),
-        "amazestore": ("Amazestore", "amazestore.cz", "feedyio.com", "6425"),
-        "misura": ("Misura", "misura.shop", "misura.shop/feed-google", "6271"),
+        "tesla": ("TESLA", "tesla-electronics.eu", "TESLA_FEED_URL", "1215"),
+        "xupe": ("Xupe", "xupe.cz", "XUPE_FEED_URL", "5649"),
+        "tera": ("Tera", "tera.cz", "TERA_FEED_URL", "2207"),
+        "amazestore": ("Amazestore", "amazestore.cz", "AMAZESTORE_FEED_URL", "6425"),
+        "misura": ("Misura", "misura.shop", "MISURA_FEED_URL", "6271"),
     }
     for slug, (name, host, feed_bit, campaign) in dognet.items():
         shop = get_shop(slug)
         assert shop is not None and shop.name == name and shop.source == "feed"
         assert shop.dognet_chid == "9CFqgvpQ" and shop.ehub_bid is None
         assert shop.extra["dognet_campaign"] == campaign
-        assert feed_bit in shop.feed_url
+        assert shop.feed_url_env == feed_bit and shop.feed_url == ""
+        assert "feed_url_default" not in shop.extra
         assert shop_for_url(f"https://www.{host}/produkt") is shop
         dest = f"https://www.{host}/produkt?x=1"
         wrapped = shop.affiliate_link(dest)
         assert wrapped.startswith("https://go.dognet.com/?chid=9CFqgvpQ&url=")
         assert unquote(parse_qs(urlparse(wrapped).query)["url"][0]) == dest
         st, label = shop.status_label()
-        assert st == "ok" and label == "oficiální feed"
+        assert st == "wait" and "feed URL chybí" in label
 
     ehub = {
-        "bscom": ("BScom", "bscom.cz", "f4a2088a", "ehub.xml"),
-        "dronpro": ("DronPro", "dronpro.cz", "5889edbd", "dronpro"),
-        "iphonemarket": ("iPhoneMarket", "iphonemarket.cz", "2bcd6f9d", "heureka/export"),
+        "bscom": ("BScom", "bscom.cz", "f4a2088a", "BSCOM_FEED_URL"),
+        "dronpro": ("DronPro", "dronpro.cz", "5889edbd", "DRONPRO_FEED_URL"),
+        "iphonemarket": ("iPhoneMarket", "iphonemarket.cz", "2bcd6f9d", "IPHONEMARKET_FEED_URL"),
         "promobily": ("ProMobily", "promobily.cz", "9530f758", "heureka_cz.xml"),
     }
     for slug, (name, host, bid, feed_bit) in ehub.items():
         shop = get_shop(slug)
         assert shop.name == name and shop.ehub_bid == bid and shop.dognet_chid is None
-        assert shop.source == "feed" and feed_bit in shop.feed_url
+        assert shop.source == "feed"
+        if slug == "promobily":
+            assert feed_bit in shop.feed_url
+        else:
+            assert shop.feed_url_env == feed_bit and shop.feed_url == ""
+            assert "feed_url_default" not in shop.extra
         assert shop_for_url(f"https://www.{host}/p") is shop
         dest = f"https://www.{host}/p"
         wrapped = shop.affiliate_link(dest)
