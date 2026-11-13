@@ -1,16 +1,29 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img %}
+{% extends "base.html" %}{% from "_macros.html" import phone_card, shop_img, img_missing %}
 {% block title %}Ulovte telefon za férovou cenu. | Lovceny{% endblock %}
 {% block description %}Ulovte telefon za férovou cenu. Nejnižší cena z českých e-shopů, historie a verdikt, jestli se sleva vyplatí.{% endblock %}
 {% block body %}
-<header class="phone-hero" id="hledat"><div class="wrap">
-  <p class="phone-kicker">Specialista na mobilní telefony</p>
-  <h1>Ulovte telefon za férovou cenu.</h1>
-  <p class="phone-lead">Nejnižší cena z českých e-shopů a verdikt, jestli je teď dobrá doba na nákup. Nikdo za pořadí neplatí.</p>
-  <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
-    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input id="home-q" name="q" type="text" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu"></label>
-    <button class="btn btn-primary" type="submit">Hledat</button>
-  </form>
+<header class="phone-hero" id="hledat"><div class="wrap phone-hero-grid">
+  <div>
+    <p class="phone-kicker">Specialista na mobilní telefony</p>
+    <h1>Nejnižší ceny telefonů z českých <span class="nowrap">e-shopů</span></h1>
+    <p class="phone-lead">Verdikt, jestli je teď dobrá doba na nákup. Nikdo za pořadí neplatí.</p>
+    <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
+      <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="home-q" name="q" type="text" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu"></label>
+      <button class="btn btn-primary" type="submit">Hledat</button>
+    </form>
+  </div>
+  {% if models %}
+  {% set featured = models[0] %}
+  <a class="hero-feature" href="/telefon/{{ featured.slug }}">
+    <div class="phone-card-img">{% if featured.image %}{{ shop_img(featured.image, 120, priority=true, alt="", sizes="96px") }}{% else %}{{ img_missing() }}{% endif %}</div>
+    <div>
+      <p class="eyebrow">Nejnižší teď</p>
+      <strong>{{ featured.name }}</strong>
+      <b>{% if featured.lowest is not none %}{{ featured.lowest|czk }}{% else %}Cenu zjišťujeme{% endif %}</b>
+    </div>
+  </a>
+  {% endif %}
 </div></header>
 
 <section class="phone-board" aria-labelledby="phone-board-h"><div class="wrap">
@@ -22,15 +35,15 @@
     <a class="btn btn-ghost" href="/telefony">Všechny telefony</a>
   </div>
   <div class="phone-filters" aria-label="Filtrovat telefony">
-    <div class="phone-filter-row">
+    <div class="phone-scroll"><div class="phone-filter-row">
       <span>Značka</span>
       <a href="/telefony"{% if not brand %} aria-current="true"{% endif %}>Vše</a>
       {% for name in brands %}<a href="/telefony?znacka={{ name|urlencode }}">{{ name }}</a>{% endfor %}
-    </div>
-    <div class="phone-filter-row">
+    </div></div>
+    <div class="phone-scroll"><div class="phone-filter-row">
       <span>Cena</span>
       {% for slug, label, low, high in bands %}<a href="/telefony?pasmo={{ slug }}">{{ label }}</a>{% endfor %}
-    </div>
+    </div></div>
   </div>
   {% if models %}
   {% if drops %}
@@ -45,15 +58,7 @@
   {% endif %}
   <div class="phone-grid">
     {% for model in models %}
-    <article class="phone-card">
-      <a class="phone-card-main" href="/telefon/{{ model.slug }}">
-        {% if model.brand %}<p class="phone-card-brand">{{ model.brand }}</p>{% endif %}
-        <h3>{{ model.name }}</h3>
-        <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
-        <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
-        <div class="phone-card-img">{{ shop_img(model.image, 160, priority=loop.index <= 4, alt="", sizes="(min-width:960px) 180px, 40vw") }}</div>
-      </a>
-    </article>
+    {{ phone_card(model, priority=loop.index <= 4) }}
     {% endfor %}
   </div>
   {% else %}

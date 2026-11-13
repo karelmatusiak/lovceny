@@ -20,6 +20,22 @@ def _phone(db, name, price, shop="alza", stock=True, slug=None):
     return product
 
 
+def test_tablet_stays_off_the_phone_site_and_names_drop_specs():
+    init_db()
+    db = SessionLocal()
+    try:
+        tablet = _phone(db, 'Kruger&Matz Drive 11 6 56" 4/64 Gb Lte eSIM 6500 mAh IP68', 3990, slug="drive")
+        _phone(db, "Chytrý telefon Apple iPhone 17 Pro 12 GB", 30000, slug="ip17")
+        models = group_phones(db.query(Product).all())
+        names = [model.name for model in models]
+        assert names == ["Apple iPhone 17 Pro"]
+        client = TestClient(app)
+        assert "Kruger" not in client.get("/").text
+        assert client.get(f"/produkt/{tablet.id}", follow_redirects=False).headers["location"] == "/telefony"
+    finally:
+        db.close()
+
+
 def test_storage_variants_are_one_model():
     init_db()
     db = SessionLocal()

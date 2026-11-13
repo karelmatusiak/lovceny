@@ -659,7 +659,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 # Nový produkt jen u telefonů, s jistou kategorií a GTIN nebo jedním kódem.
                 # Kryt, sklo, kabel ani nabíječka se jako telefon nezaloží.
                 from .categories import is_accessory_text
-                if is_accessory_text(it.name or ""):
+                from .phones import is_tablet_text
+                if is_accessory_text(it.name or "") or is_tablet_text(it.name or ""):
                     stats["skipped_accessory"] += 1
                     continue
                 part = None if gtin else single_part_code(it.name or "")

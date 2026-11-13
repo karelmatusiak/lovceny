@@ -511,7 +511,8 @@ def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
     """
     from pathlib import Path
 
-    hero = Path(__file__).resolve().parents[1].joinpath("lovceny/templates/index.html").read_text()
+    root = Path(__file__).resolve().parents[1]
+    hero = (root / "lovceny/templates/index.html").read_text() + (root / "lovceny/templates/_macros.html").read_text()
     assert "shop_img(model.image, 160" in hero
 
     assert images.wsrv_blocked(FAST_IPHONE)

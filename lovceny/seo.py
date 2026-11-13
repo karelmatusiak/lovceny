@@ -263,6 +263,7 @@ def sitemap_xml(db) -> str:
             offers_by[offer.product_id].append(offer)
     from .categories import is_accessory_text, is_non_new
     from .exclusions import is_excluded_brand
+    from .phones import is_tablet_text
     from .landings import published_paths
     from .names import canonical_slug
     for path in published_paths(db):
@@ -272,7 +273,7 @@ def sitemap_xml(db) -> str:
     for model in phone_models(db):
         urls.append((f"{base}/telefon/{model.slug}", None))
     for pid, slug, created, name, category in products:
-        if is_excluded_brand(name or "") or is_accessory_text(name or "") or is_non_new(name or "", shop_category=category):
+        if is_excluded_brand(name or "") or is_accessory_text(name or "") or is_tablet_text(name or "") or is_non_new(name or "", shop_category=category):
             continue
         holder = type("P", (), {"name": name})()
         if any(offer_is_promoted(o, cutoffs, holder) for o in offers_by[pid]):

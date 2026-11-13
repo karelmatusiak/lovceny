@@ -134,7 +134,8 @@ def test_home_hero_clarity():
     assert 'property="og:description" content="Ulovte telefon za férovou cenu.' in html
     assert "Jak to funguje" not in html
     assert "Nejvíc nabízené modely" in html
-    assert "Nejnižší cena z českých e-shopů" in html
+    assert "Nejnižší ceny telefonů z českých e-shopů" in html
+    assert html.count("Ulovte telefon za férovou cenu.") >= 4
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
     assert 'href="/telefony"' in html and 'href="/pruvodce"' in html
     assert "Pokrytí roste" not in html

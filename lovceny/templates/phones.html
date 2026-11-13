@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img %}
+{% extends "base.html" %}{% from "_macros.html" import phone_card %}
 {% block title %}Mobilní telefony – nejnižší ceny{% if brand %} {{ brand }}{% endif %} | Lovceny{% endblock %}
 {% block description %}Telefony v českých e-shopech seřazené podle nejnižší ceny. Filtr podle značky a cenového pásma.{% endblock %}
 {% block body %}
@@ -25,15 +25,7 @@
   {% if models %}
   <div class="phone-grid">
     {% for model in models %}
-    <article class="phone-card">
-      <a class="phone-card-main" href="/telefon/{{ model.slug }}">
-        {% if model.brand %}<p class="phone-card-brand">{{ model.brand }}</p>{% endif %}
-        <h3>{{ model.name }}</h3>
-        <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
-        <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
-        <div class="phone-card-img">{{ shop_img(model.image, 160, alt="", sizes="(min-width:960px) 180px, 40vw") }}</div>
-      </a>
-    </article>
+    {{ phone_card(model) }}
     {% endfor %}
   </div>
   {% else %}

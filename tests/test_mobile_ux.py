@@ -44,7 +44,8 @@ def test_header_search_on_inner_pages_and_short_home_placeholder():
     assert "sluchátka na běhání nebo odkaz" not in home
     shops = c.get("/obchody").text
     assert 'class="nav-search"' not in shops
-    assert 'class="hero page-search"' in shops and 'id="home-q"' in shops
+    assert 'class="head-search"' in shops and 'id="home-q"' in shops
+    assert 'class="hero page-search"' not in shops
     assert 'placeholder="Telefon nebo odkaz z e-shopu"' in shops
     assert 'aria-label="Název telefonu nebo odkaz z e-shopu"' in shops
     assert ".page-search{padding:6px 0 2px" in STYLE

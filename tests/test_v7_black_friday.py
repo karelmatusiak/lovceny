@@ -37,7 +37,7 @@ def test_home_banner_toggle(client_db, monkeypatch):
     h = client.get("/").text
     assert 'class="bf-banner"' in h and 'href="/black-friday"' in h
     inner = client.get("/kategorie").text
-    assert 'class="bf-banner"' in inner and 'class="hero page-search"' in inner and 'id="home-q"' in inner
+    assert 'class="bf-banner"' in inner and 'class="head-search"' in inner and 'id="home-q"' in inner
     monkeypatch.setenv("BF_BANNER_FROM", "2099-01-01")
     assert 'class="bf-banner"' not in client.get("/").text
     assert 'class="bf-banner"' not in client.get("/kategorie").text

@@ -111,7 +111,7 @@ def site_banner():
     from . import blackfriday as bfmod
     if not bfmod.banner_active():
         return None
-    return {"year": bfmod.season().year, "text": bfmod.countdown_text()}
+    return {"year": bfmod.season().year, "text": bfmod.countdown_text(), "short": bfmod.banner_short()}
 
 
 tpl.env.globals["site_banner"] = site_banner
@@ -441,8 +441,10 @@ def _phone_or_home(product: Product):
         return RedirectResponse("/", status_code=301)
     from .categories import is_accessory_text
     from .exclusions import is_excluded_brand
+    from .phones import is_tablet_text
     if product.category_slug == "telefony" and (
         is_accessory_text(product.name or "") or is_excluded_brand(product.name or "")
+        or is_tablet_text(product.name or "")
     ):
         return RedirectResponse("/telefony", status_code=301)
     return None
@@ -504,9 +506,17 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
     compare_href = ""
     if len(compare_products) >= 2:
         compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
+    from .phones import storage_label
+    active_storage = pamet.strip()
+    if not active_storage and shown is not None:
+        for product in model.products:
+            if product.id == shown.product_id:
+                active_storage = storage_label(product.name or "") or ""
+                break
     crumbs = [("Lovceny", "/"), ("Telefony", "/telefony"), (model.name, f"/telefon/{model.slug}")]
     return tpl.TemplateResponse(request, "phone_model.html", {
         "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
+        "active_storage": active_storage,
         "shown_price": current, "buyable": bool(buyable), "verdict": verdict, "v": verdict,
         "storage_deals": deals, "compare_href": compare_href,
         "chart_ranges": ranges, "chart_note": verdict_note(verdict, ranges), "crumbs": crumbs,
@@ -539,6 +549,7 @@ def guide_page(request: Request, slug: str, db=Depends(get_db)):
     crumbs = [("Lovceny", "/"), ("Průvodci", "/pruvodce"), (guide.title, f"/pruvodce/{guide.slug}")]
     return tpl.TemplateResponse(request, "guide.html", {
         "guide": guide, "models": models, "columns": columns, "crumbs": crumbs,
+        "get_shop": get_shop,
         "canonical_path": f"/pruvodce/{guide.slug}",
         "ld": [seo.breadcrumb_ld(crumbs)],
     })
@@ -947,6 +958,33 @@ def compare_legacy(ids: str = "", pridat: str = "", db=Depends(get_db)):
     return RedirectResponse("/porovnat" + (f"?{q}" if q else ""), 301)
 
 
+def _phone_compare_rows(db, products: list) -> list[dict] | None:
+    """Srovnání telefonů je po modelech. Cizí výrobek nechá původní stránku."""
+    from .phones import buying_signal, is_public_phone, phone_models, storage_deals
+    if not products or not all(is_public_phone(product) for product in products):
+        return None
+    catalog = phone_models(db)
+    by_product = {product.id: model for model in catalog for product in model.products}
+    rows = []
+    seen = set()
+    for product in products:
+        model = by_product.get(product.id)
+        if model is None or model.slug in seen:
+            continue
+        seen.add(model.slug)
+        offer = next((item for item in model.offers if offer_is_buyable(item)), None)
+        if offer is None and model.offers:
+            offer = model.offers[0]
+        rows.append({
+            "model": model,
+            "offer": offer,
+            "shop": get_shop(offer.shop) if offer else None,
+            "deals": storage_deals(model),
+            "verdict": buying_signal(model),
+        })
+    return rows
+
+
 @app.get("/porovnat", response_class=HTMLResponse)
 def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db)):
     from .verdict import daily_best
@@ -958,6 +996,13 @@ def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db))
         extra = db.get(Product, int(pridat))
         if extra and all(x.id != extra.id for x in products):
             products.append(extra)
+    phone_rows = _phone_compare_rows(db, products)
+    if phone_rows is not None:
+        priced = [row for row in phone_rows if row["model"].lowest is not None]
+        cheapest = min(priced, key=lambda row: row["model"].lowest)["model"].slug if len(priced) > 1 else None
+        return tpl.TemplateResponse(request, "phone_compare.html", {
+            "rows": phone_rows, "cheapest": cheapest, "noindex": True, "get_shop": get_shop,
+        })
     assign_display_names(products)
     now = datetime.now(timezone.utc)
     items = []

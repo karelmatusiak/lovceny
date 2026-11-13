@@ -112,6 +112,22 @@ def banner_active(now: datetime | None = None) -> bool:
     return s.banner_from <= t <= s.banner_to
 
 
+def banner_short(now: datetime | None = None) -> str:
+    """Jeden krátký řádek do pruhu. Dlouhý text nechává countdown_text."""
+    s, t = season(now), today_prague(now)
+    n = s.days_to(t)
+    if n > 1:
+        word = "dny" if 2 <= n <= 4 else "dní"
+        return f"Black Friday za {n} {word}"
+    if n == 1:
+        return "Black Friday začíná zítra"
+    if n == 0:
+        return "Black Friday je dnes"
+    if t <= s.cm:
+        return "Black Friday víkend"
+    return f"Black Friday {s.year}"
+
+
 def countdown_text(now: datetime | None = None) -> str:
     s, t = season(now), today_prague(now)
     n = s.days_to(t)

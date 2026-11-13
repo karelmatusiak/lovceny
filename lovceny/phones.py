@@ -171,14 +171,33 @@ def is_phone_category(slug: str | None) -> bool:
     return slug == PHONE
 
 
+_TABLET_WORD = re.compile(r"\b(ipad|tablet)\b", re.I)
+_INCH = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:\"|″|”|''|palc)", re.I)
+
+
+def is_tablet_text(name: str) -> bool:
+    """Tablet v kategorii telefonů na web nepatří. Skládací telefon do 9\" ano."""
+    if _TABLET_WORD.search(name or ""):
+        return True
+    for match in _INCH.finditer(name or ""):
+        size = float(match.group(1).replace(",", "."))
+        if size >= 9:
+            return True
+    return False
+
+
+_AUDIO = re.compile(r"\b(sluchatk\w*|earbuds?|airpods|headphone\w*|mikrofon\w*)\b")
+
+
 def is_public_phone(product: Product) -> bool:
-    """Telefon, který smí na web. Příslušenství, použitý kus a cizí kategorie ne."""
+    """Telefon, který smí na web. Příslušenství, tablet, použitý kus a cizí kategorie ne."""
     if product.category_slug != PHONE:
         return False
     if product.retired_at is not None or product.catalog_hidden or product.needs_review:
         return False
     name = product.name or ""
-    if is_excluded_brand(name) or is_accessory_text(name):
+    from .categories import _fold
+    if is_excluded_brand(name) or is_accessory_text(name) or is_tablet_text(name) or _AUDIO.search(_fold(name)):
         return False
     if is_non_new(name, shop_category=product.category):
         return False
@@ -223,24 +242,80 @@ def _color_prefixes() -> set[str]:
     return prefixes
 
 
+_EXTRA_COLOR = {
+    "obsidian", "moonstone", "jetblack", "graphite", "grafitovy", "grafitova",
+    "cream", "burgundy", "vinova", "vinovy", "levandulovy", "levandulova",
+    "ultramarinovy", "ultramarinova", "modrozeleny", "modrozelena", "blankytne",
+    "emerald", "dusk", "hematite", "overture", "spellbound", "pantone",
+    "awesome", "lemon", "gadget", "pancerovy", "pancerny", "cerno", "night",
+    "sky", "deep", "hluboka", "hluboky", "salvejove", "salvejovy", "kosmicky",
+    "kosmicka", "temne", "temny", "mlhove", "mlhovy", "oblacne", "oblacny",
+    "svetle", "svetly", "starlit", "ice", "denim", "velvet", "sprout", "meteor",
+    "golden", "sporting", "bright", "blackened", "sage", "jet",
+}
+
+
+def _sku_token(word: str) -> bool:
+    """Kód zboží (SM-F966B…, MFYV4HX/A, 5109CHFH), ne číslo modelu jako X300 nebo MAGIC8."""
+    if re.fullmatch(r"[A-Za-z]{1,8}\d{1,2}", word or ""):
+        return False
+    if re.fullmatch(r"[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+(?:/[A-Z0-9]+)?", word or ""):
+        return True
+    if re.fullmatch(r"[A-Z0-9]{6,}/[A-Z0-9]+", word or ""):
+        return True
+    if re.fullmatch(r"[A-Z]{2,}\d[A-Z0-9]{4,}", word or ""):
+        return True
+    return bool(
+        word
+        and len(word) >= 6
+        and re.fullmatch(r"[A-Za-z0-9]+", word)
+        and any(ch.isdigit() for ch in word)
+        and any(ch.isalpha() for ch in word)
+    )
+
+
+_NAME_PREFIX = re.compile(
+    r"^(?:chytr[ýy]\s+telefon|mobiln[íi]\s+telefon|smartphone)\s+",
+    re.I,
+)
+
+
 def _model_name(names: list[str]) -> str:
-    """Název modelu bez úložiště, úhlopříčky a barvy. Pořadí slov necháváme z názvu."""
+    """Název modelu bez úložiště, úhlopříčky, barvy a zbytků specifikace."""
     from .shops.feed import _COLOR_CANON, canonicalize_name
     colors = set(_COLOR_CANON) | set(_COLOR_CANON.values())
     prefixes = _color_prefixes()
     best = ""
-    for name in names:
-        words = re.findall(r"\S+", name or "")
+    for raw in names:
+        name = _NAME_PREFIX.sub("", raw or "")
+        words = re.findall(r"\S+", name)
         kept = []
+        codes = []
         index = 0
-        noise = {"mah", "ip68", "esim", "lte", "nfc", "distribuce"}
+        noise = {
+            "mah", "ip68", "esim", "lte", "nfc", "distribuce", "5g", "usb",
+            "android", "hybridni", "dual", "ds", "hz", "typu", "cm", "mhz",
+            "chytry", "chytra",
+        }
         while index < len(words):
-            word = words[index].strip(".,;:()[]\"“”")
+            raw_word = words[index]
+            if raw_word.startswith("(") and raw_word.endswith(")"):
+                inner = raw_word[1:-1].strip()
+                if re.fullmatch(r"\d+[A-Za-z]?", inner):
+                    raw_word = inner
+                else:
+                    index += 1
+                    continue
+            if any(mark in raw_word for mark in ('"', "″", "”")):
+                index += 1
+                continue
+            word = raw_word.strip(".,;:()[]\"“”")
             canon = canonicalize_name(word)
             nxt_word = words[index + 1].strip(".,;:()[]\"“”") if index + 1 < len(words) else ""
             nxt = canonicalize_name(nxt_word)
             if canon in {"gb", "tb"}:
-                if kept and re.fullmatch(r"\d+", canonicalize_name(kept[-1])):
+                previous = words[index - 1].strip(".,;:()[]\"“”") if index else ""
+                if kept and kept[-1] == previous and re.fullmatch(r"\d+", canonicalize_name(previous)):
                     kept.pop()
                 index += 1
                 continue
@@ -253,22 +328,69 @@ def _model_name(names: list[str]) -> str:
             if re.fullmatch(r"\d+/\d+(?:gb|tb)?", word, flags=re.I) or re.fullmatch(r"\d+/\d+(?:gb|tb)?", canon or ""):
                 index += 1
                 continue
-            if canon in {"barva", "pamet", "barvy", "pl"}:
+            if "/" in word and re.search(r"\d", word):
                 index += 1
                 continue
-            if word.endswith(("\"", "″", "”")) or re.fullmatch(r"\d+(?:[.,]\d+)?\"", word):
+            if re.fullmatch(r"\d+[.,]\d+", word) or re.fullmatch(r"\d{5,}", word):
                 index += 1
+                continue
+            if re.fullmatch(r"\d+", word) and re.match(r"(?:gb|tb)\b", nxt or "", flags=re.I):
+                index += 1
+                continue
+            if canon in {"mah", "mhz"}:
+                if kept and re.fullmatch(r"\d{3,5}", canonicalize_name(kept[-1])):
+                    kept.pop()
+                index += 1
+                continue
+            if canon == "cm":
+                if kept and re.fullmatch(r"\d+(?:,\d+)?", kept[-1]):
+                    kept.pop()
+                index += 1
+                continue
+            if canon == "telefon" and index and canonicalize_name(words[index - 1].strip(".,;:()[]\"“”")) in {"chytry", "chytra"}:
+                index += 1
+                continue
+            if canon in {"barva", "pamet", "barvy", "pl"}:
+                index += 1
+                while index < len(words) and not re.search(r"\d", words[index]):
+                    index += 1
+                continue
+            code = re.fullmatch(r"(SM-[A-Z]\d{3})[A-Z0-9]*", word or "")
+            if code:
+                codes.append(code.group(1))
+                index += 1
+                continue
+            if re.fullmatch(r"\d+,\d+", word) or _sku_token(word):
+                index += 1
+                continue
+            if word.endswith("…"):
+                index += 1
+                continue
+            parts = [part for part in (canon or "").split() if part]
+            if parts and all(part in colors or part in _EXTRA_COLOR or part in noise for part in parts):
+                index += 1
+                if "android" in parts and index < len(words) and re.fullmatch(r"\d+(?:[.,]\d+)?", words[index].strip(".,")):
+                    index += 1
+                if "typu" in parts or "usb" in parts:
+                    if index < len(words) and words[index].strip(".,") in {"C", "c"}:
+                        index += 1
                 continue
             if nxt in colors and canon not in {"pro", "max", "plus", "mini", "ultra", "air", "note", "iphone", "galaxy"}:
                 index += 2
                 continue
             if canon in colors or canon in prefixes or canon in noise:
                 index += 1
+                if canon == "android" and index < len(words) and re.fullmatch(r"\d+(?:[.,]\d+)?", words[index].strip(".,")):
+                    index += 1
+                if canon in {"typu", "usb"} and index < len(words) and words[index].strip(".,") in {"C", "c"}:
+                    index += 1
                 continue
-            if word:
+            if word and word not in {"C", "c"}:
                 kept.append(word)
             index += 1
         text = re.sub(r"\s+", " ", " ".join(kept)).strip(" -/,")
+        if codes and text.casefold() in {"samsung galaxy", "samsung", "galaxy"}:
+            text = f"{text} {codes[0]}".strip()
         if text and (not best or (len(text), text.casefold()) < (len(best), best.casefold())):
             best = text
     return best or "Telefon"

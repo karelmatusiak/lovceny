@@ -28,7 +28,14 @@
       <a class="logo" href="/" aria-label="Lovceny – telefony"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="126" height="36"></a>
       <p class="logo-slogan">Ulovte telefon za férovou cenu.</p>
     </div>
-    <button type="button" class="nav-find" id="nav-find" aria-label="Hledat">
+    {% if request.url.path != '/' %}
+    <form class="head-search" id="head-search" action="/hledat" method="get" role="search" autocomplete="off">
+      <label class="sr-only" for="home-q">Hledat telefon</label>
+      <input id="home-q" name="q" type="search" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu">
+      <button class="btn btn-primary" type="submit">Hledat</button>
+    </form>
+    {% endif %}
+    <button type="button" class="nav-find" id="nav-find" aria-label="Hledat"{% if request.url.path != '/' %} aria-expanded="false" aria-controls="head-search"{% endif %}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
     </button>
     <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-panel">
@@ -41,16 +48,7 @@
   </nav>
 </div></header>
 {% set banner = site_banner() %}
-{% if banner %}<aside class="bf-banner" aria-label="Black Friday {{ banner.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ banner.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
-{% if request.url.path != '/' %}
-<header class="hero page-search" id="hledat"><div class="wrap">
-  <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
-    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input id="home-q" name="q" type="text" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu"></label>
-    <button class="btn btn-primary" type="submit">Hledat</button>
-  </form>
-</div></header>
-{% endif %}
+{% if banner %}<aside class="bf-banner" id="bf-banner" aria-label="Black Friday {{ banner.year }}"><div class="wrap bf-line"><a href="/black-friday">{{ banner.short }} · Ověření slev <span aria-hidden="true">→</span></a><button type="button" class="bf-dismiss" aria-label="Skrýt upozornění na Black Friday">×</button></div></aside>{% endif %}
 <main id="obsah" tabindex="-1">
 {% if crumbs is defined and crumbs|length > 1 %}<div class="wrap"><nav class="crumbs" aria-label="Drobečková navigace"><ol>{% for name, url in crumbs %}<li>{% if loop.last %}<span aria-current="page">{{ name }}</span>{% else %}<a href="{{ url }}">{{ name }}</a>{% endif %}</li>{% endfor %}</ol></nav></div>{% endif %}
 {% block body %}{% endblock %}
@@ -111,11 +109,30 @@
   var b=document.getElementById("nav-find");
   if(!b)return;
   b.addEventListener("click", function(){
+    var form=document.getElementById("head-search");
+    if(form){
+      var open=!form.classList.contains("is-open");
+      form.classList.toggle("is-open", open);
+      b.setAttribute("aria-expanded", open?"true":"false");
+      if(open){ var input=form.querySelector("input"); if(input) input.focus(); }
+      return;
+    }
     var home=document.getElementById("home-q");
     if(!home) return;
     var box=document.getElementById("hledat");
     if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
     home.focus();
+  });
+})();
+(function(){
+  var bar=document.getElementById("bf-banner");
+  if(!bar) return;
+  try{ if(sessionStorage.getItem("lovceny-bf-hide")==="1"){ bar.remove(); return; } }catch(e){}
+  var btn=bar.querySelector(".bf-dismiss");
+  if(!btn) return;
+  btn.addEventListener("click", function(){
+    bar.remove();
+    try{ sessionStorage.setItem("lovceny-bf-hide","1"); }catch(e){}
   });
 })();
 </script>

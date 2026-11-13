@@ -68,6 +68,16 @@
 </div>
 </div>
 {%- endmacro %}
+{% macro phone_card(model, priority=false) -%}
+<article class="phone-card">
+  <a class="phone-card-main" href="/telefon/{{ model.slug }}">
+    <div class="phone-card-img">{% if model.image %}{{ shop_img(model.image, 160, priority=priority, alt="", sizes="(min-width:960px) 220px, 70vw") }}{% else %}{{ img_missing() }}{% endif %}</div>
+    <h3>{{ model.name }}</h3>
+    <p class="phone-card-price">{% if model.lowest is not none %}<b>{{ model.lowest|czk }}</b>{% else %}<b>Cenu zjišťujeme</b>{% endif %}</p>
+    <p class="phone-card-meta">{% if model.in_stock %}skladem{% else %}není skladem{% endif %}{% if model.shops %} · {{ cz_count(model.shops, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+  </a>
+</article>
+{%- endmacro %}
 {% macro shop_img(url, px=60, priority=false, alt="", sizes="", box=0) -%}
 {%- set a = img_attrs(url, px) -%}
 {%- set side = box if box else px -%}

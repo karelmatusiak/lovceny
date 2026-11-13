@@ -21,22 +21,41 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .btn-primary{background:var(--brand);box-shadow:none}
 .btn-primary:hover{background:var(--brand-600)}
 .kicker,.eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
-.phone-hero{padding:12px 0 0}
-.phone-hero h1{font-size:clamp(28px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:700;max-width:20ch;margin:4px 0 8px}
-.phone-lead{max-width:62ch;color:var(--muted);font-size:15px;line-height:1.45;margin:0 0 12px}
-.phone-hero .search{background:var(--soft);border:1px solid var(--line);border-radius:16px}
-.phone-board,.phone-guides,.phone-page{padding:12px 0 var(--space-6)}
-.phone-hero .search{margin-top:0}
-@media (max-width:700px){
-  .bf-banner a{font-size:13px;line-height:1.3;min-height:40px;padding:6px 0}
-  .phone-hero .search{flex-wrap:wrap}
-  .phone-hero .search .btn-primary{width:100%;height:44px}
-  .phone-hero .search input{height:44px;font-size:16px}
+.bf-banner{background:#1C1917}
+.bf-line{display:flex;align-items:center;gap:8px;min-height:36px}
+.bf-banner .bf-line a{display:block;flex:1;min-width:0;padding:7px 0;color:#fff;text-decoration:none;font-size:13.5px;font-weight:650;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bf-dismiss{flex:none;width:32px;height:32px;border:0;background:transparent;color:#fff;font-size:20px;line-height:1;cursor:pointer}
+.head-search{display:none;align-items:center;gap:8px;margin-left:auto}
+.head-search input{height:40px;width:min(240px,28vw);border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:15px;background:var(--bg);color:var(--ink)}
+.head-search .btn{height:40px;padding:0 14px;font-size:14px}
+@media (min-width:901px){
+  .head-search{display:flex}
+  .site-nav:has(.head-search) .nav-find{display:none}
 }
-.phone-board-head{display:flex;justify-content:space-between;gap:var(--space-4);align-items:end;margin-bottom:var(--space-4)}
-.phone-board-head h2,.phone-page h1{letter-spacing:-.03em;line-height:1.15;font-size:28px}
-.phone-filters{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
-.phone-filter-row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+@media (max-width:900px){
+  .head-search.is-open{display:flex;flex-basis:100%;order:2;padding:0 0 8px}
+  .head-search.is-open input{flex:1;width:auto;min-width:0;font-size:16px}
+  .head-search.is-open .btn{flex:none}
+}
+.phone-hero{padding:8px 0 0}
+.phone-hero-grid{display:grid;grid-template-columns:minmax(0,1.35fr) 260px;gap:20px;align-items:center}
+.phone-hero h1{font-size:28px;line-height:1.12;letter-spacing:-.03em;font-weight:750;max-width:22ch;margin:2px 0 6px}
+.nowrap{white-space:nowrap}
+.phone-lead{max-width:62ch;color:var(--muted);font-size:14px;line-height:1.4;margin:0 0 10px}
+.phone-hero .search{background:var(--soft);border:1px solid var(--line);border-radius:14px;margin-top:0;flex-wrap:nowrap}
+.phone-hero .search input,.phone-hero .search .btn-primary{height:46px}
+.phone-hero .search .btn-primary{width:auto;flex:none;padding:0 18px}
+.hero-feature{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:10px;text-decoration:none;color:inherit}
+.hero-feature .phone-card-img{height:84px;margin:0}
+.hero-feature strong{display:block;font-size:15px;line-height:1.25;letter-spacing:-.02em}
+.hero-feature b{display:block;margin-top:4px;font-size:20px;letter-spacing:-.03em}
+.phone-board,.phone-guides,.phone-page{padding:8px 0 var(--space-6)}
+.phone-board-head{display:flex;justify-content:space-between;gap:var(--space-3);align-items:end;margin-bottom:8px}
+.phone-board-head h2{letter-spacing:-.03em;line-height:1.15;font-size:20px;margin:0}
+.phone-page h1,.guides-page h1{letter-spacing:-.03em;line-height:1.15;font-size:28px;margin:2px 0 8px;max-width:none;text-align:left}
+.phone-filters{display:grid;gap:6px;margin-bottom:10px}
+.phone-scroll{position:relative;min-width:0}
+.phone-filter-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .phone-filter-row span{font-size:13px;font-weight:700;color:var(--muted)}
 .phone-filter-row a,.storage-chip{text-decoration:none;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:999px;min-height:44px;display:inline-flex;align-items:center;padding:0 14px;font-size:14px;font-weight:650}
 .phone-filter-row a[aria-current="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -46,9 +65,9 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .phone-drops a{font-weight:700;text-decoration:none}
 .phone-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-4)}
 .phone-card{background:var(--soft);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
-.phone-card-main{display:flex;flex-direction:column;gap:2px;text-decoration:none;padding:12px 12px 16px;color:inherit;height:100%}
-.phone-card-img,.model-photo{color:var(--muted)}
-.phone-card-img{height:128px;display:grid;place-items:center;background:var(--bg);border-radius:12px;overflow:hidden;margin-bottom:8px}
+.phone-card-main{display:flex;flex-direction:column;gap:2px;text-decoration:none;padding:10px 10px 12px;color:inherit;height:100%}
+.phone-card-img,.model-photo,.guide-photo,.pcmp-photo{color:var(--muted)}
+.phone-card-img{height:112px;display:grid;place-items:center;background:var(--bg);border-radius:12px;overflow:hidden;margin:0 0 8px}
 .phone-card-img .img-missing,.model-photo .img-missing{min-height:100%}
 .phone-card-img .img-missing svg,.model-photo .img-missing svg{display:none}
 .phone-card-img .img-missing::before,.model-photo .img-missing::before{
@@ -57,8 +76,8 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 }
 .phone-card-img img,.model-photo img{width:100%;height:100%;object-fit:contain}
 .phone-card-brand{margin:0;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.phone-card h3{margin:0 0 8px;font-size:16px;line-height:1.3;letter-spacing:-.02em}
-.phone-card-price{margin:auto 0 0;font-size:22px;letter-spacing:-.03em}
+.phone-card h3{margin:0;font-size:15px;line-height:1.3;letter-spacing:-.02em;min-height:2.6em}
+.phone-card-price{margin:6px 0 0;font-size:20px;letter-spacing:-.03em}
 .phone-card-price b{font-weight:750}
 .phone-card-meta,.phone-note,.phone-count,.phone-empty,.model-note{color:var(--muted);font-size:14px;line-height:1.45}
 .guide-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);list-style:none;padding:0;margin:0}
@@ -67,11 +86,12 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .phone-filter-form label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
 .phone-filter-form select{min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;color:var(--ink);background:var(--soft)}
 .cmp-title{font-size:clamp(22px,2.2vw,30px);line-height:1.25;letter-spacing:-.02em}
-.model{padding:var(--space-5) 0 var(--space-7)}
-.model-hero{display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:var(--space-6);align-items:center}
-.model-photo{background:var(--soft);border:1px solid var(--line);border-radius:24px;aspect-ratio:1;display:grid;place-items:center;padding:var(--space-4)}
-.model-buybox h1{font-size:clamp(28px,3vw,40px);line-height:1.1;letter-spacing:-.03em;margin:4px 0 8px}
-.model-price{font-size:44px;line-height:1;font-weight:750;letter-spacing:-.04em;margin:0}
+.model{padding:8px 0 var(--space-7)}
+.model-hero{display:grid;grid-template-columns:minmax(200px,280px) minmax(0,1fr);gap:24px;align-items:start}
+.model-photo{background:var(--soft);border:1px solid var(--line);border-radius:20px;height:280px;display:grid;place-items:center;padding:12px}
+.model-buybox h1{font-size:32px;line-height:1.1;letter-spacing:-.03em;margin:2px 0 6px;max-width:none;text-align:left}
+.model-price{font-size:36px;line-height:1;font-weight:750;letter-spacing:-.04em;margin:0}
+.history-note{margin:8px 0 0;color:var(--muted);font-size:13.5px;line-height:1.4;max-width:62ch}
 .model-price-note{margin:8px 0 0;color:var(--muted)}
 .verdict{margin-top:var(--space-4);padding:12px 14px;border-radius:14px;background:var(--soft);border:1px solid var(--line);display:grid;gap:4px}
 .verdict b{font-size:16px}
@@ -79,9 +99,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .verdict-buy{background:var(--buy)}
 .verdict-wait{background:var(--wait)}
 .model-compare{display:inline-flex;margin-top:var(--space-3);font-weight:700;color:var(--brand)}
-.model-block{margin-top:var(--space-6)}
+.model-block{margin-top:var(--space-5)}
 .model-block h2{font-size:22px;letter-spacing:-.02em;margin:0 0 var(--space-3)}
-.storage-row{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.storage-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.offer-top{margin-top:12px}
 .storage-chip{flex-direction:column;align-items:flex-start;justify-content:center;border-radius:16px;min-width:132px;padding:10px 14px;gap:2px}
 .storage-chip b{font-size:15px}
 .storage-chip span{font-size:13px;font-weight:650;color:var(--muted)}
@@ -93,29 +114,64 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .offer-shop{font-weight:700}
 .offer-price{font-size:20px;font-weight:750;letter-spacing:-.03em}
 .offer-oos{color:var(--muted);font-size:14px;font-weight:700}
-.guide-list{list-style:none;padding:0;margin:12px 0 20px;display:grid;gap:8px;counter-reset:guide}
-.guide-list li{display:flex;gap:12px;align-items:baseline;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px;counter-increment:guide}
-.guide-list li::before{content:counter(guide);font-weight:750;color:var(--brand);min-width:1.4em}
-.guide-list a{text-decoration:none;font-weight:700;margin-right:auto}
-.guide-list b{font-size:18px;letter-spacing:-.03em}
+.guide-list{list-style:none;padding:0;margin:8px 0 20px;display:grid;gap:8px}
+.guide-list li{display:grid;grid-template-columns:28px 56px minmax(0,1fr) auto auto auto;gap:10px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:8px 12px}
+.guide-list .is-top{border-color:#C9B59A;background:#FFF9F1;box-shadow:inset 3px 0 0 var(--accent)}
+.guide-rank{font-weight:750;color:var(--brand);text-align:center}
+.guide-list .is-top .guide-rank{color:var(--accent)}
+.guide-photo{width:56px;height:56px;display:grid;place-items:center;background:var(--bg);border-radius:10px;overflow:hidden}
+.guide-photo img,.pcmp-photo img{width:100%;height:100%;object-fit:contain}
+.guide-name{font-weight:700;text-decoration:none;line-height:1.3}
+.guide-shop{color:var(--muted);font-size:13px;white-space:nowrap}
+.guide-list b{font-size:18px;letter-spacing:-.03em;white-space:nowrap}
+.guide-open{font-weight:700;color:var(--brand);text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
+.pcmp-scroll{overflow-x:auto}
+.pcmp{min-width:calc(148px + var(--n) * 200px)}
+.pcmp-row{display:grid;grid-template-columns:148px repeat(var(--n),minmax(180px,1fr));gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+.pcmp-head{align-items:end;border-bottom-width:2px}
+.pcmp-label{font-size:13px;font-weight:700;color:var(--muted)}
+.pcmp-id{display:grid;gap:8px;text-decoration:none;color:inherit}
+.pcmp-photo{height:120px;display:grid;place-items:center;background:var(--soft);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pcmp-name{font-weight:750;font-size:16px;line-height:1.3;letter-spacing:-.02em}
+.pcmp-price{font-size:22px;font-weight:750;letter-spacing:-.03em}
+.pcmp-price.is-best{color:var(--brand)}
+.pcmp-store{display:block;font-size:13px;line-height:1.35}
 @media (max-width:900px){
+  .phone-hero-grid{grid-template-columns:1fr;gap:0}
+  .hero-feature{display:none}
+  .phone-hero h1{font-size:24px;max-width:none}
+  .phone-kicker{display:none}
   .phone-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .guide-links{grid-template-columns:1fr 1fr}
-  .model-hero{grid-template-columns:1fr}
-  .model-price{font-size:36px}
+  .guide-links{grid-template-columns:1fr}
+  .model-hero{grid-template-columns:1fr;gap:12px}
+  .model-photo{height:200px;border-radius:16px}
+  .model-buybox h1{font-size:26px}
+  .model-price{font-size:32px}
+  .phone-scroll::after{content:"";position:absolute;top:0;right:0;bottom:0;width:28px;pointer-events:none;background:linear-gradient(90deg,rgba(244,241,234,0),var(--bg))}
+  .phone-filter-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .phone-filter-row::-webkit-scrollbar{display:none}
+  .phone-filter-row a,.phone-filter-row span{flex:none}
+  .guide-list li{grid-template-columns:24px 52px minmax(0,1fr) auto;grid-template-areas:"rank photo name open" "rank photo shop price"}
+  .guide-rank{grid-area:rank}
+  .guide-photo{grid-area:photo}
+  .guide-name{grid-area:name}
+  .guide-shop{grid-area:shop}
+  .guide-list b{grid-area:price}
+  .guide-open{grid-area:open;justify-self:end}
 }
 @media (max-width:400px){
   .phone-lead{display:none}
-  .phone-hero h1{font-size:24px;line-height:1.15;margin-bottom:8px}
-  .phone-board-head h2{font-size:22px}
-  .phone-filters{margin-bottom:8px}
-  .phone-filter-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
-  .phone-filter-row a,.phone-filter-row span{flex:none}
-}
-@media (max-width:390px){
-  .phone-grid,.guide-links{grid-template-columns:1fr}
+  .phone-hero h1{font-size:22px;line-height:1.15;margin-bottom:8px}
+  .phone-board-head h2{font-size:18px}
+  .phone-grid{grid-template-columns:1fr}
   .offer-table li{grid-template-columns:1fr auto}
   .offer-table .btn,.offer-table .offer-oos{grid-column:1 / -1;justify-self:start}
   .wrap{padding:0 16px}
-  .phone-hero h1{font-size:30px}
 }
+@media (max-width:560px){
+  .phone-hero .search{flex-direction:row;align-items:center;padding:6px}
+  .phone-hero .search .btn-primary,.head-search .btn{width:46px;min-width:46px;padding:0;font-size:0}
+  .phone-hero .search .btn-primary{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round'><circle cx='11' cy='11' r='6.5'/><path d='M20 20l-3.2-3.2'/></svg>");background-repeat:no-repeat;background-position:center;background-size:20px}
+  .head-search .btn{width:auto;min-width:0;padding:0 14px;font-size:14px}
+}
+.pcmp-label{position:sticky;left:0;background:var(--bg);z-index:1}
