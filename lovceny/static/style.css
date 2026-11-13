@@ -114,6 +114,8 @@ svg.chart{width:100%;height:auto;display:block}
 .promise ul{list-style:none;display:grid;gap:14px}
 .promise li{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px 18px;display:flex;gap:12px;align-items:flex-start;font-size:15.5px}
 .promise li svg{flex:none;margin-top:2px}
+.promise-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.promise .verdicts{justify-content:flex-start;margin:0}
 /* hlídání ceny */
 .watch{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
 .watch-form{padding:36px}
@@ -175,6 +177,9 @@ footer{border-top:1px solid var(--line);margin-top:28px;padding:28px 0 18px;font
 
 /* hero product showcase */
 .hero-compact{display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:left}
+.hero-title{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0}
+.hero-title .pill{white-space:nowrap}
+@media (max-width:719px){.hero-title .pill{white-space:normal}}
 .hero-compact h1{margin:0;max-width:none;text-align:left;font-size:clamp(26px,6vw,32px);line-height:1.12}
 .hero-compact .search{margin:0;max-width:none}
 .hero-lead{margin:0 auto 8px;font-size:15px;max-width:40rem}
@@ -220,7 +225,8 @@ h2.hero-picks-title{font-size:clamp(22px,2.4vw,28px);font-weight:800;letter-spac
 }
 @media (min-width:800px){
   .hero-compact{flex-direction:row;align-items:center;gap:28px}
-  .hero-compact h1{flex:0 1 16em;font-size:32px}
+  .hero-compact .hero-title{flex:1 1 auto;max-width:34rem}
+  .hero-compact h1{flex:none;font-size:32px}
   .hero-compact .search{flex:1 1 auto}
   .hero-pick-name{font-size:15px}
 }

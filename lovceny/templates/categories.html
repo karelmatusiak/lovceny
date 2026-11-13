@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import ico %}
 {% block title %}Kategorie elektroniky a spotřebičů – ceny a historie | Lovceny{% endblock %}
 {% block description %}Telefony, televize, notebooky, stolní počítače, sluchátka, pračky, lednice, kávovary, vysavače, konzole, hodinky, foťáky a chytrá domácnost. Poctivé ceny s historií.{% endblock %}
 {% block body %}
@@ -9,7 +9,7 @@
 </div></section>
 <section style="padding-top:8px"><div class="wrap">
   <ul class="cat-cards">{% for c in CATEGORIES %}
-    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ c.icon }}</span>
+    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ ico(c.slug) }}</span>
       <span><b>{{ c.name }}</b><small>{% set n = counts.get(c.slug, 0) %}{{ n }} {% if n == 1 %}produkt{% elif 1 < n < 5 %}produkty{% else %}produktů{% endif %}</small></span></a></li>{% endfor %}
   </ul>
 </div></section>

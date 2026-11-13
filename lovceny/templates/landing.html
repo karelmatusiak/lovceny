@@ -1,12 +1,12 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link, ico %}
 {% block title %}{{ page.title }} | Lovceny{% endblock %}
 {% block description %}{{ page.description }}{% endblock %}
 {% block body %}
 <section class="cat-hero"><div class="wrap">
-  <div class="eyebrow"><span aria-hidden="true">{{ cat.icon }}</span> {{ cat.name }}</div>
+  <div class="eyebrow"><span aria-hidden="true">{{ ico(cat.slug) }}</span> {{ cat.name }}</div>
   <h1 class="page-h1">{{ page.h1 }}</h1>
   <p class="lead">{{ page.intro }}</p>
-  <p class="sub">Jen nabídky skladem. Vyprodané se nepočítají a nemají tlačítko Koupit. {{ rank_link() }}</p>
+  <p class="sub">Jen nabídky skladem. Vyprodané se nepočítají a nemají tlačítko Do obchodu. {{ rank_link() }}</p>
   {% if page.total > page.rows|length %}
   <p class="sub">Ukazujeme {{ page.rows|length }} nejlevnějších z {{ page.total }}. Další jsou v <a href="/kategorie/{{ cat.slug }}">kategorii {{ cat.name }}</a>.</p>
   {% endif %}
@@ -24,7 +24,7 @@
       </a>
       <div class="bf-act">
         {% if sh and o.in_stock is true %}
-        <a class="btn btn-shop-sm" href="{{ go_href(o) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>
+        <span class="buy-block"><span class="buy-shop">{{ sh.name }}</span><a class="btn btn-shop-sm" href="{{ go_href(o) }}" rel="{{ shop_rel(sh) }}" target="_blank">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>
         {% endif %}
       </div>
     </li>

@@ -34,6 +34,12 @@ h1.p-name{font-size:21px;margin:0;letter-spacing:-.01em}.p-full-name{margin:4px 
 @media (max-width:640px){.live-row{grid-template-columns:52px 1fr;}.live-price,.live-act{grid-column:2;text-align:left;align-items:flex-start}}
 /* verdikt: text + ikona + barva (ne jen barva) */
 .verdict{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%}
+.ico{display:inline-block;width:1.05em;height:1.05em;vertical-align:-0.18em;flex:none}
+.cat-ico .ico{width:28px;height:28px}.about-ico .ico{width:26px;height:26px}.kdy-ico .ico,.dg-optin-ico .ico{width:28px;height:28px}
+.buy-block{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.buy-shop{margin:0;font-size:13px;font-weight:800;line-height:1.25}
+.p-buycol .buy-shop{font-size:15px}
+.pcard-buttons .buy-block,.deal-act .buy-block{align-items:stretch;width:100%}
 .verdict-badge{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:15px;line-height:1.2;
   border-radius:12px;padding:7px 12px;border:2px solid currentColor;background:#fff}
 .verdict-ico{font-size:17px;line-height:1}
@@ -540,9 +546,14 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 
 /* ---- v7: Black Friday ---- */
 .bf-banner{background:#14211B;color:#fff}
-.bf-banner a{display:flex;align-items:center;gap:12px;padding:10px 0;text-decoration:none;min-height:48px;flex-wrap:wrap}
+.bf-banner a{display:flex;align-items:center;gap:12px;padding:10px 0;text-decoration:none;min-height:48px;flex-wrap:nowrap}
 .bf-banner a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.bf-b-ico{font-size:20px}.bf-b-txt{flex:1;min-width:220px;font-size:15px}.bf-b-txt span{color:#C9D6CF}
+.bf-b-ico{display:inline-flex;flex:none}.bf-b-ico .ico{width:22px;height:22px}
+.bf-b-txt{flex:1;min-width:0;font-size:15px;white-space:nowrap}.bf-b-txt span{color:#C9D6CF}
+@media (max-width:800px){
+  .bf-banner a{flex-wrap:wrap;align-items:flex-start}
+  .bf-b-txt{white-space:normal;overflow:visible}
+}
 .bf-b-go{font-weight:800;color:#FFC7AE;white-space:nowrap}
 .bf-hero{padding:28px 0 6px}
 .bf-hero-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:28px;align-items:center}

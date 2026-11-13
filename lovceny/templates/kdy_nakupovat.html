@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import ico %}
 {% block title %}Kdy nakupovat elektroniku – kalendář slev v Česku | Lovceny{% endblock %}
 {% block description %}Kdy se vyplatí koupit telefon, televizi, notebook nebo pračku: Black Friday, Cyber Monday, povánoční výprodeje, back-to-school a představení nových iPhonů. Obecné vzorce a data z naší historie cen.{% endblock %}
 {% block og_title %}Kdy nakupovat – kalendář slev | Lovceny{% endblock %}
@@ -10,35 +10,34 @@
     <p class="sub">Kdy se v Česku obvykle zlevňuje elektronika a spotřebiče. Kalendář níže popisuje <b>obecné vzorce trhu</b> – nejsou to naše měření a v konkrétním roce se mohou lišit. Pod ním jsou <b>data z naší vlastní historie cen</b>, pokud jich máme dost.</p>
   </div>
 
-  <div class="kdy-legend" role="note"><span class="tag-general">Obecný vzorec</span> = jak to na trhu obvykle chodí (ne naše data) · <span class="tag-data">Naše data</span> = spočítáno z cen, které jsme sami naměřili</div>
-
   <h2 class="kdy-h2" id="kalendar">Kalendář typických slevových období</h2>
   <ol class="kdy-cal" aria-label="Kalendář po měsících">
     {% for m in range(1, 13) %}{% set ps = by_month[m] %}
     <li class="kdy-month{% if m == this_month %} is-now{% endif %}{% if not ps %} is-empty{% endif %}">
       <h3>{{ months[m-1]|capitalize }}{% if m == this_month %} <span class="kdy-now">teď</span>{% endif %}</h3>
-      {% if ps %}<ul>{% for p in ps %}<li><a href="#{{ p.key }}"><span aria-hidden="true">{{ p.icon }}</span> {{ p.name }}</a></li>{% endfor %}</ul>
+      {% if ps %}<ul>{% for p in ps %}<li><a href="#{{ p.key }}"><span aria-hidden="true">{{ ico(p.key) }}</span> {{ p.name }}</a></li>{% endfor %}</ul>
       {% else %}<p>Bez výrazného slevového období.</p>{% endif %}
     </li>{% endfor %}
   </ol>
 
+  <div class="kdy-legend" role="note"><span class="tag-general">Obecný vzorec</span> = jak to na trhu obvykle chodí (ne naše data) · <span class="tag-data">Naše data</span> = spočítáno z cen, které jsme sami naměřili</div>
   <div class="kdy-periods">
     {% for p in periods %}
     <article class="card kdy-period" id="{{ p.key }}">
-      <div class="kdy-p-head"><span class="kdy-ico" aria-hidden="true">{{ p.icon }}</span><div><h3>{{ p.name }}</h3><p class="kdy-when">{{ p.when }}</p></div><span class="tag-general">Obecný vzorec</span></div>
+      <div class="kdy-p-head"><span class="kdy-ico" aria-hidden="true">{{ ico(p.key) }}</span><div><h3>{{ p.name }}</h3><p class="kdy-when">{{ p.when }}</p></div><span class="tag-general">Obecný vzorec</span></div>
       <p>{{ p.text }}</p>
       {% if p.cats %}<p class="kdy-cats">Týká se často: {% for s in p.cats %}{% set c = cat_by[s] %}<a href="/kategorie/{{ c.slug }}">{{ c.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     </article>{% endfor %}
   </div>
 
-  <div class="card kdy-tip"><span aria-hidden="true">🔎</span><p><b>Platí vždy:</b> sleva se podle zákona (§ 12a zákona o ochraně spotřebitele) má počítat z nejnižší ceny za posledních 30 dní. Než koupíš, <a href="/over-slevu">ověř slevu</a> – ukážeme, kolik produkt stál za posledních 30 dní, pokud ho sledujeme.</p></div>
+  <div class="card kdy-tip"><span aria-hidden="true">{{ ico('search') }}</span><p><b>Platí vždy:</b> sleva se podle zákona (§ 12a zákona o ochraně spotřebitele) má počítat z nejnižší ceny za posledních 30 dní. Než koupíš, <a href="/over-slevu">ověř slevu</a> – ukážeme, kolik produkt stál za posledních 30 dní, pokud ho sledujeme.</p></div>
 
   <h2 class="kdy-h2" id="kategorie">Podle kategorií</h2>
   <p class="kdy-method">Naše data: pro každý produkt porovnáme denní nejnižší cenu s jeho obvyklou cenou (medián) a pro každý měsíc vezmeme medián přes produkty. Tvrzení ukážeme, jen když máme aspoň {{ t.MIN_PRODUCTS }} produktů s historií a data z aspoň {{ t.MIN_MONTHS }} různých měsíců (v každém měsíci aspoň {{ t.MIN_PRODUCTS_PER_MONTH }} produkty s ≥ {{ t.MIN_DAYS_PER_PRODUCT_MONTH }} dny cen). Ukázková (demo) data nezapočítáváme.</p>
   <div class="kdy-cats-grid">
     {% for c in CATEGORIES %}{% set ins = insights[c.slug] %}
     <article class="card kdy-cat" id="{{ c.slug }}">
-      <h3><span aria-hidden="true">{{ c.icon }}</span> <a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></h3>
+      <h3><span aria-hidden="true">{{ ico(c.slug) }}</span> <a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></h3>
       <p><span class="tag-general">Obecný vzorec</span> {{ tips[c.slug] }}</p>
       <div class="kdy-data">
         <span class="tag-data">Naše data</span>

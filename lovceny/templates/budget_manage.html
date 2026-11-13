@@ -1,8 +1,8 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, rank_link, ico %}
 {% block title %}Hlídání rozpočtu: {{ label }} | Lovceny{% endblock %}
 {% block body %}
 <section class="bw-hero"><div class="wrap">
-  <div class="eyebrow"><span aria-hidden="true">💰</span> Hlídání podle rozpočtu</div>
+  <div class="eyebrow"><span aria-hidden="true">{{ ico('coin') }}</span> Hlídání podle rozpočtu</div>
   <h1 class="page-h1">{{ label }}</h1>
   {% if potvrzeno %}<div class="notice ok-notice" role="status">Hlídání je potvrzené. Ozveme se, až se objeví něco nového v rozpočtu.</div>{% endif %}
   {% if zmeneno %}<div class="notice ok-notice" role="status">Rozpočet jsme upravili.</div>{% endif %}

@@ -165,7 +165,7 @@ def test_ui_shows_hint_and_summary(gemini, shops):
     c = TestClient(app)
     assert "Rozumíme i běžné řeči" in c.get("/").text
     html = c.get("/hledat/zive", params={"q": "tichá pračka do 10 tisíc"}).text
-    assert "✨" in html and "&lt;b&gt;stojí" in html and "do 10 000" in html.replace("\xa0", " ")
+    assert 'class="ico"' in html and "&lt;b&gt;stojí" in html and "do 10 000" in html.replace("\xa0", " ")
     assert "Pračka LG F4" in html and "Samsung" not in html
 
 

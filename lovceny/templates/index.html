@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import pcard, badge, shop_img, img_missing %}
+{% extends "base.html" %}{% from "_macros.html" import pcard, badge, shop_img, img_missing, ico %}
 {% block description %}Lovceny srovnává ceny elektroniky v českých e-shopech, ukáže historii ceny a skutečné slevy. Bez placených pozic.{% endblock %}
 {% macro pick_card(h, extra=false, priority=false) -%}
 {%- set hs = get_shop(h.best.shop) -%}
@@ -22,16 +22,19 @@
 </article>
 {%- endmacro %}
 {% block body %}
-{% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">🛍️</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Které slevy jsou opravdu nejnižší? Kontrola 30 dní (§ 12a) u každé.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
+{% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
 <header class="hero" id="hledat"><div class="wrap hero-compact">
-  <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
+  <div class="hero-title">
+    <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
+    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
+  </div>
   <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
     <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       <input name="q" type="text" required placeholder="Název nebo odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
     <button class="btn btn-primary" type="submit">Prověřit cenu</button>
   </form>
 </div>
-{% if AI_SEARCH_ON() %}<p class="ai-hint wrap">✨ Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
+{% if AI_SEARCH_ON() %}<p class="ai-hint wrap">{{ ico('spark') }} Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
 </header>
 {% if home_picks %}
 <section class="hero-picks" aria-labelledby="hero-picks-h"><div class="wrap">
@@ -50,18 +53,10 @@
 {% endif %}
 <div class="hero-more"><div class="wrap">
   <p class="lead hero-lead">Vlož odkaz z e-shopu nebo název produktu – ukážeme historii a jestli se sleva vyplatí.</p>
-    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
     {% set tracked = SHOPS.values()|selectattr('can_scrape')|list %}
     {% set n_shops = tracked|length %}
     <p class="shops-line">Sledujeme ceny v {{ cz_count(n_shops, "českém e-shopu", "českých e-shopech", "českých e-shopech") }}. Pokrytí roste – seznam na <a href="/obchody">Hlídané obchody</a>.</p>
     <p class="hero-alt"><a href="/over-slevu">nebo ověř slevu z odkazu</a> · <a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></p>
-    <div class="hero-verdicts">
-      <div class="verdicts" aria-label="Možné verdikty">
-        <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">✅</span>Kupuj</span></div>
-        <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⏳</span>Počkej</span></div>
-        <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">⚠️</span>Za 30 dní bylo levněji</span></div>
-      </div>
-    </div>
 </div></div>
 
 {% if thin_history %}
@@ -94,7 +89,7 @@
     <a class="btn btn-ghost" href="/kategorie">Všechny kategorie →</a></div>
   <ul class="cat-cards home-cat-cards">
   {% for c in CATEGORIES %}
-    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ c.icon }}</span>
+    <li><a class="card cat-card" href="/kategorie/{{ c.slug }}"><span class="cat-ico" aria-hidden="true">{{ ico(c.slug) }}</span>
       <span><b>{{ c.name }}</b><small>{% set n = cat_counts.get(c.slug, 0) %}{{ cz_count(n, "produkt", "produkty", "produktů") }}</small></span></a></li>
   {% endfor %}
   </ul>
@@ -134,19 +129,26 @@
   <form class="search ov-form" action="/over-slevu" method="get" autocomplete="off">
     <label class="ov-label-box"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       <input name="url" type="url" inputmode="url" required maxlength="2000" placeholder="https://www.obchod.cz/produkt…" aria-label="Odkaz na produkt z e-shopu pro ověření slevy"></label>
-    <button class="btn btn-primary" type="submit"><span aria-hidden="true">🔎</span> Ověřit slevu</button>
+    <button class="btn btn-primary" type="submit"><span aria-hidden="true">{{ ico('search') }}</span> Ověřit slevu</button>
   </form>
 </div></div></section>
 
 <section id="nezavislost"><div class="wrap"><div class="promise" id="metodika">
   <div><div class="eyebrow">Proč nám věřit</div><h2>Pořadí si nikdo nekoupí.</h2>
-    <p>Obchody řadíme výhradně podle ceny. Ceny si ověřujeme sami nebo z oficiálních feedů obchodů.</p></div>
+    <p>Obchody řadíme výhradně podle ceny. Ceny si ověřujeme sami nebo z oficiálních feedů obchodů.</p>
+    <p style="margin-top:12px"><a href="/jak-radime">Celá metodika: Jak řadíme a hodnotíme</a></p></div>
+  <div class="promise-side">
+    <div class="verdicts" aria-label="Možné verdikty">
+      <div class="verdict v-buy"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('buy') }}</span>Kupuj</span></div>
+      <div class="verdict v-wait"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('wait') }}</span>Počkej</span></div>
+      <div class="verdict v-fake"><span class="verdict-badge"><span class="verdict-ico" aria-hidden="true">{{ ico('fake') }}</span>Za 30 dní bylo levněji</span></div>
+    </div>
   <ul>
-    <li>🟢 <span><b>Kupuj:</b> cena do 3 % nad minimem za 90 dní.</span></li>
-    <li>🟠 <span><b>Počkej:</b> cena je nad obvyklou úrovní (mediánem).</span></li>
-    <li>🔴 <span><b>Za 30 dní bylo levněji:</b> sleva se počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí, nebo cena krátce před slevou vzrostla o ≥ 12 %. U štítku vždy ukážeme naměřenou cenu a datum.</span></li>
+    <li>{{ ico('buy') }} <span><b>Kupuj:</b> cena do 3 % nad minimem za 90 dní.</span></li>
+    <li>{{ ico('wait') }} <span><b>Počkej:</b> cena je nad obvyklou úrovní (mediánem).</span></li>
+    <li>{{ ico('fake') }} <span><b>Za 30 dní bylo levněji:</b> sleva se počítá z ceny o víc než 5 % vyšší, než je nejnižší cena naměřená za 30 dní před akcí, nebo cena krátce před slevou vzrostla o ≥ 12 %. U štítku vždy ukážeme naměřenou cenu a datum.</span></li>
   </ul>
-  <p style="margin-top:12px"><a href="/jak-radime">Celá metodika: Jak řadíme a hodnotíme</a></p>
+  </div>
 </div></div></section>
 <section id="vydelavame"><div class="wrap"><div class="card zasady">
   <div class="eyebrow">Naše zásady</div><h2>Jak vyděláváme</h2>

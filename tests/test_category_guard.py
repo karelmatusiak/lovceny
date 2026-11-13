@@ -47,8 +47,10 @@ def test_vacuum_offer_on_a_watch_is_not_a_discount(client_db):
     picks = {h.product.id: h for h in hero_showcase(db, limit=12)}
     assert watch.id not in picks
     page = client.get(f"/produkt/{watch.id}")
-    assert "Koupit za 1\u00a0523" not in page.text
-    assert "Koupit za 5\u00a0748" in page.text
+    shown = page.text.split('class="price">', 1)[1].split("<", 1)[0]
+    assert "1\u00a0523" not in shown
+    assert "5\u00a0748" in shown
+    assert "Do obchodu" in page.text.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
 
 
 def test_storage_mismatch_suppresses_the_percent_badge():

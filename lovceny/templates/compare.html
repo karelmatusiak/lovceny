@@ -1,15 +1,15 @@
-{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, share, rank_link %}
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, badge, share, rank_link, ico %}
 {% block title %}{% if items|length >= 2 %}Srovnání: {{ page_title }} | Lovceny{% else %}Srovnání produktů – ceny, historie a verdikt vedle sebe | Lovceny{% endif %}{% endblock %}
 {% block description %}{% if items|length >= 2 %}Srovnání cen: {{ page_title }}. Nejnižší cena, obchody, minimum za 30 dní, historie ceny a verdikt vedle sebe.{% else %}Porovnej 2–3 produkty vedle sebe: aktuální nejnižší cena, obchody, nejnižší cena za 30 dní a historie ceny v jednom grafu.{% endif %}{% endblock %}
 {% block body %}
 <section class="cmp-hero"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-tokens="{{ tokens }}" data-pridat="{{ pridat }}">
-  <div class="eyebrow"><span aria-hidden="true">⚖️</span> Srovnání produktů</div>
+  <div class="eyebrow"><span aria-hidden="true">{{ ico('scales') }}</span> Srovnání produktů</div>
   <h1 class="page-h1 cmp-title">{% if items|length >= 2 %}{% for it in items %}<span class="cmp-h-item">{{ dname(it.p)|truncate(64, true, "…", 0) }}</span>{% if not loop.last %} <span class="cmp-vs">vs.</span> {% endif %}{% endfor %}{% else %}Srovnání produktů{% endif %}</h1>
   {% if items|length < 2 %}
   <picture class="empty-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
   <div class="notice warn cmp-empty">
-    {% if items %}Ve srovnání máš zatím jen <b>{{ dname(items[0].p) }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>⚖️ Přidat do srovnání</b> u karty nebo v detailu produktu.
-    {% else %}Srovnání je prázdné. U produktů klikni na <b>⚖️ Přidat do srovnání</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
+    {% if items %}Ve srovnání máš zatím jen <b>{{ dname(items[0].p) }}</b>. Přidej ještě aspoň jeden produkt tlačítkem <b>Přidat do srovnání</b> u karty nebo v detailu produktu.
+    {% else %}Srovnání je prázdné. U produktů klikni na <b>Přidat do srovnání</b> (2–{{ max }} produkty) a vrať se sem.{% endif %}
     <a class="btn btn-ghost" href="/kategorie">Vybrat produkty →</a>
   </div>
   {% if STATIC_SITE %}<div id="cmp-static"></div>{% endif %}
@@ -32,7 +32,7 @@
         {% if cheapest == p.id %}<p class="cmp-chip">Nejnižší cena ve srovnání</p>{% endif %}
         <dl class="cmp-dl">
           <div><dt>Nejnižší cena teď</dt><dd class="cmp-price">{% if it.best %}{{ it.best.price|czk }}<small>v obchodě {{ it.best_shop.name if it.best_shop else it.best.shop }}{% if it.best.last_checked %} · ověřeno {{ it.best.last_checked|prague }}{% endif %}</small>
-            {% if it.best_shop %}<a class="btn btn-shop-sm cmp-buy" href="{{ go_href(it.best) }}" target="_blank" rel="{{ shop_rel(it.best_shop) }}">Koupit v obchodě {{ it.best_shop.name }} <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a>{% endif %}
+            {% if it.best_shop and it.best.in_stock is not false %}<span class="buy-block"><span class="buy-shop">{{ it.best_shop.name }}</span><a class="btn btn-shop-sm cmp-buy" href="{{ go_href(it.best) }}" target="_blank" rel="{{ shop_rel(it.best_shop) }}">Do obchodu <span aria-hidden="true">→</span><span class="sr-only"> (otevře se v novém okně)</span></a></span>{% endif %}
             {% else %}<span class="cmp-quiet">cena zatím chybí</span>{% endif %}</dd></div>
           <div><dt>Verdikt</dt><dd>{{ badge(it.v, link=true) }}</dd></div>
         </dl>
@@ -65,7 +65,7 @@
       <tr><th scope="row">Nejnižší cena za 30 dní</th>{% for it in items %}<td>{{ it.min30|czk }}{% if it.min30_date %} <small>({{ it.min30_date.day }}. {{ it.min30_date.month }}.)</small>{% endif %}</td>{% endfor %}</tr>
       <tr><th scope="row">Minimum 90 dní</th>{% for it in items %}<td>{{ it.v.min90|czk }}</td>{% endfor %}</tr>
       <tr><th scope="row">Obvyklá cena <small>(medián 90 dní)</small></th>{% for it in items %}<td>{{ it.usual|czk }}</td>{% endfor %}</tr>
-      <tr><th scope="row">Verdikt</th>{% for it in items %}<td><span aria-hidden="true">{{ it.v.icon }}</span> {{ it.v.headline }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Verdikt</th>{% for it in items %}<td><span aria-hidden="true">{{ ico(it.v.code) }}</span> {{ it.v.headline }}</td>{% endfor %}</tr>
       <tr><th scope="row">Počet obchodů s cenou</th>{% for it in items %}<td>{{ it.n_shops }}</td>{% endfor %}</tr>
       <tr><th scope="row">Sledujeme</th>{% for it in items %}<td>{{ it.days }} {% if it.days == 1 %}den{% elif 2 <= it.days <= 4 %}dny{% else %}dní{% endif %}</td>{% endfor %}</tr>
       {% if items|selectattr('p.ean')|list %}<tr><th scope="row">EAN</th>{% for it in items %}<td>{{ it.p.ean or '–' }}</td>{% endfor %}</tr>{% endif %}

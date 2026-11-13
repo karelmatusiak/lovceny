@@ -58,7 +58,7 @@ def test_about_page_content_and_faq_ld(client_db):
 def test_nav_and_footer_links(client_db):
     client, _, _ = client_db
     html = client.get("/").text
-    assert html.count('href="/o-nas"') >= 2 and 'href="/o-nas#kontakt"' in html and 'href="/stav"' in html
+    assert html.count('href="/o-nas"') >= 2 and 'href="/kontakt"' in html and 'href="/stav"' in html
     assert 'href="/o-nas#caste-dotazy"' in html
 
 

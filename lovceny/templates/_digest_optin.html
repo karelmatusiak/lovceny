@@ -1,6 +1,6 @@
-{# Přepínač odběru Týdenního přehledu slev (Web Push). Bez JS / klíčů / podpory prohlížeče se ukáže vysvětlení. #}
+{% from "_macros.html" import ico %}{# Přepínač odběru Týdenního přehledu slev (Web Push). Bez JS / klíčů / podpory prohlížeče se ukáže vysvětlení. #}
 <div class="card dg-optin" id="prehled-optin" data-vapid="{{ push_key }}">
-  <div class="dg-optin-ico" aria-hidden="true">🔔</div>
+  <div class="dg-optin-ico" aria-hidden="true">{{ ico('bell') }}</div>
   <div class="dg-optin-main">
     <h2 class="h3" id="dg-h">Týdenní přehled slev</h2>
     <p>Každý pátek kolem 17:17 jedno upozornění v prohlížeči s nejlepšími skutečnými slevami týdne. Nic jiného ti posílat nebudeme.</p>

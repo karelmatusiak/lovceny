@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import ico %}
 {% block title %}O nás – poctivé ceny bez placených pozic | Lovceny{% endblock %}
 {% block description %}Proč vznikly Lovceny: poctivé ceny elektroniky a spotřebičů, žádné placené pozice, verdikt Kupuj / Počkej / Za 30 dní bylo levněji z historie cen. Jak se lišíme od srovnávačů a jak vyděláváme.{% endblock %}
 {% block body %}
@@ -10,17 +10,17 @@
 
 <section class="about"><div class="wrap about-grid">
   <article class="card about-card" id="mise">
-    <div class="about-ico" aria-hidden="true">🎯</div>
+    <div class="about-ico" aria-hidden="true">{{ ico('target') }}</div>
     <h2>Naše mise</h2>
     <p>Obchody umí cenu před akcí zvednout a pak ji „zlevnit“. Proto ceny sledujeme sami, ukládáme jejich <b>historii</b> a říkáme na rovinu, jestli kupovat teď, nebo počkat.</p>
   </article>
   <article class="card about-card" id="poradi">
-    <div class="about-ico" aria-hidden="true">⚖️</div>
+    <div class="about-ico" aria-hidden="true">{{ ico('scales') }}</div>
     <h2>Řazení jen podle ceny</h2>
     <p>Nabídky řadíme <b>výhradně podle ceny</b>, nejlevnější nahoře. Žádný obchod si nemůže zaplatit lepší místo, zvýraznění ani „doporučení“.</p>
   </article>
   <article class="card about-card" id="verdikt">
-    <div class="about-ico" aria-hidden="true">📈</div>
+    <div class="about-ico" aria-hidden="true">{{ ico('trend') }}</div>
     <h2>Jak vzniká verdikt</h2>
     <ul class="about-list">
       <li><span class="vd vd-buy">Kupuj</span> cena je nejvýš 3 % nad minimem za 90 dní.</li>
@@ -78,9 +78,9 @@
     <p>Teď zatím <b>nijak</b> – Lovceny jsou zdarma a bez reklam. Affiliate odkazy teď nejsou zapnuté (chybí konfigurace). Až je spustíme, vždy je označíme.</p>
     {% endif %}</div>
     <ul class="about-list">
-      <li><span aria-hidden="true">✅</span> Affiliate odkazy vždy jasně označíme.</li>
-      <li><span aria-hidden="true">✅</span> Provize <b>nikdy neovlivní</b> pořadí ani verdikt – obchod bez provize je nahoře, pokud je nejlevnější.</li>
-      <li><span aria-hidden="true">✅</span> Žádné reklamy, žádné sledovací cookies, žádný prodej dat.</li>
+      <li><span aria-hidden="true">{{ ico('check') }}</span> Affiliate odkazy vždy jasně označíme.</li>
+      <li><span aria-hidden="true">{{ ico('check') }}</span> Provize <b>nikdy neovlivní</b> pořadí ani verdikt – obchod bez provize je nahoře, pokud je nejlevnější.</li>
+      <li><span aria-hidden="true">{{ ico('check') }}</span> Žádné reklamy, žádné sledovací cookies, žádný prodej dat.</li>
     </ul>
   </div>
 </div></section>

@@ -129,7 +129,8 @@ def test_unscheduled_mironet_run_does_not_grey_the_offer(client_db):
     ])
     db.commit()
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
-    assert "Koupit za 1\u00a0000" in html
+    assert "1\u00a0000" in html.split('class="price">', 1)[1].split("<", 1)[0]
+    assert "Do obchodu" in html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
     assert "nejlevnější" in html
     assert "Cena neověřena" not in html
 
@@ -154,7 +155,8 @@ def test_two_due_runs_without_a_success_make_the_offer_stale(client_db):
     db.add_all([missed, blocked])
     db.commit()
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
-    assert "Koupit za 20\u00a0000" in html
+    assert "20\u00a0000" in html.split('class="price">', 1)[1].split("<", 1)[0]
+    assert "Do obchodu" in html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
     assert "Cena neověřena" in html
     assert "Cenu se nepodařilo ověřit" in html
     assert html.count("btn-shop") == 1
@@ -176,7 +178,8 @@ def test_four_day_safety_net_stales_even_without_a_due_run(client_db):
     db.commit()
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
     assert "Cena neověřena" in html
-    assert "Koupit za 20\u00a0000" in html
+    assert "20\u00a0000" in html.split('class="price">', 1)[1].split("<", 1)[0]
+    assert "1\u00a0000" not in html.split('class="price">', 1)[1].split("<", 1)[0]
     assert "Koupit za 1\u00a0000" not in html
 
 
