@@ -15,13 +15,15 @@ def test_fetch_has_one_clock_and_no_chained_static_build():
     assert "fetch-prices" in FETCH
 
 
-def test_pull_request_static_build_does_not_receive_the_prod_database():
-    pr_step = STATIC.split("Vygenerovat web ze snapshotu", 1)[1].split("- name:", 1)[0]
-    neon_step = STATIC.split("Vygenerovat web z Neon", 1)[1].split("- name:", 1)[0]
-    assert "github.event_name == 'pull_request'" in STATIC
-    assert "secrets.DATABASE_URL" not in pr_step
-    assert "sqlite:///snapshot/lovceny.sqlite" in pr_step
-    assert "github.event_name != 'pull_request'" in neon_step
-    assert "secrets.DATABASE_URL" in neon_step
-    assert "Snapshot lovceny-snapshot" in STATIC or "lovceny-snapshot" in STATIC
+def test_static_build_reads_the_snapshot_and_never_the_prod_database():
+    assert "secrets.DATABASE_URL" not in STATIC
+    assert "sqlite:///snapshot/lovceny.sqlite" in STATIC
+    assert "lovceny-snapshot" in STATIC
+    assert "Neon se nevolá" in STATIC
     assert 'cron: "30 6 * * *"' in STATIC
+    snapshot = (ROOT / ".github/workflows/snapshot.yml").read_text(encoding="utf-8")
+    assert "pull_request" not in snapshot
+    assert 'cron: "15 6 * * *"' in snapshot
+    assert "name: lovceny-snapshot" in snapshot
+    assert "secrets.DATABASE_URL" in snapshot
+    assert "github.ref == 'refs/heads/main'" in snapshot

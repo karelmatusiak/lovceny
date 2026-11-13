@@ -45,13 +45,12 @@ jobs:
               echo "${name}=${value}" >> "$GITHUB_ENV"
             fi
           done
-      - name: Snapshot pro pull request
+      - name: Stáhnout snapshot katalogu
         id: snapshot
-        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Pull request nesmí otevřít Neon. Poslední snapshot z main, jinak build přeskočí.
+          # Web se staví jen ze SQLite artefaktu. Chybí-li, běh skončí bez Neonu a bez nasazení.
           set +e
           gh run download --repo "${{ github.repository }}" --name lovceny-snapshot --dir snapshot \
             $(gh run list --repo "${{ github.repository }}" --workflow snapshot.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
@@ -62,30 +61,18 @@ jobs:
             echo "have=false" >> "$GITHUB_OUTPUT"
             echo "Snapshot lovceny-snapshot na main není, generování přeskakuji. Neon se nevolá."
           fi
-      - name: Vygenerovat web z Neon
-        if: github.event_name != 'pull_request'
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          PUBLIC_URL: https://lovceny.cz
-          LOVCENY_SKIP_DATA_FIXES: "1"
-          # Štítek na /obchody čte FEED_URLS. Prázdný secret = „feed URL chybí“.
-          FEED_URLS: ${{ secrets.FEED_URLS }}
-        run: |
-          extra=()
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            extra+=(--migrate)
-          fi
-          python build_static.py --out dist --report build-report.json "${extra[@]}"
       - name: Vygenerovat web ze snapshotu
-        if: github.event_name == 'pull_request' && steps.snapshot.outputs.have == 'true'
+        if: steps.snapshot.outputs.have == 'true'
         env:
           DATABASE_URL: sqlite:///snapshot/lovceny.sqlite
           PUBLIC_URL: https://lovceny.cz
           LOVCENY_SKIP_DATA_FIXES: "1"
+          # Štítek na /obchody čte FEED_URLS. Prázdný secret = „feed URL chybí“.
+          FEED_URLS: ${{ secrets.FEED_URLS }}
         run: python build_static.py --out dist --report build-report.json
       - name: Nasadit na Cloudflare Pages
         id: deploy
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.snapshot.outputs.have == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -107,7 +94,7 @@ jobs:
           fi
           echo "deployed=true" >> "$GITHUB_OUTPUT"
       - name: Artefakt webu
-        if: steps.deploy.outputs.deployed != 'true' && (github.event_name != 'pull_request' || steps.snapshot.outputs.have == 'true')
+        if: steps.deploy.outputs.deployed != 'true' && steps.snapshot.outputs.have == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: static-site
