@@ -415,7 +415,7 @@ def _drop_broken_home_images(featured, extras, popular):
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
-    from .phones import BANDS, GUIDES, brands_in, buying_signal, phone_models
+    from .phones import BANDS, GUIDES, brands_in, buying_signal, home_models, phone_models
     models = phone_models(db)
     confirmed = [model for model in models if model.price_shops >= 2 and model.lowest is not None]
     drops = []
@@ -426,7 +426,7 @@ def home(request: Request, db=Depends(get_db)):
         if len(drops) == 3:
             break
     return tpl.TemplateResponse(request, "index.html", {
-        "models": confirmed[:8],
+        "models": home_models(models),
         "drops": drops,
         "brands": brands_in(models),
         "bands": BANDS,
@@ -457,11 +457,15 @@ def _phone_or_home(product: Product):
 def phones_page(request: Request, znacka: str = "", pasmo: str = "", db=Depends(get_db)):
     from .phones import BANDS, brands_in, filter_models, phone_models
     models = phone_models(db)
-    shown = filter_models(models, brand=znacka.strip(), band=pasmo.strip())
+    brand = znacka.strip()
+    band = pasmo.strip()
+    shown = filter_models(models, brand=brand, band=band)
+    spec = next((item for item in BANDS if item[0] == band), None)
     crumbs = [("Lovceny", "/"), ("Telefony", "/telefony")]
     return tpl.TemplateResponse(request, "phones.html", {
         "models": shown, "brands": brands_in(models), "bands": BANDS,
-        "brand": znacka.strip(), "band": pasmo.strip(), "crumbs": crumbs,
+        "brand": brand, "band": band, "band_label": spec[1] if spec else "",
+        "crumbs": crumbs,
         "canonical_path": "/telefony",
         "ld": [seo.breadcrumb_ld(crumbs)],
     })

@@ -43,6 +43,12 @@ def test_same_storage_only_and_a_far_outlier_stays_out_of_the_price():
         from lovceny.phones import _fix_casing, _model_name, price_trust
         assert _model_name(["Samsung Galaxy Z FOLD8 256GB černá"]) == "Samsung Galaxy Z Fold8"
         assert _fix_casing("iPhone 16 Pro Max FE 5G") == "iPhone 16 Pro Max FE 5G"
+        assert _model_name(["Nothing Phone (3a) Lite 8/128GB černá / Mobilní telefon / 8 GB RAM / 128 GB"]) == "Nothing Phone 3a Lite"
+        assert _model_name(["Nothing Phone 3a Lite / Mobilní telefon / Ram"]) == "Nothing Phone 3a Lite"
+        assert _model_name(["Apple iPhone 15 128GB modrá / 6.1\" / 128GB / iOS17.3"]) == "Apple iPhone 15"
+        assert _model_name(["Mobilní telefon Samsung Galaxy A55 128GB"]) == "Samsung Galaxy A55"
+        assert _model_name(["Smartphone Xiaomi Redmi Note 12 128GB"]) == "Xiaomi Redmi Note 12"
+        assert _model_name(["Honor 600 Smart 5G Dual SIM barva Meteor Silver paměť 4GB/256GB"]) == "Honor 600 Smart"
         cheap = _phone(db, "Apple iPhone Air 256GB černá", 10000, shop="tera", slug="air-tera")
         _phone(db, "Apple iPhone Air 256GB bílá", 32000, shop="alza", slug="air-alza")
         _phone(db, "Apple iPhone Air 256GB modrá", 33000, shop="datart", slug="air-datart")
@@ -131,11 +137,19 @@ def test_card_shop_count_matches_the_shown_price():
         card = catalog.split("iPhone Air", 1)[1].split("</article>", 1)[0]
         assert "1\xa0obchod" in card
         assert "3\xa0obchody" not in card
+        _phone(db, "Samsung Galaxy A55 128GB", 8990, shop="alza", slug="a55-alza")
+        _phone(db, "Samsung Galaxy A55 128GB", 9100, shop="datart", slug="a55-datart")
         home = client.get("/").text
         assert "Nejnižší teď" not in home
-        assert "22\xa0227" not in home
+        assert "Nejoblíbenější telefony" in home
         assert "Cenu kontrolujeme denně" in home
         assert "Nikdo neplatí za pořadí" in home
+        assert home.find("Galaxy A55") < home.find("iPhone Air")
+        air = home.split("iPhone Air", 1)[1].split("</article>", 1)[0]
+        assert "22\xa0227" in air
+        assert "1\xa0obchod" in air
+        assert "Ověřeno 2+ obchody" not in air
+        assert "Ověřeno 2+ obchody" in home.split("Galaxy A55", 1)[1].split("</article>", 1)[0]
     finally:
         db.close()
 
@@ -173,6 +187,24 @@ def test_guide_uses_only_prices_we_have():
         db.close()
 
 
+def test_thin_filter_explains_the_empty_grid():
+    init_db()
+    db = SessionLocal()
+    try:
+        _phone(db, "Samsung Galaxy A55 128GB", 8990, slug="a55")
+        client = TestClient(app)
+        missing = client.get("/telefony?znacka=Apple&pasmo=do-5").text
+        assert "Značka Apple v pásmu do 5 000 Kč" in missing
+        assert "jen Apple" in missing
+        assert "phone-grid" not in missing
+        one = client.get("/telefony?znacka=Samsung").text
+        assert "jen 1 model" in one
+        assert "celém katalogu" in one
+        assert "Galaxy A55" in one
+    finally:
+        db.close()
+
+
 def test_public_site_hides_other_categories_and_accessories():
     init_db()
     db = SessionLocal()
@@ -187,7 +219,7 @@ def test_public_site_hides_other_categories_and_accessories():
         assert home.status_code == 200
         catalog = client.get("/telefony").text
         assert "Samsung Galaxy A55" in catalog
-        assert "Samsung Galaxy A55" not in home.text
+        assert "Samsung Galaxy A55" in home.text
         assert "IdeaPad" not in home.text
         assert "Pouzdro" not in home.text
         assert "Repas" not in home.text

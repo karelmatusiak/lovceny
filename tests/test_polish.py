@@ -11,7 +11,7 @@ def test_homepage_uses_line_icons_and_places_labels(client_db):
     assert "Ulovte telefon za férovou cenu." in title
     assert "<i>Nově</i>" not in html
     assert "Specialista na mobilní telefony" in html
-    assert "Potvrzená cena" in html
+    assert "Nejoblíbenější telefony" in html
     assert "Poctivý hlídač cen elektroniky, bez placených pozic" not in html
     css = open("lovceny/static/app.css", encoding="utf-8").read().replace(" ", "")
     banner = css.split(".bf-bannera{", 1)[1].split("}", 1)[0]

@@ -155,7 +155,7 @@ def test_category_counts_use_the_listing_filter(client_db):
     listing = client.get("/kategorie/telefony").text
     total = re.search(r"z (\d+)\s", listing.replace("\xa0", " "))
     assert total and total.group(1) == "1"
-    assert "Potvrzená cena" in home
+    assert "Nejoblíbenější telefony" in home
     assert "Galaxy A55" in home
     assert "1\xa0produkt" not in home
     assert index.status_code == 301 and index.headers["location"] == "/telefony"

@@ -123,7 +123,7 @@ def test_home_renders_hero_picks():
     _seed(db, name="Apple iPhone 16 128GB", prices=[3000] * 9 + [2100],
           category_slug="telefony", category="Mobilní telefony", shops=("mironet", "alza"))
     html = TestClient(app).get("/").text
-    assert "Aspoň dva obchody, stejné úložiště" in html
+    assert "Nejoblíbenější telefony" in html
     assert "phone-card" in html
     assert "Apple iPhone 16" in html
     assert "Notebooky" not in html
@@ -282,7 +282,7 @@ def test_hero_oos_not_buyable_and_accessory_not_filed_as_main():
     assert cheap.url not in html
     assert "USB-C kabel" not in html
     assert "Galaxy A55" in html
-    assert "Potvrzená cena" in html
+    assert "Nejoblíbenější telefony" in html
     page = TestClient(app).get(f"/produkt/{phone.id}").text
     assert f'href="/go/{phone_pick.best.id}"' in page
     hop = TestClient(app).get(f"/go/{phone_pick.best.id}", follow_redirects=False)

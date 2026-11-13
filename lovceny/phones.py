@@ -270,7 +270,7 @@ _EXTRA_COLOR = {
     "kosmicka", "temne", "temny", "mlhove", "mlhovy", "oblacne", "oblacny",
     "svetle", "svetly", "starlit", "ice", "denim", "velvet", "sprout", "meteor",
     "golden", "sporting", "bright", "blackened", "sage", "jet",
-    "krem", "grafit",
+    "krem", "grafit", "hneda", "hnedou", "matova", "matovy",
 }
 
 
@@ -297,6 +297,11 @@ _NAME_PREFIX = re.compile(
     r"^(?:chytr[ýy]\s+telefon|mobiln[íi]\s+telefon|smartphone)\s+",
     re.I,
 )
+_FEED_CATEGORY = re.compile(
+    r"\b(?:chytr[ýy]\s+telefon|mobiln[íi]\s+telefon|smartphone)\b",
+    re.I,
+)
+_IOS_TOKEN = re.compile(r"ios\d+(?:[.,]\d+)?", re.I)
 
 
 def _model_name(names: list[str]) -> str:
@@ -306,7 +311,10 @@ def _model_name(names: list[str]) -> str:
     prefixes = _color_prefixes()
     best = ""
     for raw in names:
-        name = _NAME_PREFIX.sub("", raw or "")
+        # Feed often appends "/ Mobilní telefon / 8 GB RAM". The model is the first segment.
+        name = re.split(r"\s+/\s+", raw or "", maxsplit=1)[0]
+        name = _FEED_CATEGORY.sub(" ", name)
+        name = _NAME_PREFIX.sub("", name)
         words = re.findall(r"\S+", name)
         kept = []
         codes = []
@@ -314,10 +322,13 @@ def _model_name(names: list[str]) -> str:
         noise = {
             "mah", "ip68", "esim", "lte", "nfc", "distribuce", "5g", "usb",
             "android", "hybridni", "dual", "ds", "hz", "typu", "cm", "mhz",
-            "chytry", "chytra", "sim",
+            "chytry", "chytra", "sim", "ram", "smartphone",
         }
         while index < len(words):
             raw_word = words[index]
+            if raw_word in {"/", "|"} or _IOS_TOKEN.fullmatch(raw_word.strip(".,")):
+                index += 1
+                continue
             if raw_word.startswith("(") and raw_word.endswith(")"):
                 inner = raw_word[1:-1].strip()
                 if re.fullmatch(r"\d+[A-Za-z]?", inner):
@@ -566,6 +577,22 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
         ))
     models.sort(key=lambda model: (-model.shops, model.lowest if model.lowest is not None else 10**12, model.name.casefold()))
     return models
+
+
+def home_models(models: list[PhoneModel], limit: int = 12) -> list[PhoneModel]:
+    """Nejoblíbenější na úvodu. Potvrzená cena první, pak nejvíc obchodů.
+
+    Jedna prodejna u ceny je v pořádku a počet obchodů to řekne. Ven jde jen
+    cena, kterou neoznačujeme jako nepotvrzenou a která není odlehlá nabídka.
+    """
+    shown = [model for model in models if model.lowest is not None]
+    shown.sort(key=lambda model: (
+        model.price_shops < 2,
+        -model.shops,
+        model.lowest if model.lowest is not None else 10**12,
+        model.name.casefold(),
+    ))
+    return shown[:limit]
 
 
 def in_band(price: float | None, low: int | None, high: int | None) -> bool:

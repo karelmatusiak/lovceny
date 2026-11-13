@@ -24,7 +24,7 @@ def test_nav_simplified_links():
 def test_home_category_tiles():
     init_db()
     html = TestClient(app).get("/").text
-    assert "phone-grid" in html or "Potvrzená cena" in html
+    assert "phone-grid" in html or "Nejoblíbenější telefony" in html
     assert 'href="/telefony"' in html
     assert 'href="/pruvodce"' in html
     assert "Všechny kategorie" not in html

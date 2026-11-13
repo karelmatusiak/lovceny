@@ -1,6 +1,15 @@
 {% extends "base.html" %}{% from "_macros.html" import phone_card, shop_img, img_missing %}
 {% block title %}Ulovte telefon za férovou cenu. | Lovceny{% endblock %}
 {% block description %}Ulovte telefon za férovou cenu. Nejnižší cena z českých e-shopů, historie a verdikt, jestli se sleva vyplatí.{% endblock %}
+{% macro trust_check() -%}
+<svg class="trust-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 9.5 17 19 7"/></svg>
+{%- endmacro %}
+{% macro trust_items() -%}
+<li>{{ trust_check() }}<span>{{ cz_count(model_count, "model", "modely", "modelů") }}</span></li>
+<li>{{ trust_check() }}<span>{{ cz_count(shop_count, "obchod", "obchody", "obchodů") }}</span></li>
+<li>{{ trust_check() }}<span>Cenu kontrolujeme denně</span></li>
+<li>{{ trust_check() }}<span>Nikdo neplatí za pořadí</span></li>
+{%- endmacro %}
 {% block body %}
 <header class="phone-hero" id="hledat"><div class="wrap phone-hero-grid">
   <div>
@@ -15,23 +24,20 @@
   </div>
   <aside class="hero-trust" aria-label="Jak ceny hlídáme">
     <p class="eyebrow">Jak to hlídáme</p>
-    <ul>
-      <li>{{ cz_count(model_count, "model", "modely", "modelů") }}</li>
-      <li>{{ cz_count(shop_count, "obchod", "obchody", "obchodů") }}</li>
-      <li>Cenu kontrolujeme denně</li>
-      <li>Nikdo neplatí za pořadí</li>
-    </ul>
+    <ul class="trust-list">{{ trust_items() }}</ul>
   </aside>
 </div></header>
 
 <section class="phone-board" aria-labelledby="phone-board-h"><div class="wrap">
   <div class="phone-board-head">
     <div>
-      <p class="eyebrow">Potvrzená cena</p>
-      <h2 id="phone-board-h">Aspoň dva obchody, stejné úložiště</h2>
+      <p class="eyebrow">Katalog</p>
+      <h2 id="phone-board-h">Nejoblíbenější telefony</h2>
+      <p class="phone-note">Odznak Ověřeno 2+ obchody znamená, že stejné úložiště a stejnou cenu hlásí aspoň dva obchody.</p>
     </div>
     <a class="phone-more" href="/telefony">Všechny telefony</a>
   </div>
+  <ul class="hero-trust-line" aria-label="Jak ceny hlídáme">{{ trust_items() }}</ul>
   <div class="phone-filters" aria-label="Filtrovat telefony">
     <div class="phone-scroll"><div class="phone-filter-row">
       <span>Značka</span>

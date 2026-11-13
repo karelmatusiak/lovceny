@@ -22,14 +22,27 @@
     <button class="btn btn-primary btn-sm" type="submit">Filtrovat</button>
   </form>
   <p class="phone-count">{{ cz_count(models|length, "model", "modely", "modelů") }}</p>
-  {% if models %}
+  {% if not models %}
+  <p class="phone-empty">
+    {% if brand and band_label %}Značka {{ brand }} v pásmu {{ band_label }} teď žádný telefon nemá.
+    Zkus <a href="/telefony?znacka={{ brand|urlencode }}">jen {{ brand }}</a>
+    nebo <a href="/telefony?pasmo={{ band }}">jen pásmo {{ band_label }}</a>.
+    {% elif brand %}Značku {{ brand }} teď v katalogu nemáme. Podívej se na <a href="/telefony">všechny telefony</a>.
+    {% elif band_label %}V pásmu {{ band_label }} teď žádný telefon nemáme. Podívej se na <a href="/telefony">celý katalog</a>.
+    {% else %}Zatím tu nemáme telefon, který bychom mohli férově ukázat.{% endif %}
+  </p>
+  {% else %}
+  {% if models|length < 4 %}
+  <p class="phone-empty">{% if models|length == 1 %}V tomhle výběru je jen 1 model.{% else %}V tomhle výběru jsou jen {{ cz_count(models|length, "model", "modely", "modelů") }}.{% endif %}
+    Širší výběr je v <a href="/telefony">celém katalogu</a>{% if brand and band_label %},
+    u <a href="/telefony?znacka={{ brand|urlencode }}">značky {{ brand }}</a>
+    nebo v <a href="/telefony?pasmo={{ band }}">pásmu {{ band_label }}</a>{% endif %}.</p>
+  {% endif %}
   <div class="phone-grid">
     {% for model in models %}
     {{ phone_card(model) }}
     {% endfor %}
   </div>
-  {% else %}
-  <p class="phone-empty">V tomhle výběru teď žádný telefon nemáme. Zkus jiné pásmo nebo <a href="/telefony">celý katalog</a>.</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -236,7 +236,7 @@ def test_home_entry_point():
     assert 'href="/over-slevu"' in html
     assert "nebo ověř slevu z odkazu" not in html
     assert "Prověřit cenu" not in html and ">Hledat<" in html
-    assert "Potvrzená cena" in html
+    assert "Nejoblíbenější telefony" in html
     assert 'class="btn btn-verify" href="/over-slevu"' not in html
 
 
