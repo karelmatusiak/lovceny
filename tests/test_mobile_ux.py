@@ -42,10 +42,11 @@ def test_header_search_on_inner_pages_and_short_home_placeholder():
     assert 'placeholder="Zadej název nebo vlož odkaz z e-shopu"' in home
     assert "sluchátka na běhání nebo odkaz" not in home
     shops = c.get("/obchody").text
-    assert 'class="nav-search"' in shops and 'action="/hledat"' in shops
-    assert 'name="q"' in shops.split('class="nav-search"', 1)[1].split("</form>", 1)[0]
-    assert ".nav-search{display:none}" in CSS
-    assert ".nav-search{display:flex" in CSS
+    assert 'class="nav-search"' not in shops
+    assert 'class="hero page-search"' in shops and 'id="home-q"' in shops
+    assert 'placeholder="Zadej název nebo vlož odkaz z e-shopu"' in shops
+    assert ".page-search{padding:6px 0 2px" in STYLE
+    assert ".foot ul a{display:inline-flex" in CSS and "font-size:14px" in CSS.split(".foot ul a{")[1].split("}")[0]
 
 
 def test_category_header_collapses_tip_and_filters():
@@ -65,7 +66,8 @@ def test_product_hero_is_large_on_mobile_and_desktop_slot_stays():
 
 
 def test_tap_targets_and_minimum_text():
-    assert ".foot ul a,.legal a{display:inline-flex" in CSS and "min-height:40px" in CSS
+    assert ".foot ul a{display:inline-flex" in CSS and "font-size:14px" in CSS.split(".foot ul a{")[1].split("}")[0]
+    assert ".legal a{display:inline-flex" in CSS
     assert ".rank-link{display:inline-flex" in CSS and "min-height:40px" in CSS.split(".rank-link{")[1].split("}")[0]
     assert ".expect-badge{display:inline-block;font-size:12px" in CSS
     assert ".offer-best-tag{display:inline-block;margin-left:6px;font-size:12px" in CSS

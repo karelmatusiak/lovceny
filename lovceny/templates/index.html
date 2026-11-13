@@ -22,7 +22,6 @@
 </article>
 {%- endmacro %}
 {% block body %}
-{% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
 <header class="hero" id="hledat"><div class="wrap">
   <h1 class="sr-only">Hlídáme ceny. Řekneme na rovinu.</h1>
   <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">

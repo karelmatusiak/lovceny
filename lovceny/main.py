@@ -104,6 +104,17 @@ def pslug(p) -> str:
 
 tpl.env.globals["dname"] = dname
 tpl.env.globals["pslug"] = pslug
+
+
+def site_banner():
+    """Stejný Black Friday pruh na každé stránce, jen v okně z blackfriday.banner_active."""
+    from . import blackfriday as bfmod
+    if not bfmod.banner_active():
+        return None
+    return {"year": bfmod.season().year, "text": bfmod.countdown_text()}
+
+
+tpl.env.globals["site_banner"] = site_banner
 # Statický generátor ho na čas zapne. Živý web ho nechává vypnutý.
 tpl.env.globals["STATIC_SITE"] = False
 
@@ -405,7 +416,6 @@ def _drop_broken_home_images(featured, extras, popular):
 def home(request: Request, db=Depends(get_db)):
     from .offer_trust import use_cutoffs
     use_cutoffs(db)
-    from . import blackfriday as bfmod
     from .hero import home_board
     from .images import has_working_image
     from .popular import popular_picks
@@ -413,10 +423,9 @@ def home(request: Request, db=Depends(get_db)):
     popular = popular_picks(db, limit=8)
     featured, extras, popular = _drop_broken_home_images(featured, extras, popular)
     deals = [r for r in real_deals(db, top=12)["buys"] if has_working_image(r.product.image_url)][:3]
-    bf = {"season": bfmod.season(), "text": bfmod.countdown_text()} if bfmod.banner_active() else None
     cat_counts = listing_category_counts(db)
     return tpl.TemplateResponse(request, "index.html", {
-        "deals": deals, "bf": bf,
+        "deals": deals,
         "thin_history": price_history_thin(db),
         "home_picks": [(h, False) for h in featured] + [(h, True) for h in extras],
         "pick_chips": chips,
