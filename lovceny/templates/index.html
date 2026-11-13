@@ -23,16 +23,14 @@
 {%- endmacro %}
 {% block body %}
 {% if bf %}<aside class="bf-banner" aria-label="Black Friday {{ bf.season.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ bf.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
-<header class="hero" id="hledat"><div class="wrap hero-compact">
-  <div class="hero-title">
-    <h1>Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></h1>
-    <span class="pill"><i>Nově</i> Poctivý hlídač cen elektroniky, bez placených pozic</span>
-  </div>
-  <form class="search" action="/hledat" method="get" role="search" autocomplete="off">
+<header class="hero" id="hledat"><div class="wrap">
+  <h1 class="sr-only">Hlídáme ceny. Řekneme na rovinu.</h1>
+  <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
     <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input name="q" type="text" required placeholder="Název nebo odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
-    <button class="btn btn-primary" type="submit">Prověřit cenu</button>
+      <input id="home-q" name="q" type="text" required placeholder="Zadej název nebo vlož odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
+    <button class="btn btn-primary" type="submit">Hledat</button>
   </form>
+  <p class="search-note">Poctivý hlídač cen elektroniky, bez placených pozic</p>
 </div>
 {% if AI_SEARCH_ON() %}<p class="ai-hint wrap">{{ ico('spark') }} Rozumíme i běžné řeči – zkus „tichá pračka do 10 tisíc“ nebo „sluchátka na běhání“.</p>{% endif %}
 </header>

@@ -16,13 +16,16 @@ a{color:inherit}
 .demo-ribbon{background:var(--ink);color:#fff;text-align:center;font-size:13px;padding:8px 16px;letter-spacing:.01em}
 .demo-ribbon b{color:#FFC7AE}
 /* nav */
-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 0}
+nav{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:-.02em;text-decoration:none}
+.logo-slogan{margin:0 0 0 14px;padding-left:14px;border-left:1px solid var(--line);font-size:15px;line-height:1.25;font-weight:650;color:var(--ink);white-space:nowrap}
+.logo-slogan .hl{color:var(--brand)}
+.nav-find{display:none}
 .logo-mark{width:36px;height:36px;border-radius:11px;background:var(--brand);display:grid;place-items:center}
 .logo span em{font-style:normal;color:var(--brand)}
-.logo-img{display:block;height:72px;width:auto}
+.logo-img{display:block;height:36px;width:auto}
 footer .logo-img{height:44px}
-@media (max-width:560px){.logo-img{height:64px}nav{padding:12px 0}}
+@media (max-width:560px){.logo-img{height:32px}nav{padding:8px 0}}
 .nav-links{display:flex;gap:28px;font-size:15px;color:var(--muted)}
 .nav-links a{text-decoration:none}.nav-links a:hover{color:var(--ink)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;font:inherit;font-weight:700;border-radius:14px;text-decoration:none;transition:transform .15s,background .15s,box-shadow .15s}
@@ -31,7 +34,12 @@ footer .logo-img{height:44px}
 .btn-primary{background:var(--brand);color:#fff;padding:0 28px;height:60px;font-size:17px;box-shadow:0 8px 20px -8px rgba(11,110,79,.6)}
 .btn-primary:hover{background:var(--brand-600)}
 /* hero */
-.hero{padding:16px 0 8px;text-align:center;position:relative}
+.hero{padding:8px 0 4px;text-align:center;position:relative}
+.search-wide,.search.search-wide{max-width:none;width:100%}
+.hero .search{padding:6px}
+.hero .search input,.hero .search .btn-primary{height:48px}
+.hero .search .btn-primary{padding:0 22px;font-size:16px;box-shadow:none}
+.search-note{margin:8px 2px 0;font-size:13px;line-height:1.35;color:var(--muted);text-align:left}
 .hero::before{content:"";position:absolute;inset:-40px 0 auto 0;height:220px;z-index:-1;
   background:radial-gradient(600px 300px at 50% 0%,var(--brand-50),transparent 70%),radial-gradient(380px 220px at 82% 30%,var(--accent-50),transparent 70%)}
 .pill{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 8px;font-size:14px;color:var(--muted);box-shadow:var(--shadow)}

@@ -24,7 +24,11 @@
 <a class="skip" href="#obsah">Přeskočit na obsah</a>
 <header class="site-head"><div class="wrap">
   <nav aria-label="Hlavní navigace" class="site-nav">
-    <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="159" height="72"></a>
+    <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="126" height="36"></a>
+    <p class="logo-slogan">Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></p>
+    <button type="button" class="nav-find" id="nav-find" aria-label="Hledat">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    </button>
     {% if request.url.path != '/' %}
     <form class="nav-search" action="/hledat" method="get" role="search">
       <input id="nav-q" name="q" type="search" required maxlength="200" placeholder="Hledat" enterkeyhint="search" autocomplete="off" aria-label="Hledat produkt">
@@ -37,7 +41,6 @@
     </button>
     <div class="nav-panel" id="nav-panel">
       <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/#hledat">Hledat</a><a href="/slevy">Slevy</a><a href="/o-nas">O nás</a></div>
-      <div class="nav-cta"><a class="btn btn-primary nav-cta-btn" href="/#hledat">Prověřit cenu</a></div>
     </div>
   </nav>
 </div></header>
@@ -68,7 +71,7 @@
 {% endif %}
 <div class="wrap">
   <div class="foot">
-    <div class="foot-brand"><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="110" height="50" loading="lazy"></a>
+    <div class="foot-brand"><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="154" height="44" loading="lazy"></a>
       <p>Poctivý hlídač cen. Bez placených pozic, bez reklam ve výsledcích.</p></div>
     <div><p class="foot-h">Kategorie</p><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
     <div><p class="foot-h">Produkt</p><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/over-slevu">Ověř slevu</a></li><li><a href="/kdy-nakupovat">Kdy nakupovat</a></li>{% if DIGEST_ON() %}<li><a href="/prehled">Týdenní přehled</a></li>{% endif %}{% if BUDGET_ON() %}<li><a href="/hlidat-rozpocet">Hlídání rozpočtu</a></li>{% endif %}<li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li></ul>
@@ -97,6 +100,23 @@
   b.addEventListener("click", function(){ set(b.getAttribute("aria-expanded")!=="true"); });
   p.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ set(false); }); });
   document.addEventListener("keydown", function(e){ if(e.key==="Escape") set(false); });
+})();
+(function(){
+  var b=document.getElementById("nav-find");
+  if(!b)return;
+  b.addEventListener("click", function(){
+    var home=document.getElementById("home-q");
+    if(home){
+      var box=document.getElementById("hledat");
+      if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
+      home.focus();
+      return;
+    }
+    var form=document.querySelector(".nav-search");
+    var input=document.getElementById("nav-q");
+    if(form) form.classList.add("is-open");
+    if(input) input.focus();
+  });
 })();
 </script>
 {% block scripts %}{% endblock %}

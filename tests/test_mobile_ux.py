@@ -39,7 +39,7 @@ def test_header_search_on_inner_pages_and_short_home_placeholder():
     c = TestClient(app)
     home = c.get("/").text
     assert 'class="nav-search"' not in home
-    assert 'placeholder="Název nebo odkaz z e-shopu"' in home
+    assert 'placeholder="Zadej název nebo vlož odkaz z e-shopu"' in home
     assert "sluchátka na běhání nebo odkaz" not in home
     shops = c.get("/obchody").text
     assert 'class="nav-search"' in shops and 'action="/hledat"' in shops
