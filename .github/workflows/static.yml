@@ -2,7 +2,9 @@ name: Statický web
 on:
   pull_request:
   workflow_dispatch: {}
-  workflow_call: {}
+  # Jednou denně po ranním stažení cen (cron-job.org v 6:00 Praha).
+  schedule:
+    - cron: "30 6 * * *"
   # Stejný běh jako ruční Run workflow (workflow 414497804).
   repository_dispatch:
     types: [static-site]
@@ -43,7 +45,25 @@ jobs:
               echo "${name}=${value}" >> "$GITHUB_ENV"
             fi
           done
-      - name: Vygenerovat web
+      - name: Snapshot pro pull request
+        id: snapshot
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Pull request nesmí otevřít Neon. Poslední snapshot z main, jinak build přeskočí.
+          set +e
+          gh run download --repo "${{ github.repository }}" --name lovceny-snapshot --dir snapshot \
+            $(gh run list --repo "${{ github.repository }}" --workflow snapshot.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          set -e
+          if [ -f snapshot/lovceny.sqlite ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "Snapshot lovceny-snapshot na main není, generování přeskakuji. Neon se nevolá."
+          fi
+      - name: Vygenerovat web z Neon
+        if: github.event_name != 'pull_request'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PUBLIC_URL: https://lovceny.cz
@@ -52,10 +72,17 @@ jobs:
           FEED_URLS: ${{ secrets.FEED_URLS }}
         run: |
           extra=()
-          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             extra+=(--migrate)
           fi
           python build_static.py --out dist --report build-report.json "${extra[@]}"
+      - name: Vygenerovat web ze snapshotu
+        if: github.event_name == 'pull_request' && steps.snapshot.outputs.have == 'true'
+        env:
+          DATABASE_URL: sqlite:///snapshot/lovceny.sqlite
+          PUBLIC_URL: https://lovceny.cz
+          LOVCENY_SKIP_DATA_FIXES: "1"
+        run: python build_static.py --out dist --report build-report.json
       - name: Nasadit na Cloudflare Pages
         id: deploy
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -80,7 +107,7 @@ jobs:
           fi
           echo "deployed=true" >> "$GITHUB_OUTPUT"
       - name: Artefakt webu
-        if: steps.deploy.outputs.deployed != 'true'
+        if: steps.deploy.outputs.deployed != 'true' && (github.event_name != 'pull_request' || steps.snapshot.outputs.have == 'true')
         uses: actions/upload-artifact@v4
         with:
           name: static-site
