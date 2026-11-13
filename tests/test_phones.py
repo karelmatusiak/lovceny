@@ -40,7 +40,7 @@ def test_same_storage_only_and_a_far_outlier_stays_out_of_the_price():
     init_db()
     db = SessionLocal()
     try:
-        from lovceny.phones import _fix_casing, _model_name, credible_offers
+        from lovceny.phones import _fix_casing, _model_name, price_trust
         assert _model_name(["Samsung Galaxy Z FOLD8 256GB černá"]) == "Samsung Galaxy Z Fold8"
         assert _fix_casing("iPhone 16 Pro Max FE 5G") == "iPhone 16 Pro Max FE 5G"
         cheap = _phone(db, "Apple iPhone Air 256GB černá", 10000, shop="tera", slug="air-tera")
@@ -51,9 +51,23 @@ def test_same_storage_only_and_a_far_outlier_stays_out_of_the_price():
         assert model.name == "Apple iPhone Air"
         assert model.lowest == 32000
         assert "tera" not in {offer.shop for offer in model.offers if offer.product_id == cheap.id}
-        kept = credible_offers(model.products, [offer for product in model.products for offer in product.offers])
+        kept, disputed = price_trust(model.products, [offer for product in model.products for offer in product.offers])
         assert cheap.offers[0].id not in {offer.id for offer in kept}
+        assert "256 GB" not in disputed
         assert any(offer.shop == "istyle" for offer in kept)
+    finally:
+        db.close()
+
+
+def test_two_shops_far_apart_do_not_claim_a_lowest_price():
+    init_db()
+    db = SessionLocal()
+    try:
+        _phone(db, "Samsung Galaxy Z Fold8 512GB krémová", 39653, shop="xm", slug="fold-xm")
+        _phone(db, "Samsung Galaxy Z Fold8 512GB krémová", 73368, shop="xupe", slug="fold-xupe")
+        model = group_phones(db.query(Product).all())[0]
+        assert "512 GB" in model.disputed
+        assert model.lowest is None
     finally:
         db.close()
 

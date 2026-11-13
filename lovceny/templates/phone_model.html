@@ -8,8 +8,12 @@
     <div class="model-buybox">
       {% if model.brand %}<p class="kicker">{{ model.brand }}</p>{% endif %}
       <h1>{{ model.name }}</h1>
-      <p class="model-price">{% if shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
+      <p class="model-price">{% if active_storage in model.disputed %}Cenu nepotvrzujeme{% elif shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
+      {% if active_storage in model.disputed %}
+      <p class="history-note">Dva obchody se u téhle kapacity liší o víc než 35 %. Nejnižší cenu uvedeme, až ji potvrdí třetí obchod nebo delší historie.</p>
+      {% else %}
       <p class="model-price-note">{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if offers %} · {{ cz_count(offers|map(attribute='shop')|unique|list|length, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+      {% endif %}
       {% if verdict and verdict.code == 'none' %}
       <p class="history-note">Historie ceny se právě tvoří. Doporučení Kupuj nebo Počkej ukážeme po 7 dnech měření.</p>
       {% elif verdict %}
@@ -19,8 +23,8 @@
       <div class="storage-row" aria-label="Úložiště">
         {% for deal in storage_deals %}
         <a class="storage-chip{% if active_storage == deal.label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?pamet={{ deal.label|urlencode }}{% if color %}&barva={{ color|urlencode }}{% endif %}"{% if active_storage == deal.label %} aria-current="true"{% endif %}>
-          <b>{{ deal.label }}</b>
-          <span>{{ deal.price|czk }}{% if not deal.in_stock %} · není skladem{% endif %}</span>
+        <b>{{ deal.label }}</b>
+        <span>{% if deal.unconfirmed %}nepotvrzeno{% else %}{{ deal.price|czk }}{% if not deal.in_stock %} · není skladem{% endif %}{% endif %}</span>
         </a>
         {% endfor %}
       </div>
@@ -30,7 +34,7 @@
         {% for row in offer_rows[:3] %}
         {% set offer = row.offer %}
         {% set shop = get_shop(offer.shop) %}
-        <li class="{% if loop.first and offer.in_stock is not false %}is-best{% endif %}">
+        <li class="{% if loop.first and offer.in_stock is not false and active_storage not in model.disputed %}is-best{% endif %}">
           <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
           <span class="offer-price">{{ offer.price|czk }}</span>
           {% if offer.in_stock is false %}

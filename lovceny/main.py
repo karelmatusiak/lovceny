@@ -472,13 +472,21 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
         raise HTTPException(404)
     storage_query = pamet.strip()
     if not storage_query:
-        pool = [offer for offer in model.offers if offer_is_buyable(offer)] or list(model.offers)
+        def _label(offer) -> str:
+            for product in model.products:
+                if product.id == offer.product_id:
+                    return storage_label(product.name or "") or ""
+            return ""
+        confirmed = [
+            offer for offer in model.offers
+            if _label(offer) not in model.disputed and offer_is_buyable(offer)
+        ] or [
+            offer for offer in model.offers if _label(offer) not in model.disputed
+        ]
+        pool = confirmed or [offer for offer in model.offers if offer_is_buyable(offer)] or list(model.offers)
         if pool:
             cheapest = min(pool, key=lambda offer: float(offer.price))
-            for product in model.products:
-                if product.id == cheapest.product_id:
-                    storage_query = storage_label(product.name or "") or ""
-                    break
+            storage_query = _label(cheapest)
     products = select_variant(model, storage=storage_query, color=barva.strip())
     product_ids = {product.id for product in products}
     offers = [offer for offer in model.offers if offer.product_id in product_ids]

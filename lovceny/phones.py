@@ -85,6 +85,7 @@ class PhoneModel:
     in_stock: bool = False
     shops: int = 0
     image: str | None = None
+    disputed: set[str] = field(default_factory=set)
 
     @property
     def storages(self) -> list[str]:
@@ -128,12 +129,13 @@ def storage_deals(model: PhoneModel) -> list[dict]:
         winner = min(pool, key=lambda offer: float(offer.price))
         price = float(winner.price)
         current = best.get(label)
-        if current is None or price < current["price"]:
+        if current is None or (current["price"] is not None and price < current["price"]):
             best[label] = {
                 "label": label,
-                "price": price,
+                "price": None if label in model.disputed else price,
                 "in_stock": bool(buyable),
                 "product_id": product.id,
+                "unconfirmed": label in model.disputed,
             }
     rows = sorted(best.values(), key=lambda row: _storage_sort_key(row["label"]))
     large = [row for row in rows if _storage_sort_key(row["label"]) >= 32]
@@ -142,8 +144,17 @@ def storage_deals(model: PhoneModel) -> list[dict]:
 
 def anchor_product(model: PhoneModel) -> Product | None:
     """Varianta, kterou bereme do srovnání: nejlevnější skladem, jinak nejlevnější vůbec."""
-    buyable = [offer for offer in model.offers if offer_is_buyable(offer)]
-    pool = buyable or list(model.offers)
+    usable = []
+    for offer in model.offers:
+        label = ""
+        for product in model.products:
+            if product.id == offer.product_id:
+                label = storage_label(product.name or "") or ""
+                break
+        if label not in model.disputed:
+            usable.append(offer)
+    buyable = [offer for offer in usable if offer_is_buyable(offer)]
+    pool = buyable or usable or list(model.offers)
     if not pool:
         return model.products[0] if model.products else None
     winner = min(pool, key=lambda offer: float(offer.price))
@@ -252,6 +263,7 @@ _EXTRA_COLOR = {
     "kosmicka", "temne", "temny", "mlhove", "mlhovy", "oblacne", "oblacny",
     "svetle", "svetly", "starlit", "ice", "denim", "velvet", "sprout", "meteor",
     "golden", "sporting", "bright", "blackened", "sage", "jet",
+    "krem", "grafit",
 }
 
 
@@ -295,7 +307,7 @@ def _model_name(names: list[str]) -> str:
         noise = {
             "mah", "ip68", "esim", "lte", "nfc", "distribuce", "5g", "usb",
             "android", "hybridni", "dual", "ds", "hz", "typu", "cm", "mhz",
-            "chytry", "chytra",
+            "chytry", "chytra", "sim",
         }
         while index < len(words):
             raw_word = words[index]
@@ -427,42 +439,44 @@ def _fix_casing(text: str) -> str:
     return " ".join(out)
 
 
-def credible_offers(products: list[Product], offers: list[Offer]) -> list[Offer]:
-    """Veřejná cena. Jiná kapacita se sem nedostane — volající už filtruje.
+def price_trust(products: list[Product], offers: list[Offer]) -> tuple[list[Offer], set[str]]:
+    """Které nabídky smějí tvořit veřejnou nejnižší cenu, a které kapacity ne.
 
-    V rámci jedné kapacity schováme obchod, který je o víc než 35 % pod mediánem
-    ostatních, když jsou ostatní aspoň dva. Řádek v databázi zůstane.
+    Jiná kapacita se do stejné skupiny nedostane. Obchod o víc než 35 % pod
+    mediánem aspoň dvou dalších schováme. Když jsou obchody jen dva a liší se
+    o víc než 35 %, nejnižší cenu té kapacity neuvádíme. Řádky v databázi zůstávají.
     """
     from statistics import median
-    by_storage: dict[str, list[Offer]] = {}
     product_storage = {product.id: storage_label(product.name or "") or "" for product in products}
+    by_storage: dict[str, list[Offer]] = {}
     for offer in offers:
         by_storage.setdefault(product_storage.get(offer.product_id, ""), []).append(offer)
-    flagged: set[str] = set()
-    for group in by_storage.values():
+    hidden: set[tuple[str, str]] = set()
+    disputed: set[str] = set()
+    for storage, group in by_storage.items():
         shop_price: dict[str, float] = {}
         for offer in group:
             price = float(offer.price)
             current = shop_price.get(offer.shop)
             if current is None or price < current:
                 shop_price[offer.shop] = price
+        if len(shop_price) == 2 and storage:
+            low, high = sorted(shop_price.values())
+            if high > 0 and low < high * 0.65:
+                disputed.add(storage)
+            continue
         if len(shop_price) < 3:
             continue
         for shop, price in shop_price.items():
             others = [other for name, other in shop_price.items() if name != shop]
-            if len(others) < 2:
-                continue
             mid = float(median(others))
             if mid > 0 and price < mid * 0.65:
-                flagged.add(f"{product_storage.get(group[0].product_id, '')}|{shop}")
-    if not flagged:
-        return list(offers)
-    kept = []
-    for offer in offers:
-        key = f"{product_storage.get(offer.product_id, '')}|{offer.shop}"
-        if key not in flagged:
-            kept.append(offer)
-    return kept
+                hidden.add((storage, shop))
+    shown = [
+        offer for offer in offers
+        if (product_storage.get(offer.product_id, ""), offer.shop) not in hidden
+    ]
+    return shown, disputed
 
 
 def _visible_offers(product: Product) -> list[Offer]:
@@ -500,12 +514,18 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
             slug = f"{slug}-{group[0].id}"
         used_slugs.add(slug)
         offers: list[Offer] = []
+        from .offer_trust import offer_mismatches_product
         for product in group:
-            offers.extend(_visible_offers(product))
-        offers = credible_offers(group, offers)
-        buyable = [offer for offer in offers if offer_is_buyable(offer)]
-        priced = buyable or offers
-        lowest = min((float(offer.price) for offer in priced), default=None)
+            for offer in _visible_offers(product):
+                if offer_mismatches_product(offer, product):
+                    continue
+                offers.append(offer)
+        offers, disputed = price_trust(group, offers)
+        product_storage = {product.id: storage_label(product.name or "") or "" for product in group}
+        priced = [offer for offer in offers if product_storage.get(offer.product_id, "") not in disputed]
+        buyable = [offer for offer in priced if offer_is_buyable(offer)]
+        pool = buyable or priced
+        lowest = min((float(offer.price) for offer in pool), default=None)
         image = next((product.image_url for product in group if product.image_url), None)
         brand = next((guess_brand(product.name or "") for product in group if guess_brand(product.name or "")), None)
         if brand is None and any("iphone" in (product.name or "").casefold() for product in group):
@@ -523,6 +543,7 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
             in_stock=bool(buyable),
             shops=len({offer.shop for offer in offers}),
             image=image,
+            disputed=disputed,
         ))
     models.sort(key=lambda model: (-model.shops, model.lowest if model.lowest is not None else 10**12, model.name.casefold()))
     return models
