@@ -234,12 +234,33 @@ def _skip_excluded_brand(offer, item) -> bool:
     return True
 
 
+def feed_display_name(raw: str) -> str:
+    """Název nového produktu. Úklid z names.py, bez zkrácení karty, které by smazalo model."""
+    from .names import normalize_display_title, polish_feed_display
+    cleaned = polish_feed_display(raw or "") or (raw or "")
+    titled = (normalize_display_title(cleaned) or cleaned).strip()
+    return (titled or (raw or "").strip())[:300]
+
+
+def single_part_code(name: str):
+    """Jedna značka a právě jeden silný kód výrobce. Víc kódů je nejednoznačné."""
+    from .matching import brand_and_mpn
+    key = brand_and_mpn(name or "")
+    if key is None or len(key[1]) != 1:
+        return None
+    return key
+
+
 def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missing: bool = False,
-               max_create: int | None = None) -> dict:
+               max_create: int | None = None, create_identified: bool = False,
+               commit: bool = True) -> dict:
     """Spáruje položky feedu s nabídkami a zapíše ceny.
 
     Párování: URL → ITEM_ID → GTIN → značka a kód výrobce. Shoda jen podle názvu
     jde do fronty a produkt nezaloží. Kategorie jen z mapování obchodu.
+
+    create_identified založí nový produkt jen při jisté kategorii, platném GTIN
+    nebo jednom kódu výrobce, a jen do max_create. Bez commit se změny neuloží.
     """
     from sqlalchemy import select as sa_select
 
@@ -454,6 +475,8 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
             by_url[clean] = existing
             stats["matched"] += 1
             return existing
+        if prod.offers:
+            stats["second_offer"] = stats.get("second_offer", 0) + 1
         offer = Offer(product=prod, shop=shop_slug, url=clean)
         db.add(offer)
         db.flush()
@@ -600,6 +623,60 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 else:
                     created += 1
                     stats["created"] += 1
+            elif create_identified and res.action == "high" and res.slug in BY_SLUG:
+                # Nový produkt jen z jisté cesty kategorie a z GTIN nebo jednoho kódu.
+                # Shoda jen podle názvu se sem nedostane: ta už skončila jako hidden.
+                part = None if gtin else single_part_code(it.name or "")
+                if not gtin and part is None:
+                    stats["skipped"] += 1
+                    continue
+                if part is not None and any(
+                    p.retired_at is None for p in mpn_index.get(part, ())
+                ):
+                    stats["skipped"] += 1
+                    continue
+                from .category_guard import guarded_category
+                if guarded_category(it.name or "", res.slug)[0] != "keep":
+                    stats["skipped"] += 1
+                    continue
+                if shop_slug == "allegro":
+                    from .allegro_narrow import is_known_brand
+                    if not is_known_brand(it.name or ""):
+                        stats["skipped"] += 1
+                        continue
+                stats["eligible"] = stats.get("eligible", 0) + 1
+                by_cat = stats.setdefault("eligible_by_category", {})
+                by_cat[res.slug] = by_cat.get(res.slug, 0) + 1
+                if max_create is not None and created >= max_create:
+                    stats["capped"] = stats.get("capped", 0) + 1
+                    stats["skipped"] += 1
+                    continue
+                shown = feed_display_name(it.name)
+                prod = Product(
+                    name=shown, slug=slugify(shown), category=BY_SLUG[res.slug].name,
+                    category_slug=res.slug, catalog_hidden=False, needs_review=False,
+                )
+                assign_ean(prod, it.ean)
+                _assign_image(prod, it.image)
+                o = Offer(product=prod, shop=shop_slug, url=clean)
+                db.add(o)
+                db.flush()
+                products.append(prod)
+                index_mpn(prod)
+                by_url[clean] = o
+                if it.item_id:
+                    by_id[it.item_id] = o
+                g = stamp(o, it)
+                remember_gtin(g or normalize_gtin(prod.ean), prod, o)
+                key = canonicalize_name(shown)
+                if key:
+                    by_canon[key] = None if key in by_canon else prod
+                fresh = True
+                created += 1
+                stats["created"] += 1
+                samples = stats.setdefault("samples", [])
+                if len(samples) < 20:
+                    samples.append({"name": shown, "category": BY_SLUG[res.slug].name})
             else:
                 stats["skipped"] += 1
                 continue
@@ -664,7 +741,10 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
     looked_at = datetime.now(timezone.utc)
     for existing in db.scalars(select(Offer).where(Offer.shop == shop_slug)).all():
         note_offer_due(existing, looked_at)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return stats
 
 

@@ -11,6 +11,7 @@ přeskočíme. Captcha se neobchází.
 """
 import argparse
 import logging
+import os
 import signal
 import sys
 import time
@@ -41,6 +42,46 @@ SCRAPE_BUDGET_S = 12 * 60
 SHOP_BUDGET_S = 90
 MIRONET_BUDGET_S = 180
 SHOP_FAIL_STREAK = 3
+# Nové produkty za jeden běh. 100 řádků je řádově desetiny MB v Neon (řádek + nabídka
+# + první cena, fotka je jen URL). Statický web přidá asi minutu na několik set nových stránek.
+DEFAULT_CREATE_CAP = 100
+
+
+def create_cap_from(raw) -> int:
+    if raw is None or raw == "":
+        raw = os.environ.get("LOVCENY_FEED_CREATE_CAP", str(DEFAULT_CREATE_CAP))
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_CREATE_CAP
+
+
+def log_create_plan(plan: list[dict], samples: list[dict], cap: int) -> None:
+    """Souhrn suchého běhu. Bez adres feedů a bez URL nabídek."""
+    eligible = created = attached = capped = 0
+    by_cat: dict[str, dict[str, int]] = {}
+    for row in plan:
+        eligible += row["eligible"]
+        created += row["created"]
+        attached += row["second_offer"]
+        capped += row["capped"]
+        log.info(
+            "NÁVRH %s: kandidáti %s, vytvořit %s, druhá nabídka %s, nad strop %s, kategorie %s",
+            row["shop"], row["eligible"], row["created"], row["second_offer"], row["capped"],
+            row["by_category"],
+        )
+        for slug, counts in row["by_category"].items():
+            bucket = by_cat.setdefault(slug, {"eligible": 0, "created": 0})
+            bucket["eligible"] += counts
+            # created per category is not split when the cap cuts mid-shop; eligible is the candidate count.
+    for slug in sorted(by_cat):
+        log.info("NÁVRH kategorie %s: kandidáti %s", slug, by_cat[slug]["eligible"])
+    for i, sample in enumerate(samples, 1):
+        log.info("VZOREK %s. %s | %s", i, sample["name"], sample["category"])
+    log.info(
+        "SOUHRN NÁVRHU: kandidáti %s, vytvořit %s (strop %s), druhá nabídka %s, nad strop %s",
+        eligible, created, cap, attached, capped,
+    )
 
 
 def load_feed_items(slug: str, src: str):
@@ -126,7 +167,15 @@ def main(argv=None):
     ap.add_argument("--min-age-hours", type=float, default=2, help="přeskočit nedávno kontrolované nabídky")
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--health-out", help="zapsat vyhodnocení zdraví obchodů (JSON) – čte ho shop_health_issues.py")
+    ap.add_argument("--dry-run", action="store_true", help="spočítej nové produkty a nic nezapisuj")
+    ap.add_argument("--create-cap", type=int, default=None, help="max nových produktů v tomto běhu")
     a = ap.parse_args(argv)
+    if not a.dry_run and os.environ.get("LOVCENY_FEED_DRY_RUN", "").lower() in {"1", "true", "yes"}:
+        a.dry_run = True
+    cap = create_cap_from(a.create_cap)
+    remaining = cap
+    plan: list[dict] = []
+    samples: list[dict] = []
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     init_db()
     db = SessionLocal()
@@ -172,20 +221,45 @@ def main(argv=None):
             continue
         try:
             t0 = time.perf_counter()
-            st = apply_feed(db, slug, items)
-            log.info("feed %s: stažení %.0fs, zápis %.1fs, %s", slug, seconds, time.perf_counter() - t0, st)
+            st = apply_feed(
+                db, slug, items, create_identified=True, max_create=remaining, commit=not a.dry_run,
+            )
+            public = {k: v for k, v in st.items() if k != "samples"}
+            log.info("feed %s: stažení %.0fs, zápis %.1fs, %s", slug, seconds, time.perf_counter() - t0, public)
             report[f"{slug}:feed_ok"] += st["matched"]
+            report[f"{slug}:created"] += st.get("created", 0)
+            report[f"{slug}:second_offer"] += st.get("second_offer", 0)
             stats.add(slug, "ok", 200)
-            checkpoint()
+            remaining = max(0, remaining - st.get("created", 0))
+            plan.append({
+                "shop": slug,
+                "eligible": st.get("eligible", 0),
+                "created": st.get("created", 0),
+                "second_offer": st.get("second_offer", 0),
+                "capped": st.get("capped", 0),
+                "by_category": dict(st.get("eligible_by_category") or {}),
+            })
+            for sample in st.get("samples") or []:
+                if len(samples) < 20:
+                    samples.append(sample)
+            if not a.dry_run:
+                checkpoint()
         except Exception as e:
             db.rollback()
             log.error("feed %s selhal: %s", slug, e)
             report[f"{slug}:feed_error"] += 1
             stats.add(slug, "errors", getattr(getattr(e, "response", None), "status_code", None), str(e))
-            checkpoint()
+            if not a.dry_run:
+                checkpoint()
     for s in SHOPS.values():
         if s.source == "feed" and not s.feed_url and s.slug not in feeds:
             log.info("%s: feed URL není nastavená (%s), obchod přeskakuji", s.name, s.feed_url_env or s.slug)
+
+    if a.dry_run:
+        db.rollback()
+        log_create_plan(plan, samples, cap)
+        log.info("Suchý běh: databáze beze změny")
+        return 0
 
     # Kryty a pouzdra, které už v DB visí na sluchátkách nebo telefonech.
     try:
