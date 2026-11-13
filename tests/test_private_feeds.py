@@ -1,8 +1,10 @@
 """Soukromé feedy nemají adresu v gitu. Prázdný env je přeskočí."""
 import json
 import logging
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 from lovceny.shops import get_shop
 
@@ -89,15 +91,35 @@ def test_fetch_skips_a_shop_without_a_feed_url():
 
 
 def test_build_feed_urls_script_writes_keys_not_stdout(tmp_path):
+    repo = tmp_path / "repo"
+    registry = repo / "lovceny" / "shops"
+    registry.mkdir(parents=True)
+    shops = []
+    for key in PRIVATE.values():
+        shops.append(
+            'Shop("s", "S", ["s.cz"], feed_url_env="' + key + '",\n'
+            '         extra={"feed_url_default": "https://example.test/' + key.lower() + '.xml"})'
+        )
+    (registry / "registry.py").write_text("\n".join(shops) + "\n", encoding="utf-8")
+    git_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Test",
+        "GIT_AUTHOR_EMAIL": "test@example.com",
+        "GIT_COMMITTER_NAME": "Test",
+        "GIT_COMMITTER_EMAIL": "test@example.com",
+    }
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "add", "lovceny/shops/registry.py"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "fixture"], cwd=repo, check=True, capture_output=True, env=git_env)
     out = tmp_path / "feeds.json"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "build_feed_urls_json.py"
     proc = subprocess.run(
-        [sys.executable, "scripts/build_feed_urls_json.py", str(out), "--ref", "origin/main"],
-        capture_output=True, text=True, check=False,
+        [sys.executable, str(script), str(out), "--ref", "HEAD"],
+        cwd=repo, capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 0, proc.stderr
     assert "http" not in proc.stdout and "http" not in proc.stderr
     data = json.loads(out.read_text(encoding="utf-8"))
     assert list(data) == list(PRIVATE.values())
-    missing = [key for key, value in data.items() if not (isinstance(value, str) and value.startswith("http"))]
-    assert missing == []
+    assert data == {key: "https://example.test/" + key.lower() + ".xml" for key in PRIVATE.values()}
     assert oct(out.stat().st_mode & 0o777) == "0o600"
