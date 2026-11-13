@@ -333,17 +333,20 @@ main:focus{outline:none}
 .faq-item summary::-webkit-details-marker{display:none}
 .faq-item summary::after{content:"+";position:absolute;right:0;top:12px;font-size:24px;color:var(--brand)}.faq-item[open] summary::after{content:"–"}
 .faq-item p{margin:0 0 16px;color:#33433B}
-.contact{padding:28px;border-radius:26px}.contact h2{margin-top:0}
+.about-contact .narrow{display:flex;flex-direction:column;gap:16px}
+.operator,.contact{padding:28px;border-radius:26px}
+.operator h2,.contact h2{margin-top:0}
+.operator p{margin:0;line-height:1.5}
 .contact-form select,.contact-form textarea{width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;font:inherit;font-size:16px;background:#fff}
 .contact-form select{height:52px}.contact-form textarea{resize:vertical;min-height:130px}
 .contact-form select:focus,.contact-form textarea:focus{border-color:var(--brand);outline:0;box-shadow:0 0 0 4px var(--brand-50)}
 .hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
 .ok-notice{background:#E6F4EE;color:#0E5B36}
 @media (max-width:860px){.about-grid{grid-template-columns:1fr}.money{grid-template-columns:1fr}}
-@media (max-width:560px){.about-wide,.contact{padding:20px}.st-list{grid-template-columns:1fr}.adm-grid{grid-template-columns:1fr}}
+@media (max-width:560px){.about-wide,.contact,.operator{padding:20px}.st-list{grid-template-columns:1fr}.adm-grid{grid-template-columns:1fr}}
 .st-card .h3,.adm-card .h3,.st-legend .h3{font-size:18px;margin:0 0 8px;letter-spacing:-.01em}
 .share-top{display:flex;justify-content:space-between;align-items:center;margin:-4px 0 8px}.share-close{width:44px;height:44px;margin-right:-8px;border:0;background:none;font-size:26px;line-height:1;color:var(--muted);cursor:pointer;border-radius:12px}.share-close:hover{background:var(--soft)}
-.about-wide h2,.contact h2,.sec-h{font-size:clamp(24px,3vw,30px);letter-spacing:-.02em;line-height:1.15;margin:4px 0 10px}
+.about-wide h2,.contact h2,.operator h2,.sec-h{font-size:clamp(24px,3vw,30px);letter-spacing:-.02em;line-height:1.15;margin:4px 0 10px}
 .push-ios .small,.contact .small,.adm-card .small,.about-card .small,.about-wide .small{text-align:left}
 .cmp-dl+.cmp-dl{margin-top:12px}
 .contact .notice{margin:14px 0 16px}
@@ -942,7 +945,8 @@ h2.h3,h3.h3{font-size:20px;line-height:1.3;margin:0 0 8px;letter-spacing:-.01em}
 .tbl-shops td{overflow-wrap:anywhere}
 .nav-search{display:none}
 .tip-box{display:none}
-.foot ul a,.legal a{display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:8px 0}
+.foot ul a{display:inline-flex;align-items:center;box-sizing:border-box;min-height:0;padding:1px 0;font-size:14px;line-height:1.3}
+.legal a{display:inline-flex;align-items:center;box-sizing:border-box;min-height:32px;padding:2px 0}
 .foot ul{gap:0}
 .empty-state-honest{padding:22px 18px}
 .empty-fallback{margin-top:22px;padding:14px 12px 6px;border:1px dashed var(--line,#DDE3DF);border-radius:18px;background:var(--soft,#F6F9F7)}

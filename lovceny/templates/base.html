@@ -29,12 +29,6 @@
     <button type="button" class="nav-find" id="nav-find" aria-label="Hledat">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
     </button>
-    {% if request.url.path != '/' %}
-    <form class="nav-search" action="/hledat" method="get" role="search">
-      <input id="nav-q" name="q" type="search" required maxlength="200" placeholder="Hledat" enterkeyhint="search" autocomplete="off" aria-label="Hledat produkt">
-      <button type="submit" class="nav-search-btn" aria-label="Hledat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
-    </form>
-    {% endif %}
     <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-panel">
       <span class="nav-toggle-bars" aria-hidden="true"></span>
       <span class="sr-only">Menu</span>
@@ -44,6 +38,17 @@
     </div>
   </nav>
 </div></header>
+{% set banner = site_banner() %}
+{% if banner %}<aside class="bf-banner" aria-label="Black Friday {{ banner.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ banner.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
+{% if request.url.path != '/' %}
+<header class="hero page-search" id="hledat"><div class="wrap">
+  <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
+    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="home-q" name="q" type="text" required placeholder="Zadej název nebo vlož odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
+    <button class="btn btn-primary" type="submit">Hledat</button>
+  </form>
+</div></header>
+{% endif %}
 <main id="obsah" tabindex="-1">
 {% if crumbs is defined and crumbs|length > 1 %}<div class="wrap"><nav class="crumbs" aria-label="Drobečková navigace"><ol>{% for name, url in crumbs %}<li>{% if loop.last %}<span aria-current="page">{{ name }}</span>{% else %}<a href="{{ url }}">{{ name }}</a>{% endif %}</li>{% endfor %}</ol></nav></div>{% endif %}
 {% block body %}{% endblock %}
@@ -74,8 +79,7 @@
     <div class="foot-brand"><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="154" height="44" loading="lazy"></a>
       <p>Poctivý hlídač cen. Bez placených pozic, bez reklam ve výsledcích.</p></div>
     <div><p class="foot-h">Kategorie</p><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
-    <div><p class="foot-h">Produkt</p><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/over-slevu">Ověř slevu</a></li><li><a href="/kdy-nakupovat">Kdy nakupovat</a></li>{% if DIGEST_ON() %}<li><a href="/prehled">Týdenní přehled</a></li>{% endif %}{% if BUDGET_ON() %}<li><a href="/hlidat-rozpocet">Hlídání rozpočtu</a></li>{% endif %}<li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li></ul>
-      <p class="foot-more"><a href="/porovnat">Srovnání</a><a href="/black-friday">Black Friday</a><a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a>{% if EXTENSION_ON() %}<a href="/rozsireni">Rozšíření</a>{% endif %}{% if not request.url.path.startswith('/admin') %}<button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">{{ ico('device') }}</span> Na plochu</button>{% endif %}</p></div>
+    <div><p class="foot-h">Produkt</p><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/over-slevu">Ověř slevu</a></li><li><a href="/kdy-nakupovat">Kdy nakupovat</a></li><li><a href="/porovnat">Srovnání</a></li><li><a href="/black-friday">Black Friday</a></li><li><a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></li>{% if DIGEST_ON() %}<li><a href="/prehled">Týdenní přehled</a></li>{% endif %}{% if BUDGET_ON() %}<li><a href="/hlidat-rozpocet">Hlídání rozpočtu</a></li>{% endif %}{% if EXTENSION_ON() %}<li><a href="/rozsireni">Rozšíření</a></li>{% endif %}<li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li>{% if not request.url.path.startswith('/admin') %}<li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">{{ ico('device') }}</span> Na plochu</button></li>{% endif %}</ul></div>
     <div><p class="foot-h">Transparentnost</p><ul><li><a href="/jak-radime">Jak řadíme</a></li><li><a href="/pro-obchody">Pro e-shopy</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
     <div><p class="foot-h">Kontakt a právní</p><ul><li><a href="/o-nas">O nás</a></li><li><a href="/kontakt">Kontakt</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana údajů</a></li><li><a href="/cookies">Cookies</a></li><li><a href="/podminky">Podmínky</a></li></ul></div>
   </div>
@@ -106,16 +110,10 @@
   if(!b)return;
   b.addEventListener("click", function(){
     var home=document.getElementById("home-q");
-    if(home){
-      var box=document.getElementById("hledat");
-      if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
-      home.focus();
-      return;
-    }
-    var form=document.querySelector(".nav-search");
-    var input=document.getElementById("nav-q");
-    if(form) form.classList.add("is-open");
-    if(input) input.focus();
+    if(!home) return;
+    var box=document.getElementById("hledat");
+    if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
+    home.focus();
   });
 })();
 </script>
