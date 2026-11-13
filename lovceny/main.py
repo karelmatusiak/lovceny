@@ -182,7 +182,7 @@ def _apply_phase0_data() -> None:
 def _startup():
     init_db()
     # Obnov soft-tombstony za hard-delete před soft-retire (301 /produkt → kategorie).
-    # Úklid katalogu se nespouští: přepisoval by data při každém probuzení Renderu.
+    # Úklid katalogu se nespouští při startu: přepisoval by data při každém startu procesu.
     from .retire_tombstones import restore_tombstones
     log = logging.getLogger("lovceny")
     db = SessionLocal()
