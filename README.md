@@ -142,7 +142,7 @@ Tabulky se vytvoří automaticky (`create_all`). Pro další vývoj doporučujem
 Veřejný web je statický export. Návštěvník se k databázi nedostane.
 
 1. **Statický web.** Workflow **Statický web** (`.github/workflows/static.yml`) z Neon databáze vygeneruje HTML (`build_static.py`) a na větvi `main` ho nasadí na Cloudflare Pages, projekt **lovceny** (`wrangler pages deploy --project-name=lovceny --branch=main`). Spuštění: push na `main` ho nespouští sám; produkci startuje `repository_dispatch` s `event_type` `static-site`, nebo ručně *Run workflow*.
-2. **Pages Functions.** Build zapíše `dist/functions`. `/go/*` (`lovceny/go.py`) přesměruje na obchod s `rel="nofollow sponsored"`. `/produkt/*` (`lovceny/staticsite.py`) vyřeší 301, které se nevejdou do souboru `_redirects`.
+2. **Pages Functions.** Build zapíše `dist/functions`. `/go/*` (`lovceny/go.py`) přesměruje na obchod. Odkazy na stránkách mají `rel="nofollow sponsored"`. `/produkt/*` (`lovceny/staticsite.py`) vyřeší 301, které se nevejdou do souboru `_redirects`.
 3. **Neon.** Secret `DATABASE_URL` je Postgres na Neon. Čte ho generování webu, stahování cen i naplnění katalogu.
 4. **Ceny.** Workflow **Stažení cen** (`.github/workflows/fetch.yml`) stahuje feedy. Soukromé adresy jsou v jednom secretu `FEED_URLS` (JSON objekt, klíče jako `ISTYLE_FEED_URL`). Vlastní proměnná obchodu má přednost. Prázdná nebo neplatná hodnota obchod přeskočí a běh nespadne. Primární budík je [cron-job.org](https://cron-job.org) třikrát denně v **6:00, 12:00 a 18:00** (Europe/Prague, cron `0 6,12,18 * * *`), metoda POST:
 
