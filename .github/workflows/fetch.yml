@@ -2,7 +2,16 @@ name: Stažení cen
 on:
   schedule:
     - cron: "17 5,11,17 * * *"   # záloha, 3× denně (UTC). Primární budík je repository_dispatch.
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Jen spočítat nové produkty, nic nezapisovat"
+        type: boolean
+        default: false
+      create_cap:
+        description: "Max nových produktů v jednom běhu"
+        type: string
+        default: "100"
   repository_dispatch:
     types: [fetch-prices]
 concurrency:
@@ -28,7 +37,7 @@ jobs:
         id: gate
         # Ruční Run workflow a budík s client_payload.force=true vždy stáhnou.
         # Cron a běžný externí budík ne, když úspěch není starší než 3 h.
-        if: github.event_name != 'workflow_dispatch' && github.event.client_payload.force != 'true'
+        if: github.event_name != 'workflow_dispatch' && github.event.client_payload.force != 'true' && github.event.client_payload.dry_run != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -107,18 +116,28 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
           PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.cz' }}
-        run: python fetch_prices.py --health-out health.json
+        run: |
+          args=(--health-out health.json)
+          dry="${{ github.event.inputs.dry_run || github.event.client_payload.dry_run }}"
+          cap="${{ github.event.inputs.create_cap || github.event.client_payload.create_cap }}"
+          if [ "$dry" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ -n "$cap" ]; then
+            args+=(--create-cap "$cap")
+          fi
+          python fetch_prices.py "${args[@]}"
       - name: Hlídání obchodů (GitHub issue při blokaci / starých cenách)
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ steps.gate.outputs.skip }}" = "true" ]; then
+          if [ "${{ steps.gate.outputs.skip }}" = "true" ] || [ "${{ github.event.inputs.dry_run }}" = "true" ] || [ "${{ github.event.client_payload.dry_run }}" = "true" ]; then
             exit 0
           fi
           python shop_health_issues.py health.json
   site:
     needs: fetch
-    if: always() && needs.fetch.outputs.ran == 'true'
+    if: always() && needs.fetch.outputs.ran == 'true' && github.event.inputs.dry_run != true && github.event.client_payload.dry_run != 'true'
     uses: ./.github/workflows/static.yml
     secrets: inherit
