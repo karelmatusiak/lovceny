@@ -70,19 +70,22 @@ def test_404_html_for_browser_json_for_api():
 def test_home_hides_products_without_price():
     init_db()
     db = SessionLocal()
-    priced = Product(name="S cenou redesign", slug="s-cenou-redesign",
+    priced = Product(name="Samsung Galaxy A55 s cenou", slug="s-cenou-redesign",
+                     category_slug="telefony", category="Mobilní telefony",
                      image_url="https://img.example/redesign.jpg")
     bare = Product(name="Bez ceny redesign", slug="bez-ceny-redesign")
     db.add_all([priced, bare])
     db.flush()
     db.add(Offer(product=priced, shop="mironet", url="https://www.mironet.cz/redesign-priced",
                  price=9990, status="ok", in_stock=True))
+    db.add(Offer(product=priced, shop="alza", url="https://www.alza.cz/redesign-priced",
+                 price=10100, status="ok", in_stock=True))
     db.add(Offer(product=bare, shop="mironet", url="https://www.mironet.cz/redesign-bare",
                  price=None, status="pending"))
     db.commit()
     c = TestClient(app)
     home = c.get("/").text
-    assert "S cenou redesign" in home
+    assert "Galaxy A55" in home
     assert "Bez ceny redesign" not in home
     # Detail bez ceny zůstane dostupný
     detail = c.get(f"/produkt/{bare.id}-{bare.slug}")
@@ -125,17 +128,18 @@ def test_priced_cards_and_thin_history_helpers():
 
 def test_home_hero_clarity():
     init_db()
-    from lovceny.shops import SHOPS
-    from lovceny.util import cz_count
     html = TestClient(app).get("/").text
-    assert "Hlídáme ceny" in html or "hlídá ceny" in html.lower()
-    assert "Jak to funguje" in html
+    assert "Ulovte telefon za férovou cenu." in html
+    assert "<title>Ulovte telefon za férovou cenu. | Lovceny</title>" in html
+    assert 'property="og:title" content="Ulovte telefon za férovou cenu. | Lovceny"' in html
+    assert 'name="description" content="Ulovte telefon za férovou cenu.' in html
+    assert 'property="og:description" content="Ulovte telefon za férovou cenu.' in html
+    assert "Jak to funguje" not in html
+    assert "Nejoblíbenější telefony" in html
+    assert "Nejnižší ceny telefonů z českých" in html and "e-shopů" in html
+    assert html.count("Ulovte telefon za férovou cenu.") >= 4
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
-    # Hero: shop count line, no chip list; electronics photo removed
-    n = sum(1 for s in SHOPS.values() if s.can_scrape)
-    expected = "Sledujeme ceny v " + cz_count(n, "českém e-shopu", "českých e-shopech", "českých e-shopech")
-    assert expected in html
-    assert "Pokrytí roste" in html
+    assert 'href="/telefony"' in html and 'href="/pruvodce"' in html
+    assert "Pokrytí roste" not in html
     assert 'class="shops"' not in html
-    assert 'class="shop"' not in html
     assert "hero-art" not in html

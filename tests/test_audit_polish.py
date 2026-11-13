@@ -34,7 +34,7 @@ def test_feed_titles_drop_shop_prefix_and_marketing():
 def test_changed_slug_redirects_and_hand_slug_stays(client_db):
     client, db, make = client_db
     raw = "Jbl Tune 290 Originální In-ear Sluchátka T290 Černé Nové By Harman"
-    product = make([1161], name=raw, shop="alza", category="sluchatka")
+    product = make([1161], name=raw, shop="alza", category="telefony")
     db.commit()
     assert product.slug == slugify(raw)
     public = canonical_slug(product.name, product.slug)
@@ -64,21 +64,21 @@ def test_pagination_title_names_the_page_and_canonical_stays(client_db):
     client, db, make = client_db
     from lovceny.models import Product
     from lovceny.catcache import clear
-    db.query(Product).filter(Product.category_slug == "konzole").delete()
+    db.query(Product).filter(Product.category_slug == "telefony").delete()
     db.commit()
     clear()
     for i in range(25):
-        make([1000 + i], name=f"Herní konzole stránka {i:02d}", shop="alza", category="konzole")
-    first = client.get("/kategorie/konzole")
-    second = client.get("/kategorie/konzole", params={"strana": 2})
+        make([1000 + i], name=f"Samsung Galaxy A{i:02d} stránka", shop="alza", category="telefony")
+    first = client.get("/kategorie/telefony")
+    second = client.get("/kategorie/telefony", params={"strana": 2})
     title1 = first.text.split("<title>", 1)[1].split("</title>", 1)[0]
     title2 = second.text.split("<title>", 1)[1].split("</title>", 1)[0]
     assert "– strana" not in title1
     assert "– strana 2 |" in title2
     desc2 = re.search(r'<meta name="description" content="([^"]*)"', second.text).group(1)
     assert desc2.endswith("Strana 2.") or "Strana 2." in desc2
-    assert 'rel="canonical" href="https://lovceny.cz/kategorie/konzole"' in first.text
-    assert 'rel="canonical" href="https://lovceny.cz/kategorie/konzole?strana=2"' in second.text
+    assert 'rel="canonical" href="https://lovceny.cz/kategorie/telefony"' in first.text
+    assert 'rel="canonical" href="https://lovceny.cz/kategorie/telefony?strana=2"' in second.text
     assert "strana" not in re.search(r'<h1 class="page-h1">(.*?)</h1>', second.text).group(1).casefold()
 
 

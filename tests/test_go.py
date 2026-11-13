@@ -66,7 +66,7 @@ def test_affiliate_wrap_uses_cleaned_dest(monkeypatch):
 def test_go_redirect_headers_fallback_and_oos(client_db, monkeypatch):
     monkeypatch.delenv("EHUB_AID", raising=False)
     client, db, make = client_db
-    product = make([2490], name="Sencor SVC 8618GD tyčový", shop="bscom", category="vysavace")
+    product = make([2490], name="Sencor SVC 8618GD tyčový", shop="bscom")
     offer = product.offers[0]
     offer.url = SVC
     offer.in_stock = True

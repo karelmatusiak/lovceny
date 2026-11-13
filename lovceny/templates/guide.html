@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing %}
+{% block title %}{{ guide.title }} | Lovceny{% endblock %}
+{% block description %}{{ guide.lead }}{% endblock %}
+{% block body %}
+<div class="wrap phone-page">
+  <p class="eyebrow">Průvodce</p>
+  <h1>{{ guide.title }}</h1>
+  <p class="phone-lead">{{ guide.lead }}</p>
+  {% if guide.versus %}
+    {% for brand, rows in columns %}
+    <h2>{{ brand }}</h2>
+    {% if rows %}
+    {{ guide_rows(rows) }}
+    {% else %}
+    <p class="phone-empty">V tomhle pásmu teď {{ brand }} nemáme.</p>
+    {% endif %}
+    {% endfor %}
+  {% elif models %}
+  {{ guide_rows(models) }}
+  {% else %}
+  <p class="phone-empty">V tomhle výběru teď žádný telefon nemáme. Až se objeví v katalogu, průvodce ho zařadí sám podle ceny.</p>
+  {% endif %}
+</div>
+{% endblock %}
+{% macro guide_rows(rows) %}
+<ol class="guide-list">
+  {% for model in rows %}
+  {% set offer = model.price_offer %}
+  {% set shop = get_shop(model.price_shop) if model.price_shop else none %}
+  <li class="{% if loop.index <= 3 %}is-top{% endif %}">
+    <span class="guide-rank">{{ loop.index }}</span>
+    <a class="guide-photo" href="/telefon/{{ model.slug }}" tabindex="-1" aria-hidden="true">{% if model.image %}{{ shop_img(model.image, 72, alt="") }}{% else %}{{ img_missing() }}{% endif %}</a>
+    <a class="guide-name" href="/telefon/{{ model.slug }}">{{ model.name }}</a>
+    <span class="guide-shop">{{ shop.name if shop else (offer.shop if offer else "obchod doplníme") }}</span>
+    <b>{% if model.lowest is not none %}{{ model.lowest|czk }}{% else %}bez ceny{% endif %}</b>
+    <a class="guide-open" href="/telefon/{{ model.slug }}">Zobrazit</a>
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}

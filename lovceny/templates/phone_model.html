@@ -1,0 +1,114 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing, ico %}
+{% block title %}{{ model.name }} od {% if shown_price is not none %}{{ shown_price|czk }}{% else %}ceny, kterou zjišťujeme{% endif %} | Lovceny{% endblock %}
+{% block description %}{{ model.name }}: obchody seřazené podle ceny, historie a verdikt z naměřených cen. Úložiště a barva jsou varianty téhož modelu.{% endblock %}
+{% block body %}
+<article class="wrap model">
+  <div class="model-hero">
+    <div class="model-photo">{% if model.image %}{{ shop_img(model.image, 320, priority=true, alt=model.name, sizes="(min-width:800px) 280px, 70vw") }}{% else %}{{ img_missing() }}{% endif %}</div>
+    <div class="model-buybox">
+      {% if model.brand %}<p class="kicker">{{ model.brand }}</p>{% endif %}
+      <h1>{{ model.name }}</h1>
+      <p class="model-price">{% if active_storage in model.disputed %}Cenu nepotvrzujeme{% elif shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
+      {% if active_storage in model.disputed %}
+      <p class="history-note">Dva obchody se u téhle kapacity liší o víc než 35 %. Nejnižší cenu uvedeme, až ji potvrdí třetí obchod nebo delší historie.</p>
+      {% else %}
+      <p class="model-price-note">{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if offers %} · {{ cz_count(offers|map(attribute='shop')|unique|list|length, "obchod", "obchody", "obchodů") }}{% endif %}</p>
+      {% endif %}
+      {% if verdict and verdict.code == 'none' %}
+      <p class="history-note">Historie ceny se právě tvoří. Doporučení Kupuj nebo Počkej ukážeme po 7 dnech měření.</p>
+      {% elif verdict %}
+      <p class="verdict verdict-{{ verdict.code }}"><b>{{ verdict.headline }}</b><span>{{ verdict.reason or verdict.text }}</span></p>
+      {% endif %}
+      {% if storage_deals %}
+      <div class="storage-row" aria-label="Úložiště">
+        {% for deal in storage_deals %}
+        <a class="storage-chip{% if active_storage == deal.label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?pamet={{ deal.label|urlencode }}{% if color %}&barva={{ color|urlencode }}{% endif %}"{% if active_storage == deal.label %} aria-current="true"{% endif %}>
+        <b>{{ deal.label }}</b>
+        <span>{% if deal.unconfirmed %}nepotvrzeno{% else %}{{ deal.price|czk }}{% if not deal.in_stock %} · není skladem{% endif %}{% endif %}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if offer_rows %}
+      <ol class="offer-table offer-top">
+        {% for row in offer_rows[:3] %}
+        {% set offer = row.offer %}
+        {% set shop = get_shop(offer.shop) %}
+        <li class="{% if loop.first and offer.in_stock is not false and active_storage not in model.disputed %}is-best{% endif %}">
+          <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
+          <span class="offer-price">{{ offer.price|czk }}</span>
+          {% if offer.in_stock is false %}
+          <span class="offer-oos">Není skladem</span>
+          {% else %}
+          <a class="btn btn-primary btn-sm" href="{{ go_href(offer) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu</a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="phone-empty">U téhle varianty teď žádnou nabídku nemáme.</p>
+      {% endif %}
+      {% if compare_href %}<a class="model-compare" href="{{ compare_href }}">Srovnat s blízkými modely</a>{% endif %}
+    </div>
+  </div>
+
+  {% if model.colors %}
+  <section class="model-block" aria-labelledby="color-h">
+    <h2 id="color-h">Barva</h2>
+    <div class="phone-scroll"><div class="color-row">
+      <a class="storage-chip{% if not color %} is-on{% endif %}" href="/telefon/{{ model.slug }}{% if storage %}?pamet={{ storage|urlencode }}{% endif %}"{% if not color %} aria-current="true"{% endif %}>Vše</a>
+      {% for label in model.colors %}
+      <a class="storage-chip{% if color == label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?barva={{ label|urlencode }}{% if storage %}&pamet={{ storage|urlencode }}{% endif %}"{% if color == label %} aria-current="true"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </div></div>
+  </section>
+  {% endif %}
+
+  {% if offer_rows|length > 3 %}
+  <section class="model-block" aria-labelledby="offers-h">
+    <h2 id="offers-h">Další obchody</h2>
+    <ol class="offer-table">
+      {% for row in offer_rows[3:] %}
+      {% set offer = row.offer %}
+      {% set shop = get_shop(offer.shop) %}
+      <li>
+        <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
+        <span class="offer-price">{{ offer.price|czk }}</span>
+        {% if offer.in_stock is false %}
+        <span class="offer-oos">Není skladem</span>
+        {% else %}
+        <a class="btn btn-primary btn-sm" href="{{ go_href(offer) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  <section class="model-block" aria-labelledby="hist-h">
+    <h2 id="hist-h">Historie ceny</h2>
+    {% if chart_ranges and chart_ranges[2].n == 0 %}
+    <p class="history-note">Graf se doplní s dalšími dny měření.</p>
+    {% elif chart_ranges %}
+    <div class="chart-box" role="group" aria-labelledby="hist-h">
+      {% set def_key = '90' if chart_ranges[1].n >= 2 else 'all' %}
+      {% for r in chart_ranges %}<input class="ct-radio sr-only" type="radio" name="ct" id="ct-{{ r.key }}" value="{{ r.key }}"{% if r.key == def_key %} checked{% endif %}>{% endfor %}
+      <div class="seg ct-seg">{% for r in chart_ranges %}<label for="ct-{{ r.key }}">{{ r.label }}</label>{% endfor %}</div>
+      {% for r in chart_ranges %}
+      <div class="ct-panel" id="cp-{{ r.key }}">
+        <dl class="ct-stats">
+          <div class="cs-cur"><dt>Aktuálně</dt><dd>{{ r.current|czk }}</dd></div>
+          <div class="cs-min"><dt>Minimum</dt><dd>{{ r.min|czk }}</dd></div>
+          <div class="cs-avg"><dt>Průměr</dt><dd>{{ r.avg|czk }}</dd></div>
+        </dl>
+        {% if r.n >= 2 %}<div class="ct-svg ct-wide">{{ r.svg|safe }}</div><div class="ct-svg ct-narrow">{{ r.svg_m|safe }}</div>
+        {% elif r.n == 1 %}<p class="phone-empty">Za toto období máme jeden záznam ({{ r.current|czk }}). Graf ukážeme od druhého dne.</p>
+        {% else %}<p class="phone-empty">Za toto období zatím nemáme ceny.</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if chart_note %}<p class="model-note">{{ chart_note }} <a href="/jak-radime">Jak verdikt počítáme</a></p>{% endif %}
+  </section>
+</article>
+{% endblock %}

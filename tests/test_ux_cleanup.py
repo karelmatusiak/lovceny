@@ -8,38 +8,27 @@ from lovceny.main import app
 def test_nav_simplified_links():
     init_db()
     html = TestClient(app).get("/").text
-    # Main nav: Kategorie | Hledat | Slevy | O nás (+ CTA)
     nav = html.split('class="nav-links"', 1)[1].split("</div>", 1)[0]
-    assert 'href="/kategorie"' in nav
-    assert 'href="/#hledat"' in nav and "Hledat" in nav
+    assert 'href="/telefony"' in nav
+    assert 'href="/pruvodce"' in nav
     assert 'href="/slevy"' in nav
     assert 'href="/o-nas"' in nav
-    assert 'href="/kdy-nakupovat"' not in nav  # přesunuto do patičky
-    assert 'href="/kdy-nakupovat"' in html  # zůstává ve footeru / obsahu
+    assert 'href="/kategorie"' not in nav
+    assert 'href="/kdy-nakupovat"' in html
     assert "Prověřit cenu" not in html
     assert 'id="nav-find"' in html
-    assert ">Hledat<" in html
     assert 'class="btn btn-verify"' not in html
-    assert 'class="nav-verify"' not in html
-    assert html.count('href="/over-slevu"') >= 2
-    assert "nebo ověř slevu z odkazu" in html
     assert 'id="nav-toggle"' in html and "aria-expanded" in html
 
 
 def test_home_category_tiles():
     init_db()
     html = TestClient(app).get("/").text
-    assert 'class="home-cats"' in html or 'home-cats' in html
-    assert 'id="home-cats-h"' in html
-    assert 'href="/kategorie/telefony"' in html
-    assert "Všechny kategorie" in html
-    # Duplicate long how-section removed
-    assert "Od odkazu k hlídání ceny" not in html or 'id="jak"' not in html
+    assert "phone-grid" in html or "Nejoblíbenější telefony" in html
+    assert 'href="/telefony"' in html
+    assert 'href="/pruvodce"' in html
+    assert "Všechny kategorie" not in html
     assert 'id="jak"' not in html
-    # Short 3-step kept
-    assert "Jak to funguje" in html and "Tři kroky" in html
-    # Slevy dne kept (item 2 not approved for change)
-    assert "Slevy dne" in html
 
 
 def test_category_intro_visible():
@@ -72,8 +61,8 @@ def test_earnings_text_affiliate_off(monkeypatch):
     m.tpl.env.globals["AFFILIATE_ON"] = lambda: False
     c = TestClient(app)
     home = c.get("/").text
-    assert "Zatím nevyděláváme" in home or "zatím" in home.lower()
-    assert "affiliate" in home.lower()
+    assert "zatím" in home.lower()
+    assert "proviz" in home.lower()
     about = c.get("/o-nas").text
     assert "nijak" in about.lower() or "Zatím" in about or "zatím" in about
     assert "affiliate" in about.lower()

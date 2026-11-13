@@ -139,37 +139,44 @@ def test_excluded_brands_stay_out_of_import_listing_and_sitemap(client_db):
     assert f"/produkt/{gigabyte.id}-" not in sitemap
     assert f"/produkt/{lagerfeld.id}-" not in sitemap
     gone = client.get(f"/produkt/{gigabyte.id}-{gigabyte.slug}", follow_redirects=False)
-    assert gone.status_code == 301 and gone.headers["location"] == "/kategorie/notebooky"
+    assert gone.status_code == 301 and gone.headers["location"] == "/"
 
 
 def test_category_counts_use_the_listing_filter(client_db):
     client, db, make = client_db
-    make([8990], name="Samsung Galaxy A55 128GB", category="telefony")
+    a55 = make([8990], name="Samsung Galaxy A55 128GB", category="telefony")
+    db.add(Offer(product=a55, shop="alza", url="https://www.alza.cz/a55-count", price=9100, status="ok", in_stock=True))
+    db.commit()
     make([299], name="Samsung Galaxy A55 silikonový kryt", category="telefony")
     make([], name="Samsung Galaxy A35 bez ceny", category="telefony")
     make([24990], name="Gigabyte GAMING A16 PRO", category="notebooky")
     home = client.get("/").text
-    index = client.get("/kategorie").text
+    index = client.get("/kategorie", follow_redirects=False)
     listing = client.get("/kategorie/telefony").text
     total = re.search(r"z (\d+)\s", listing.replace("\xa0", " "))
     assert total and total.group(1) == "1"
-    assert "1\xa0produkt" in home
-    assert ">1 produkt<" in index or "1 produkt" in index
+    assert "Nejoblíbenější telefony" in home
+    assert "Galaxy A55" in home
+    assert "1\xa0produkt" not in home
+    assert index.status_code == 301 and index.headers["location"] == "/telefony"
     assert "Gigabyte" not in client.get("/kategorie/notebooky").text
 
 
 def test_out_of_stock_has_no_buy_verdict(client_db):
     client, db, make = client_db
-    p = make([9000] * 10, name="PlayStation 5 Pro", category="konzole")
+    p = make([9000] * 10, name="Samsung Galaxy A55 Pro", category="telefony")
     p.offers[0].in_stock = False
-    p.offers[0].url = "https://www.mironet.cz/playstation-5-pro"
+    p.offers[0].url = "https://www.mironet.cz/samsung-galaxy-a55-pro"
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
     assert "v-buy" not in html and "Kupuj" not in html
     assert "Není skladem" in html
-    card = client.get("/kategorie/konzole").text
+    card = client.get("/kategorie/telefony").text
     start = card.find('class="card pcard"')
     assert start != -1
     snippet = card[start:start + 2500]
+    intro = snippet.find('class="cat-intro"')
+    if intro != -1:
+        snippet = snippet[:intro]
     assert "v-buy" not in snippet and "Kupuj" not in snippet
     assert "Není skladem" in snippet

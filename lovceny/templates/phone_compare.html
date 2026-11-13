@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% from "_macros.html" import shop_img, img_missing %}
+{% block title %}Srovnání telefonů | Lovceny{% endblock %}
+{% block description %}Srovnání telefonů vedle sebe: nejnižší cena, obchod, sklad, úložiště a verdikt z naměřených cen.{% endblock %}
+{% block body %}
+<section class="wrap phone-page phone-compare">
+  <p class="eyebrow">Srovnání</p>
+  <h1>Srovnání telefonů</h1>
+  {% if rows|length < 2 %}
+  <p class="phone-lead">Na srovnání jsou potřeba dva různé modely. Na stránce modelu je odkaz na dva blízké telefony s cenou.</p>
+  {% else %}
+  <p class="phone-lead">Stejné řádky u každého modelu. Cena je nejnižší nabídka, kterou teď máme.</p>
+  {% endif %}
+  {% if rows %}
+  <div class="pcmp-scroll" role="region" aria-label="Srovnávané telefony" tabindex="0">
+    <div class="pcmp" style="--n:{{ rows|length }}">
+      <div class="pcmp-row pcmp-head">
+        <div class="pcmp-label"><span class="sr-only">Model</span></div>
+        {% for row in rows %}
+        <div class="pcmp-cell">
+          <a class="pcmp-id" href="/telefon/{{ row.model.slug }}">
+            <span class="pcmp-photo">{% if row.model.image %}{{ shop_img(row.model.image, 120, alt="") }}{% else %}{{ img_missing() }}{% endif %}</span>
+            <span class="pcmp-name">{{ row.model.name }}</span>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Nejnižší cena</div>
+        {% for row in rows %}<div class="pcmp-cell pcmp-price{% if row.model.slug == cheapest %} is-best{% endif %}">{% if row.model.lowest is not none %}{{ row.model.lowest|czk }}{% else %}zatím bez ceny{% endif %}</div>{% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Obchod</div>
+        {% for row in rows %}<div class="pcmp-cell">{{ row.shop.name if row.shop else (row.offer.shop if row.offer else "–") }}</div>{% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Skladem</div>
+        {% for row in rows %}<div class="pcmp-cell">{% if row.model.in_stock %}ano{% else %}ne{% endif %}</div>{% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Počet obchodů</div>
+        {% for row in rows %}<div class="pcmp-cell">{{ row.model.price_shops }}</div>{% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Úložiště</div>
+        {% for row in rows %}
+        <div class="pcmp-cell">{% if row.deals %}{% for deal in row.deals %}<span class="pcmp-store">{% if deal.unconfirmed %}{{ deal.label }} · nepotvrzeno{% elif deal.price is not none %}{{ deal.label }} · {{ deal.price|czk }}{% else %}{{ deal.label }}{% endif %}</span>{% endfor %}{% else %}–{% endif %}</div>
+        {% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Verdikt</div>
+        {% for row in rows %}
+        <div class="pcmp-cell">{% if row.verdict and row.verdict.code == 'none' %}Historie se právě tvoří{% elif row.verdict %}{{ row.verdict.headline }}{% else %}–{% endif %}</div>
+        {% endfor %}
+      </div>
+      <div class="pcmp-row">
+        <div class="pcmp-label">Do obchodu</div>
+        {% for row in rows %}
+        <div class="pcmp-cell">{% if row.offer and row.offer.in_stock is not false %}<a class="btn btn-primary btn-sm" href="{{ go_href(row.offer) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu</a>{% else %}<span class="offer-oos">Není skladem</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,711 @@
+"""Veřejný katalog je jen o telefonech. Ostatní kategorie v databázi zůstávají.
+
+Žádné vymyšlené parametry: název, značka, úložiště a barva bereme z názvu,
+cenu a počet obchodů z nabídek, verdikt z naměřené historie.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from .availability import offer_is_buyable
+from .categories import is_accessory_text, is_non_new
+from .exclusions import is_excluded_brand
+from .matching import model_family
+from .models import Offer, Product
+from .names import guess_brand
+from .shops.feed import _colors, canonicalize_name
+from .util import slugify
+
+PHONE = "telefony"
+_STORAGE_RE = re.compile(r"\b(\d+)\s*(GB|TB)\b", re.I)
+
+BANDS: tuple[tuple[str, str, int | None, int | None], ...] = (
+    ("do-5", "do 5 000 Kč", None, 5000),
+    ("5-10", "5–10 000 Kč", 5000, 10000),
+    ("10-20", "10–20 000 Kč", 10000, 20000),
+    ("20-plus", "20 000 Kč a víc", 20000, None),
+)
+
+
+@dataclass(frozen=True)
+class Guide:
+    slug: str
+    title: str
+    lead: str
+    max_price: int | None = None
+    min_price: int | None = None
+    brands: tuple[str, ...] = ()
+    versus: bool = False
+
+
+GUIDES: tuple[Guide, ...] = (
+    Guide("nejlepsi-do-5-tisic", "Nejlepší telefon do 5 000 Kč",
+          "Řazeno jen podle nejnižší ceny, kterou teď máme. Žádné testy a žádné vymyšlené parametry.",
+          max_price=5000),
+    Guide("nejlepsi-do-8-tisic", "Nejlepší telefon do 8 000 Kč",
+          "Řazeno jen podle nejnižší ceny, kterou teď máme. Žádné testy a žádné vymyšlené parametry.",
+          max_price=8000),
+    Guide("nejlepsi-do-10-tisic", "Nejlepší telefon do 10 000 Kč",
+          "Řazeno jen podle nejnižší ceny, kterou teď máme. Žádné testy a žádné vymyšlené parametry.",
+          max_price=10000),
+    Guide("nejlepsi-do-15-tisic", "Nejlepší telefon do 15 000 Kč",
+          "Řazeno jen podle nejnižší ceny, kterou teď máme. Žádné testy a žádné vymyšlené parametry.",
+          max_price=15000),
+    Guide("iphone-nebo-samsung-do-15-tisic", "iPhone nebo Samsung do 15 000 Kč",
+          "Dvě značky, stejné cenové pásmo. U každého modelu jen nejnižší cena, kterou teď vidíme.",
+          max_price=15000, brands=("Apple", "Samsung"), versus=True),
+    Guide("iphone-nebo-samsung-nad-15-tisic", "iPhone nebo Samsung nad 15 000 Kč",
+          "Dvě značky nad 15 000 Kč. Pořadí je nejnižší aktuální cena, nic jiného.",
+          min_price=15000, brands=("Apple", "Samsung"), versus=True),
+    Guide("nejlevnejsi-iphone", "Nejlevnější iPhone",
+          "iPhony, které teď máme v katalogu, od nejnižší ceny.",
+          brands=("Apple",)),
+    Guide("nejlevnejsi-samsung", "Nejlevnější Samsung",
+          "Samsungy, které teď máme v katalogu, od nejnižší ceny.",
+          brands=("Samsung",)),
+    Guide("nejlevnejsi-xiaomi", "Nejlevnější Xiaomi",
+          "Xiaomi, které teď máme v katalogu, od nejnižší ceny.",
+          brands=("Xiaomi",)),
+)
+GUIDE_BY_SLUG = {guide.slug: guide for guide in GUIDES}
+
+
+@dataclass
+class PhoneModel:
+    slug: str
+    name: str
+    brand: str | None
+    products: list[Product] = field(default_factory=list)
+    offers: list[Offer] = field(default_factory=list)
+    lowest: float | None = None
+    in_stock: bool = False
+    shops: int = 0
+    image: str | None = None
+    disputed: set[str] = field(default_factory=set)
+    price_shops: int = 0
+    price_shop: str | None = None
+    price_offer: Offer | None = None
+
+    @property
+    def storages(self) -> list[str]:
+        found = []
+        for product in self.products:
+            label = storage_label(product.name or "")
+            if label and label not in found:
+                found.append(label)
+        return found
+
+    @property
+    def colors(self) -> list[str]:
+        found = []
+        for product in self.products:
+            for color in sorted(color_labels(product.name or "")):
+                if color not in found:
+                    found.append(color)
+        return found
+
+
+def _storage_sort_key(label: str) -> int:
+    match = re.match(r"(\d+)", label or "")
+    if not match:
+        return 10**9
+    size = int(match.group(1))
+    return size * 1024 if "TB" in (label or "") else size
+
+
+def storage_deals(model: PhoneModel) -> list[dict]:
+    """Nejnižší cena, kterou teď máme pro každé uvedené úložiště."""
+    best: dict[str, dict] = {}
+    for product in model.products:
+        label = storage_label(product.name or "")
+        if not label:
+            continue
+        offers = [offer for offer in model.offers if offer.product_id == product.id]
+        buyable = [offer for offer in offers if offer_is_buyable(offer)]
+        pool = buyable or offers
+        if not pool:
+            continue
+        winner = min(pool, key=lambda offer: float(offer.price))
+        price = float(winner.price)
+        current = best.get(label)
+        if current is None or (current["price"] is not None and price < current["price"]):
+            best[label] = {
+                "label": label,
+                "price": None if label in model.disputed else price,
+                "in_stock": bool(buyable),
+                "product_id": product.id,
+                "unconfirmed": label in model.disputed,
+            }
+    rows = sorted(best.values(), key=lambda row: _storage_sort_key(row["label"]))
+    large = [row for row in rows if _storage_sort_key(row["label"]) >= 32]
+    return large or rows
+
+
+def anchor_product(model: PhoneModel) -> Product | None:
+    """Varianta, kterou bereme do srovnání: nejlevnější skladem, jinak nejlevnější vůbec."""
+    usable = []
+    for offer in model.offers:
+        label = ""
+        for product in model.products:
+            if product.id == offer.product_id:
+                label = storage_label(product.name or "") or ""
+                break
+        if label not in model.disputed:
+            usable.append(offer)
+    buyable = [offer for offer in usable if offer_is_buyable(offer)]
+    pool = buyable or usable or list(model.offers)
+    if not pool:
+        return model.products[0] if model.products else None
+    winner = min(pool, key=lambda offer: float(offer.price))
+    for product in model.products:
+        if product.id == winner.product_id:
+            return product
+    return model.products[0]
+
+
+def buying_signal(model: PhoneModel):
+    """Verdikt z historie nejlevnější skladové varianty. Bez dostatku dní zůstane „Sbíráme data“."""
+    from .verdict import compute
+    product = anchor_product(model)
+    if product is None or model.lowest is None:
+        return None
+    points = [
+        point for offer in model.offers
+        if offer.product_id == product.id
+        for point in offer.points
+    ]
+    return compute(points, model.lowest)
+
+
+def is_phone_category(slug: str | None) -> bool:
+    return slug == PHONE
+
+
+_TABLET_WORD = re.compile(r"\b(ipad|tablet|tab)\b", re.I)
+_TABLET_LINE = re.compile(r"\bdrive\s+1[0-3]\b", re.I)
+_INCH = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:\"|″|”|''|palc)", re.I)
+
+
+def is_tablet_text(name: str) -> bool:
+    """Tablet v kategorii telefonů na web nepatří. Skládací telefon do 9\" ano.
+
+    Kruger&Matz Drive 10–13 je řada tabletů, i když feed napíše 6,56\" a „smartphone“.
+    """
+    if _TABLET_WORD.search(name or "") or _TABLET_LINE.search(name or ""):
+        return True
+    for match in _INCH.finditer(name or ""):
+        size = float(match.group(1).replace(",", "."))
+        if size >= 9:
+            return True
+    return False
+
+
+_AUDIO = re.compile(r"\b(sluchatk\w*|earbuds?|airpods|headphone\w*|mikrofon\w*)\b")
+
+
+def is_public_phone(product: Product) -> bool:
+    """Telefon, který smí na web. Příslušenství, tablet, použitý kus a cizí kategorie ne."""
+    if product.category_slug != PHONE:
+        return False
+    if product.retired_at is not None or product.catalog_hidden or product.needs_review:
+        return False
+    name = product.name or ""
+    from .categories import _fold
+    if is_excluded_brand(name) or is_accessory_text(name) or is_tablet_text(name) or _AUDIO.search(_fold(name)):
+        return False
+    if is_non_new(name, shop_category=product.category):
+        return False
+    return True
+
+
+def storage_label(name: str) -> str | None:
+    matches = list(_STORAGE_RE.finditer(name or ""))
+    if not matches:
+        return None
+
+    def _size(match: re.Match) -> int:
+        amount = int(match.group(1))
+        return amount * 1024 if match.group(2).upper() == "TB" else amount
+
+    match = max(matches, key=_size)
+    # 4/8/12 GB v názvu je skoro vždy operační paměť, když vedle ní je i úložiště.
+    if _size(match) < 32 and any(_size(other) >= 32 for other in matches):
+        match = max((item for item in matches if _size(item) >= 32), key=_size)
+    return f"{int(match.group(1))} {match.group(2).upper()}"
+
+
+_COLOR_CS = {
+    "black": "černá", "white": "bílá", "blue": "modrá", "pink": "růžová",
+    "green": "zelená", "yellow": "žlutá", "purple": "fialová", "silver": "stříbrná",
+    "gold": "zlatá", "gray": "šedá", "orange": "oranžová", "red": "červená",
+}
+
+
+def color_labels(name: str) -> set[str]:
+    canon = canonicalize_name(name or "")
+    return {_COLOR_CS.get(token, token) for token in _colors(canon)}
+
+
+def _color_prefixes() -> set[str]:
+    from .shops.feed import _COLOR_CANON
+    prefixes = set()
+    for source in _COLOR_CANON:
+        parts = source.split()
+        if len(parts) > 1:
+            prefixes.update(parts[:-1])
+    return prefixes
+
+
+_EXTRA_COLOR = {
+    "obsidian", "moonstone", "jetblack", "graphite", "grafitovy", "grafitova",
+    "cream", "burgundy", "vinova", "vinovy", "levandulovy", "levandulova",
+    "ultramarinovy", "ultramarinova", "modrozeleny", "modrozelena", "blankytne",
+    "emerald", "dusk", "hematite", "overture", "spellbound", "pantone",
+    "awesome", "lemon", "gadget", "pancerovy", "pancerny", "cerno", "night",
+    "sky", "deep", "hluboka", "hluboky", "salvejove", "salvejovy", "kosmicky",
+    "kosmicka", "temne", "temny", "mlhove", "mlhovy", "oblacne", "oblacny",
+    "svetle", "svetly", "starlit", "ice", "denim", "velvet", "sprout", "meteor",
+    "golden", "sporting", "bright", "blackened", "sage", "jet",
+    "krem", "grafit", "hneda", "hnedou", "matova", "matovy",
+}
+
+
+def _sku_token(word: str) -> bool:
+    """Kód zboží (SM-F966B…, MFYV4HX/A, 5109CHFH), ne číslo modelu jako X300 nebo MAGIC8."""
+    if re.fullmatch(r"[A-Za-z]{1,8}\d{1,2}", word or ""):
+        return False
+    if re.fullmatch(r"[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+(?:/[A-Z0-9]+)?", word or ""):
+        return True
+    if re.fullmatch(r"[A-Z0-9]{6,}/[A-Z0-9]+", word or ""):
+        return True
+    if re.fullmatch(r"[A-Z]{2,}\d[A-Z0-9]{4,}", word or ""):
+        return True
+    return bool(
+        word
+        and len(word) >= 6
+        and re.fullmatch(r"[A-Za-z0-9]+", word)
+        and any(ch.isdigit() for ch in word)
+        and any(ch.isalpha() for ch in word)
+    )
+
+
+_NAME_PREFIX = re.compile(
+    r"^(?:chytr[ýy]\s+telefon|mobiln[íi]\s+telefon|smartphone)\s+",
+    re.I,
+)
+_FEED_CATEGORY = re.compile(
+    r"\b(?:chytr[ýy]\s+telefon|mobiln[íi]\s+telefon|smartphone)\b",
+    re.I,
+)
+_IOS_TOKEN = re.compile(r"ios\d+(?:[.,]\d+)?", re.I)
+
+
+def _model_name(names: list[str]) -> str:
+    """Název modelu bez úložiště, úhlopříčky, barvy a zbytků specifikace."""
+    from .shops.feed import _COLOR_CANON, canonicalize_name
+    colors = set(_COLOR_CANON) | set(_COLOR_CANON.values())
+    prefixes = _color_prefixes()
+    best = ""
+    for raw in names:
+        # Feed often appends "/ Mobilní telefon / 8 GB RAM". The model is the first segment.
+        name = re.split(r"\s+/\s+", raw or "", maxsplit=1)[0]
+        name = _FEED_CATEGORY.sub(" ", name)
+        name = _NAME_PREFIX.sub("", name)
+        words = re.findall(r"\S+", name)
+        kept = []
+        codes = []
+        index = 0
+        noise = {
+            "mah", "ip68", "esim", "lte", "nfc", "distribuce", "5g", "usb",
+            "android", "hybridni", "dual", "ds", "hz", "typu", "cm", "mhz",
+            "chytry", "chytra", "sim", "ram", "smartphone",
+        }
+        while index < len(words):
+            raw_word = words[index]
+            if raw_word in {"/", "|"} or _IOS_TOKEN.fullmatch(raw_word.strip(".,")):
+                index += 1
+                continue
+            if raw_word.startswith("(") and raw_word.endswith(")"):
+                inner = raw_word[1:-1].strip()
+                if re.fullmatch(r"\d+[A-Za-z]?", inner):
+                    raw_word = inner
+                else:
+                    index += 1
+                    continue
+            if any(mark in raw_word for mark in ('"', "″", "”")):
+                index += 1
+                continue
+            word = raw_word.strip(".,;:()[]\"“”")
+            canon = canonicalize_name(word)
+            nxt_word = words[index + 1].strip(".,;:()[]\"“”") if index + 1 < len(words) else ""
+            nxt = canonicalize_name(nxt_word)
+            if canon in {"gb", "tb"}:
+                previous = words[index - 1].strip(".,;:()[]\"“”") if index else ""
+                if kept and kept[-1] == previous and re.fullmatch(r"\d+", canonicalize_name(previous)):
+                    kept.pop()
+                index += 1
+                continue
+            if re.fullmatch(r"\d+(?:gb|tb)", canon or "") or _STORAGE_RE.fullmatch(word):
+                index += 1
+                continue
+            if re.fullmatch(r"\d+\+\d+", word) or re.fullmatch(r"\d+gb/\d+gb", word, flags=re.I):
+                index += 1
+                continue
+            if re.fullmatch(r"\d+/\d+(?:gb|tb)?", word, flags=re.I) or re.fullmatch(r"\d+/\d+(?:gb|tb)?", canon or ""):
+                index += 1
+                continue
+            if "/" in word and re.search(r"\d", word):
+                index += 1
+                continue
+            if re.fullmatch(r"\d+[.,]\d+", word) or re.fullmatch(r"\d{5,}", word):
+                index += 1
+                continue
+            if re.fullmatch(r"\d+", word) and re.match(r"(?:gb|tb)\b", nxt or "", flags=re.I):
+                index += 1
+                continue
+            if canon in {"mah", "mhz"}:
+                if kept and re.fullmatch(r"\d{3,5}", canonicalize_name(kept[-1])):
+                    kept.pop()
+                index += 1
+                continue
+            if canon == "cm":
+                if kept and re.fullmatch(r"\d+(?:,\d+)?", kept[-1]):
+                    kept.pop()
+                index += 1
+                continue
+            if canon == "telefon" and index and canonicalize_name(words[index - 1].strip(".,;:()[]\"“”")) in {"chytry", "chytra"}:
+                index += 1
+                continue
+            if canon in {"barva", "pamet", "barvy", "pl"}:
+                index += 1
+                while index < len(words) and not re.search(r"\d", words[index]):
+                    index += 1
+                continue
+            code = re.fullmatch(r"(SM-[A-Z]\d{3})[A-Z0-9]*", word or "")
+            if code:
+                codes.append(code.group(1))
+                index += 1
+                continue
+            if re.fullmatch(r"\d+,\d+", word) or _sku_token(word):
+                index += 1
+                continue
+            if word.endswith("…"):
+                index += 1
+                continue
+            parts = [part for part in (canon or "").split() if part]
+            if parts and all(part in colors or part in _EXTRA_COLOR or part in noise for part in parts):
+                index += 1
+                if "android" in parts and index < len(words) and re.fullmatch(r"\d+(?:[.,]\d+)?", words[index].strip(".,")):
+                    index += 1
+                if "typu" in parts or "usb" in parts:
+                    if index < len(words) and words[index].strip(".,") in {"C", "c"}:
+                        index += 1
+                continue
+            if nxt in colors and canon not in {"pro", "max", "plus", "mini", "ultra", "air", "note", "iphone", "galaxy"}:
+                index += 2
+                continue
+            if canon in colors or canon in prefixes or canon in noise:
+                index += 1
+                if canon == "android" and index < len(words) and re.fullmatch(r"\d+(?:[.,]\d+)?", words[index].strip(".,")):
+                    index += 1
+                if canon in {"typu", "usb"} and index < len(words) and words[index].strip(".,") in {"C", "c"}:
+                    index += 1
+                continue
+            if word and word not in {"C", "c"}:
+                kept.append(word)
+            index += 1
+        text = re.sub(r"\s+", " ", " ".join(kept)).strip(" -/,")
+        text = _fix_casing(text)
+        if codes and text.casefold() in {"samsung galaxy", "samsung", "galaxy"}:
+            text = f"{text} {codes[0]}".strip()
+        if text and (not best or (len(text), text.casefold()) < (len(best), best.casefold())):
+            best = text
+    return best or "Telefon"
+
+
+def _family_key(name: str, product_id: int):
+    key = model_family(name or "", PHONE)
+    return key if key is not None else ("solo", product_id)
+
+
+def _fix_casing(text: str) -> str:
+    """FOLD8 → Fold8. iPhone, Pro Max, FE a 5G necháváme."""
+    keep = {
+        "iphone": "iPhone", "ipad": "iPad", "macbook": "MacBook", "oneplus": "OnePlus",
+        "pro": "Pro", "max": "Max", "fe": "FE", "se": "SE", "5g": "5G", "4g": "4G",
+        "lte": "LTE", "usb": "USB", "nfc": "NFC", "oled": "OLED", "xr": "XR", "xs": "XS",
+        "air": "Air", "ultra": "Ultra", "plus": "Plus", "mini": "mini", "note": "Note",
+        "galaxy": "Galaxy", "pixel": "Pixel", "redmi": "Redmi", "poco": "Poco",
+        "samsung": "Samsung", "xiaomi": "Xiaomi", "google": "Google", "apple": "Apple",
+        "honor": "Honor", "motorola": "Motorola", "nothing": "Nothing", "oppo": "Oppo",
+        "vivo": "Vivo", "nokia": "Nokia", "huawei": "Huawei", "sony": "Sony", "asus": "Asus",
+        "zte": "ZTE", "tcl": "TCL", "lg": "LG", "htc": "HTC", "edge": "Edge",
+    }
+    out = []
+    for word in text.split():
+        key = word.casefold()
+        if key in keep:
+            out.append(keep[key])
+        elif "-" not in word and any(ch.isalpha() for ch in word) and word == word.upper() and len(word) > 1:
+            out.append(word[:1] + word[1:].lower())
+        else:
+            out.append(word)
+    return " ".join(out)
+
+
+def price_trust(products: list[Product], offers: list[Offer]) -> tuple[list[Offer], set[str]]:
+    """Které nabídky smějí tvořit veřejnou nejnižší cenu, a které kapacity ne.
+
+    Jiná kapacita se do stejné skupiny nedostane. Obchod o víc než 35 % pod
+    mediánem aspoň dvou dalších schováme. Když jsou obchody jen dva a liší se
+    o víc než 35 %, nejnižší cenu té kapacity neuvádíme. Řádky v databázi zůstávají.
+    """
+    from statistics import median
+    product_storage = {product.id: storage_label(product.name or "") or "" for product in products}
+    by_storage: dict[str, list[Offer]] = {}
+    for offer in offers:
+        by_storage.setdefault(product_storage.get(offer.product_id, ""), []).append(offer)
+    hidden: set[tuple[str, str]] = set()
+    disputed: set[str] = set()
+    for storage, group in by_storage.items():
+        shop_price: dict[str, float] = {}
+        for offer in group:
+            price = float(offer.price)
+            current = shop_price.get(offer.shop)
+            if current is None or price < current:
+                shop_price[offer.shop] = price
+        if len(shop_price) == 2 and storage:
+            low, high = sorted(shop_price.values())
+            if high > 0 and low < high * 0.65:
+                disputed.add(storage)
+            continue
+        if len(shop_price) < 3:
+            continue
+        for shop, price in shop_price.items():
+            others = [other for name, other in shop_price.items() if name != shop]
+            mid = float(median(others))
+            if mid > 0 and price < mid * 0.65:
+                hidden.add((storage, shop))
+    shown = [
+        offer for offer in offers
+        if (product_storage.get(offer.product_id, ""), offer.shop) not in hidden
+    ]
+    return shown, disputed
+
+
+def _visible_offers(product: Product) -> list[Offer]:
+    return [offer for offer in product.offers if not getattr(offer, "withheld", False) and offer.price is not None]
+
+
+def group_phones(products: list[Product]) -> list[PhoneModel]:
+    """Jedna karta na model. Úložiště a barva jsou varianty, ne samostatné modely."""
+    buckets: dict[tuple, list[Product]] = {}
+    order: list[tuple] = []
+    for product in products:
+        if not is_public_phone(product):
+            continue
+        key = _family_key(product.name or "", product.id)
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(product)
+    titled: dict[str, tuple[str, list[Product]]] = {}
+    title_order: list[str] = []
+    for key in order:
+        group = buckets[key]
+        title = _model_name([product.name or "" for product in group])
+        fold = title.casefold()
+        if fold not in titled:
+            titled[fold] = (title, [])
+            title_order.append(fold)
+        titled[fold][1].extend(group)
+    used_slugs: set[str] = set()
+    models = []
+    for fold in title_order:
+        title, group = titled[fold]
+        slug = slugify(title) or f"model-{group[0].id}"
+        if slug in used_slugs:
+            slug = f"{slug}-{group[0].id}"
+        used_slugs.add(slug)
+        offers: list[Offer] = []
+        from .offer_trust import offer_mismatches_product
+        for product in group:
+            for offer in _visible_offers(product):
+                if offer_mismatches_product(offer, product):
+                    continue
+                offers.append(offer)
+        offers, disputed = price_trust(group, offers)
+        product_storage = {product.id: storage_label(product.name or "") or "" for product in group}
+        priced = [offer for offer in offers if product_storage.get(offer.product_id, "") not in disputed]
+        buyable = [offer for offer in priced if offer_is_buyable(offer)]
+        pool = buyable or priced
+        winner = min(pool, key=lambda offer: float(offer.price)) if pool else None
+        lowest = float(winner.price) if winner is not None else None
+        price_label = product_storage.get(winner.product_id, "") if winner is not None else ""
+        same_price = [
+            offer for offer in pool
+            if product_storage.get(offer.product_id, "") == price_label
+        ] if winner is not None else []
+        price_shops = len({offer.shop for offer in same_price})
+        price_shop = winner.shop if winner is not None else None
+        in_stock = any(offer_is_buyable(offer) for offer in same_price)
+        image = next((product.image_url for product in group if product.image_url), None)
+        brand = next((guess_brand(product.name or "") for product in group if guess_brand(product.name or "")), None)
+        if brand is None and any("iphone" in (product.name or "").casefold() for product in group):
+            brand = "Apple"
+        if brand and not title.casefold().startswith(brand.casefold()):
+            title = f"{brand} {title}"
+            slug = slugify(title) or slug
+        models.append(PhoneModel(
+            slug=slug,
+            name=title,
+            brand=brand,
+            products=group,
+            offers=sorted(offers, key=lambda offer: (not offer_is_buyable(offer), float(offer.price))),
+            lowest=lowest,
+            in_stock=in_stock,
+            shops=len({offer.shop for offer in offers}),
+            image=image,
+            disputed=disputed,
+            price_shops=price_shops,
+            price_shop=price_shop,
+            price_offer=winner,
+        ))
+    models.sort(key=lambda model: (-model.shops, model.lowest if model.lowest is not None else 10**12, model.name.casefold()))
+    return models
+
+
+def home_models(models: list[PhoneModel], limit: int = 12) -> list[PhoneModel]:
+    """Nejoblíbenější na úvodu. Potvrzená cena první, pak nejvíc obchodů.
+
+    Jedna prodejna u ceny je v pořádku a počet obchodů to řekne. Ven jde jen
+    cena, kterou neoznačujeme jako nepotvrzenou a která není odlehlá nabídka.
+    """
+    shown = [model for model in models if model.lowest is not None]
+    shown.sort(key=lambda model: (
+        model.price_shops < 2,
+        -model.shops,
+        model.lowest if model.lowest is not None else 10**12,
+        model.name.casefold(),
+    ))
+    return shown[:limit]
+
+
+def in_band(price: float | None, low: int | None, high: int | None) -> bool:
+    if price is None:
+        return False
+    if low is not None and price < low:
+        return False
+    if high is not None and price >= high:
+        return False
+    return True
+
+
+def filter_models(models: list[PhoneModel], *, brand: str = "", band: str = "") -> list[PhoneModel]:
+    chosen = models
+    if brand:
+        wanted = brand.casefold()
+        chosen = [model for model in chosen if (model.brand or "").casefold() == wanted]
+    spec = next((item for item in BANDS if item[0] == band), None)
+    if spec is not None:
+        _slug, _label, low, high = spec
+        chosen = [model for model in chosen if in_band(model.lowest, low, high)]
+    return chosen
+
+
+def guide_models(guide: Guide, models: list[PhoneModel]) -> list[PhoneModel]:
+    chosen = models
+    if guide.brands:
+        allowed = {brand.casefold() for brand in guide.brands}
+        chosen = [model for model in chosen if (model.brand or "").casefold() in allowed]
+    chosen = [
+        model for model in chosen
+        if in_band(model.lowest, guide.min_price, guide.max_price)
+    ]
+    return sorted(chosen, key=lambda model: (model.lowest is None, model.lowest or 0, model.name.casefold()))
+
+
+def load_phone_products(db: Session) -> list[Product]:
+    rows = list(db.scalars(
+        select(Product).where(
+            Product.category_slug == PHONE,
+            Product.retired_at.is_(None),
+            Product.catalog_hidden.is_(False),
+            Product.needs_review.is_(False),
+        ).options(selectinload(Product.offers).selectinload(Offer.points))
+    ).all())
+    return [row for row in rows if is_public_phone(row)]
+
+
+def phone_models(db: Session) -> list[PhoneModel]:
+    return group_phones(load_phone_products(db))
+
+
+def find_model(db: Session, slug: str) -> PhoneModel | None:
+    for model in phone_models(db):
+        if model.slug == slug:
+            return model
+    return None
+
+
+def brands_in(models: list[PhoneModel]) -> list[str]:
+    found = []
+    for model in models:
+        if model.brand and model.brand not in found:
+            found.append(model.brand)
+    return sorted(found, key=str.casefold)
+
+
+def offer_color(model: PhoneModel, offer: Offer) -> str:
+    for product in model.products:
+        if product.id == offer.product_id:
+            labels = sorted(color_labels(product.name or ""))
+            return labels[0] if labels else ""
+    return ""
+
+
+def shop_offer_rows(model: PhoneModel, offers: list[Offer]) -> list[dict]:
+    """Jedna nejlevnější skladová nabídka na obchod.
+
+    Když jsou obchody aspoň tři, další barvy téhož obchodu se neopakují.
+    Když je obchodů míň, další řádky zůstanou a nesou barvu, ať to není
+    třikrát stejný název bez rozdílu.
+    """
+    chosen: dict[str, Offer] = {}
+    for offer in offers:
+        if offer.shop not in chosen:
+            chosen[offer.shop] = offer
+    rows = [{"offer": offer, "color": ""} for offer in chosen.values()]
+    rows.sort(key=lambda row: (not offer_is_buyable(row["offer"]), float(row["offer"].price)))
+    if len(rows) != 1:
+        return rows
+    seen = {rows[0]["offer"].id}
+    extra = []
+    for offer in offers:
+        if offer.id in seen:
+            continue
+        seen.add(offer.id)
+        extra.append({"offer": offer, "color": offer_color(model, offer)})
+    if extra:
+        rows[0]["color"] = offer_color(model, rows[0]["offer"])
+    return rows + extra
+
+
+def select_variant(model: PhoneModel, storage: str = "", color: str = "") -> list[Product]:
+    chosen = model.products
+    filtered = False
+    if storage:
+        filtered = True
+        wanted = storage.casefold()
+        chosen = [product for product in chosen if (storage_label(product.name or "") or "").casefold() == wanted]
+    if color:
+        filtered = True
+        wanted = color.casefold()
+        chosen = [product for product in chosen if wanted in {item.casefold() for item in color_labels(product.name or "")}]
+    if filtered:
+        return chosen
+    return model.products

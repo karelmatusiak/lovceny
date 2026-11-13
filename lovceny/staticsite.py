@@ -348,10 +348,15 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
+    # docs/preview jsou jen snímky v pull requestu. Do nasazení nepatří
+    # a složka se před sloučením smaže.
     shutil.copytree(Path(__file__).parent / "static", root / "static")
     fav = Path(__file__).parent / "static" / "brand" / "favicon.ico"
     if fav.exists():
         shutil.copyfile(fav, root / "favicon.ico")
+    for leftover in (root / "docs", root / "preview"):
+        if leftover.exists():
+            shutil.rmtree(leftover)
 
     catcache.clear()
     clear_display_names_cache()
@@ -417,7 +422,19 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         _render_404(root, tpl)
         pages += 1
 
+        from .main import guide_page, guides_page, phone_model_page, phones_page
+        from .phones import GUIDES, phone_models
+        call("/telefony", phones_page, request_for("/telefony"), db=db)
+        call("/pruvodce", guides_page, request_for("/pruvodce"))
+        for guide in GUIDES:
+            call(f"/pruvodce/{guide.slug}", guide_page, request_for(f"/pruvodce/{guide.slug}"), guide.slug, db=db)
+        for model in phone_models(db):
+            call(f"/telefon/{model.slug}", phone_model_page, request_for(f"/telefon/{model.slug}"), model.slug, db=db)
         for cat in CATEGORIES:
+            if cat.slug != "telefony":
+                book.add(f"/kategorie/{cat.slug}", "/telefony", 301)
+                book.add(f"/kategorie/{cat.slug}/*", "/telefony", 301, dynamic=True)
+                continue
             pages += _render_category(root, db, cat)
 
         public_rows = []
@@ -449,9 +466,13 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
                 dest = _location(response)
                 code = _status(response)
                 book.add(path, dest, code)
-                bare = f"/produkt/{item.id}"
-                if path != bare:
-                    book.add(bare, dest, code)
+                # add() na /produkt/ se do _redirects nepropíše. gone ano.
+                book.gone[str(item.id)] = dest
+                if public_slug:
+                    book.gone[f"{item.id}-{public_slug}"] = dest
+                stored = (item.slug or "").strip("-")
+                if stored and stored != public_slug:
+                    book.gone[f"{item.id}-{stored}"] = dest
                 continue
             write_html(path, response)
             book.add_live_id(item)

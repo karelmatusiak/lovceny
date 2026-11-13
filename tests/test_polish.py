@@ -8,11 +8,11 @@ def test_homepage_uses_line_icons_and_places_labels(client_db):
     assert "🛍️" not in html and "⚖️" not in html and "📲" not in html
     assert 'class="ico"' in html
     title = html.split('class="logo-slogan"', 1)[1].split("</p>", 1)[0]
-    assert "Hlídáme ceny." in title and "Řekneme na rovinu." in title
+    assert "Ulovte telefon za férovou cenu." in title
     assert "<i>Nově</i>" not in html
-    assert "Poctivý hlídač cen elektroniky, bez placených pozic" in html
-    promise = html.split('id="nezavislost"', 1)[1].split('id="vydelavame"', 1)[0]
-    assert 'aria-label="Možné verdikty"' in promise
+    assert "Specialista na mobilní telefony" in html
+    assert "Nejoblíbenější telefony" in html
+    assert "Poctivý hlídač cen elektroniky, bez placených pozic" not in html
     css = open("lovceny/static/app.css", encoding="utf-8").read().replace(" ", "")
     banner = css.split(".bf-bannera{", 1)[1].split("}", 1)[0]
     assert "flex-wrap:nowrap" in banner
@@ -33,7 +33,7 @@ def test_footer_links_are_unique(client_db):
 
 def test_product_buy_shows_shop_above_do_obchodu(client_db):
     client, _, make = client_db
-    p = make([4200], name="Sony WH-1000XM5", shop="alza", category="sluchatka")
+    p = make([4200], name="Sony WH-1000XM5", shop="alza", category="telefony")
     html = client.get(f"/produkt/{p.id}").text
     block = html.split('class="buy-block"', 1)[1].split("</div>", 1)[0]
     assert "Alza" in block.split('class="buy-shop"', 1)[1].split("</p>", 1)[0]

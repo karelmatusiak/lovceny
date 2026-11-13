@@ -40,14 +40,14 @@ def test_compare_is_secondary_button_with_pressed_state():
 
 def test_missing_and_broken_image_markup(client_db):
     client, db, make = client_db
-    missing = make([500], name="Bez fotky UX", shop="alza", category="sluchatka")
+    missing = make([500], name="Bez fotky UX", shop="alza", category="telefony")
     missing.image_url = None
-    broken = make([700], name="Rozbita fotka UX", shop="alza", category="sluchatka")
+    broken = make([700], name="Rozbita fotka UX", shop="alza", category="telefony")
     broken.image_url = "https://www.alza.cz/no-such-photo-ux.jpg"
-    ok = make([900], name="Allegro fotka UX", shop="allegro", category="sluchatka")
+    ok = make([900], name="Allegro fotka UX", shop="allegro", category="telefony")
     ok.image_url = "https://a.allegroimg.com/original/11aa22/abcd/sluchatka.jpg"
     db.commit()
-    html = client.get("/kategorie/sluchatka").text
+    html = client.get("/kategorie/telefony").text
     card = html.split(f'href="/produkt/{missing.id}-')[1].split('class="card pcard"')[0]
     assert 'aria-label="Fotka produktu chybí"' in card
     assert "📦" not in card

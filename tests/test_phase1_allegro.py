@@ -58,7 +58,7 @@ def test_unknown_allegro_only_retires_to_category_and_keeps_history(client_db):
     assert db.get(PricePoint, point_id).price is not None
     page = client.get(f"/produkt/{drop.id}-{drop.slug}", follow_redirects=False)
     assert page.status_code == 301
-    assert page.headers["location"] == "/kategorie/sluchatka"
+    assert page.headers["location"] == "/"
     again = apply_allegro_narrow(db, dry_run=False)
     db.commit()
     assert again["retire"] == 0

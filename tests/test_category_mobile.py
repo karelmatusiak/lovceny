@@ -13,17 +13,17 @@ def test_category_mobile_css():
 
 def test_category_card_has_one_status_and_icon_compare(client_db):
     client, db, make = client_db
-    buy = make([4000] * 12, name="Sony WH-1000XM5 černá", shop="alza", category="sluchatka")
-    buy.category = "Sluchátka"
+    buy = make([4000] * 12, name="Sony WH-1000XM5 černá", shop="alza", category="telefony")
+    buy.category = "Mobilní telefony"
     buy.image_url = "https://img.example/wh.jpg"
     db.add(Offer(product=buy, shop="datart", url="https://www.datart.cz/wh-mobile",
                  price=4200, status="ok", in_stock=True))
-    oos = make([9000], name="Bose tiché OOS", shop="alza", category="sluchatka")
-    oos.category = "Sluchátka"
+    oos = make([9000], name="Bose tiché OOS", shop="alza", category="telefony")
+    oos.category = "Mobilní telefony"
     oos.offers[0].in_stock = False
     db.commit()
 
-    html = client.get("/kategorie/sluchatka").text
+    html = client.get("/kategorie/telefony").text
 
     def card_for(pid):
         start = html.rfind('<div class="card pcard">', 0, html.find(f'href="/produkt/{pid}-'))

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="seznam-wmt" content="WI7Ow11Q7HnunD2B4LUn1AgYjivjydyF">
-<title>{% block title %}Lovceny – poctivý hlídač cen elektroniky a spotřebičů{% endblock %}</title>
-<meta name="description" content="{% block description %}Poctivý hlídač cen elektroniky a spotřebičů. Řekneme na rovinu: kupovat, nebo počkat.{% endblock %}">
+<title>{% block title %}Lovceny – poctivý specialista na mobilní telefony{% endblock %}</title>
+<meta name="description" content="{% block description %}Poctivý specialista na mobilní telefony. Nejnižší cena, historie a verdikt, jestli se sleva vyplatí.{% endblock %}">
 <link rel="icon" href="{{ static('brand/favicon.ico') }}" sizes="any"><link rel="icon" href="{{ static('brand/ikona.svg') }}" type="image/svg+xml">
-<link rel="apple-touch-icon" href="{{ static('brand/apple-touch-icon.png') }}"><meta name="theme-color" content="#0B6E4F">
+<link rel="apple-touch-icon" href="{{ static('brand/apple-touch-icon.png') }}"><meta name="theme-color" content="#1F4D3A">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Lovceny"><meta name="apple-mobile-web-app-status-bar-style" content="default">
 {%- set canon = canonical(canonical_path if canonical_path is defined else (request.url.path if request else '/')) -%}
@@ -16,7 +16,7 @@
 <meta property="og:type" content="{% block og_type %}website{% endblock %}"><meta property="og:url" content="{{ canon }}">
 {% block og_image_tags %}<meta property="og:image" content="{{ public_url() }}{{ static('brand/og-image.png') }}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">{% endblock %}
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="{{ static('style.css') }}"><link rel="stylesheet" href="{{ static('app.css') }}">
+<link rel="stylesheet" href="{{ static('style.css') }}"><link rel="stylesheet" href="{{ static('app.css') }}"><link rel="stylesheet" href="{{ static('phones.css') }}">
 {% for obj in (ld if ld is defined else []) %}<script type="application/ld+json">{{ obj|tojson_ld }}</script>
 {% endfor %}{% block head %}{% endblock %}
 </head>
@@ -24,9 +24,18 @@
 <a class="skip" href="#obsah">Přeskočit na obsah</a>
 <header class="site-head"><div class="wrap">
   <nav aria-label="Hlavní navigace" class="site-nav">
-    <a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="126" height="36"></a>
-    <p class="logo-slogan">Hlídáme ceny. <span class="hl">Řekneme na rovinu.</span></p>
-    <button type="button" class="nav-find" id="nav-find" aria-label="Hledat">
+    <div class="logo-lockup">
+      <a class="logo" href="/" aria-label="Lovceny – telefony"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="126" height="36"></a>
+      <p class="logo-slogan">Ulovte telefon za férovou cenu.</p>
+    </div>
+    {% if request.url.path != '/' %}
+    <form class="head-search" id="head-search" action="/hledat" method="get" role="search" autocomplete="off">
+      <label class="sr-only" for="home-q">Hledat telefon</label>
+      <input id="home-q" name="q" type="search" required placeholder="Telefon nebo odkaz z e-shopu" aria-label="Název telefonu nebo odkaz z e-shopu">
+      <button class="btn btn-primary" type="submit">Hledat</button>
+    </form>
+    {% endif %}
+    <button type="button" class="nav-find" id="nav-find" aria-label="Hledat"{% if request.url.path != '/' %} aria-expanded="false" aria-controls="head-search"{% endif %}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
     </button>
     <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-panel">
@@ -34,21 +43,12 @@
       <span class="sr-only">Menu</span>
     </button>
     <div class="nav-panel" id="nav-panel">
-      <div class="nav-links"><a href="/kategorie">Kategorie</a><a href="/#hledat">Hledat</a><a href="/slevy">Slevy</a><a href="/o-nas">O nás</a></div>
+      <div class="nav-links"><a href="/telefony">Telefony</a><a href="/pruvodce">Průvodce</a><a href="/slevy">Slevy</a><a href="/o-nas">O nás</a></div>
     </div>
   </nav>
 </div></header>
 {% set banner = site_banner() %}
-{% if banner %}<aside class="bf-banner" aria-label="Black Friday {{ banner.year }}"><div class="wrap"><a href="/black-friday"><span class="bf-b-ico" aria-hidden="true">{{ ico('bag') }}</span><span class="bf-b-txt"><b>{{ banner.text }}</b> <span>Kontrola 30 dní (§ 12a) u každé slevy.</span></span><span class="bf-b-go">Black Friday přehled <span aria-hidden="true">→</span></span></a></div></aside>{% endif %}
-{% if request.url.path != '/' %}
-<header class="hero page-search" id="hledat"><div class="wrap">
-  <form class="search search-wide" action="/hledat" method="get" role="search" autocomplete="off">
-    <label><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B6B63" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input id="home-q" name="q" type="text" required placeholder="Zadej název nebo vlož odkaz z e-shopu" aria-label="Název produktu nebo odkaz z e-shopu"></label>
-    <button class="btn btn-primary" type="submit">Hledat</button>
-  </form>
-</div></header>
-{% endif %}
+{% if banner %}<aside class="bf-banner" id="bf-banner" aria-label="Black Friday {{ banner.year }}"><div class="wrap bf-line"><a href="/black-friday">{{ banner.short }} · Ověření slev <span aria-hidden="true">→</span></a><button type="button" class="bf-dismiss" aria-label="Skrýt upozornění na Black Friday">×</button></div></aside>{% endif %}
 <main id="obsah" tabindex="-1">
 {% if crumbs is defined and crumbs|length > 1 %}<div class="wrap"><nav class="crumbs" aria-label="Drobečková navigace"><ol>{% for name, url in crumbs %}<li>{% if loop.last %}<span aria-current="page">{{ name }}</span>{% else %}<a href="{{ url }}">{{ name }}</a>{% endif %}</li>{% endfor %}</ol></nav></div>{% endif %}
 {% block body %}{% endblock %}
@@ -77,8 +77,8 @@
 <div class="wrap">
   <div class="foot">
     <div class="foot-brand"><a class="logo" href="/" aria-label="Lovceny – domů"><img class="logo-img" src="{{ static('brand/logo.svg') }}" alt="" width="154" height="44" loading="lazy"></a>
-      <p>Poctivý hlídač cen. Bez placených pozic, bez reklam ve výsledcích.</p></div>
-    <div><p class="foot-h">Kategorie</p><ul>{% for c in CATEGORIES[:6] %}<li><a href="/kategorie/{{ c.slug }}">{{ c.name }}</a></li>{% endfor %}<li><a href="/kategorie">Všechny kategorie</a></li></ul></div>
+      <p>Specialista na mobilní telefony. Bez placených pozic, bez reklam ve výsledcích.</p></div>
+    <div><p class="foot-h">Telefony</p><ul><li><a href="/telefony">Všechny modely</a></li><li><a href="/pruvodce/nejlepsi-do-5-tisic">Do 5 000 Kč</a></li><li><a href="/pruvodce/nejlepsi-do-10-tisic">Do 10 000 Kč</a></li><li><a href="/pruvodce/nejlepsi-do-15-tisic">Do 15 000 Kč</a></li><li><a href="/pruvodce/nejlevnejsi-iphone">Nejlevnější iPhone</a></li><li><a href="/pruvodce">Všichni průvodci</a></li></ul></div>
     <div><p class="foot-h">Produkt</p><ul><li><a href="/slevy">Skutečné slevy</a></li><li><a href="/over-slevu">Ověř slevu</a></li><li><a href="/kdy-nakupovat">Kdy nakupovat</a></li><li><a href="/porovnat">Srovnání</a></li><li><a href="/black-friday">Black Friday</a></li><li><a href="/black-friday/skutecna-sleva">Je to skutečná sleva?</a></li>{% if DIGEST_ON() %}<li><a href="/prehled">Týdenní přehled</a></li>{% endif %}{% if BUDGET_ON() %}<li><a href="/hlidat-rozpocet">Hlídání rozpočtu</a></li>{% endif %}{% if EXTENSION_ON() %}<li><a href="/rozsireni">Rozšíření</a></li>{% endif %}<li><a href="/o-nas#caste-dotazy">Časté dotazy</a></li>{% if not request.url.path.startswith('/admin') %}<li><button type="button" class="foot-btn" data-pwa-open hidden><span aria-hidden="true">{{ ico('device') }}</span> Na plochu</button></li>{% endif %}</ul></div>
     <div><p class="foot-h">Transparentnost</p><ul><li><a href="/jak-radime">Jak řadíme</a></li><li><a href="/pro-obchody">Pro e-shopy</a></li><li><a href="/obchody">Hlídané obchody</a></li><li><a href="/o-nas#vydelavame">Jak vyděláváme</a></li><li><a href="/stav">Stav obchodů</a></li></ul></div>
     <div><p class="foot-h">Kontakt a právní</p><ul><li><a href="/o-nas">O nás</a></li><li><a href="/kontakt">Kontakt</a></li><li><a href="/ochrana-osobnich-udaju">Ochrana údajů</a></li><li><a href="/cookies">Cookies</a></li><li><a href="/podminky">Podmínky</a></li></ul></div>
@@ -109,11 +109,30 @@
   var b=document.getElementById("nav-find");
   if(!b)return;
   b.addEventListener("click", function(){
+    var form=document.getElementById("head-search");
+    if(form){
+      var open=!form.classList.contains("is-open");
+      form.classList.toggle("is-open", open);
+      b.setAttribute("aria-expanded", open?"true":"false");
+      if(open){ var input=form.querySelector("input"); if(input) input.focus(); }
+      return;
+    }
     var home=document.getElementById("home-q");
     if(!home) return;
     var box=document.getElementById("hledat");
     if(box) box.scrollIntoView({behavior:"smooth",block:"center"});
     home.focus();
+  });
+})();
+(function(){
+  var bar=document.getElementById("bf-banner");
+  if(!bar) return;
+  try{ if(sessionStorage.getItem("lovceny-bf-hide")==="1"){ bar.remove(); return; } }catch(e){}
+  var btn=bar.querySelector(".bf-dismiss");
+  if(!btn) return;
+  btn.addEventListener("click", function(){
+    bar.remove();
+    try{ sessionStorage.setItem("lovceny-bf-hide","1"); }catch(e){}
   });
 })();
 </script>

@@ -90,17 +90,19 @@ def test_series_and_price_caps_need_real_stock(client_db):
     phones = client.get("/kategorie/telefony").text
     assert 'href="/nejlevnejsi/iphone-16"' in phones
     assert "– strana" not in phones.split("</title>", 1)[0]
-    vac_page = client.get("/kategorie/vysavace").text
-    assert 'href="/kategorie/vysavace/do/5000"' in vac_page
-    assert 'href="/kategorie/vysavace/do/10000"' in vac_page
+    vac_page = client.get("/kategorie/vysavace", follow_redirects=False)
+    assert vac_page.status_code == 301 and vac_page.headers["location"] == "/telefony"
     home = client.get("/").text
-    assert 'href="/nejlevnejsi/iphone-16"' in home and 'href="/kategorie/vysavace/do/5000"' in home
+    assert "Nejoblíbenější telefony" in home
+    assert 'href="/pruvodce/' in home
+    assert 'href="/kategorie/vysavace/do/5000"' not in home
     assert "SearchAction" not in home
 
     sm = client.get("/sitemap.xml").text
     assert "/nejlevnejsi/iphone-16</loc>" in sm
-    assert "/kategorie/vysavace/do/5000</loc>" in sm
-    assert "/kategorie/vysavace/do/10000</loc>" in sm
+    assert "/telefony" in sm
+    assert "/kategorie/vysavace" not in sm
+    assert "/kategorie/notebooky" not in sm
     assert "/nejlevnejsi/airpods" not in sm
     assert "/kategorie/vysavace/do/3000" not in sm
 

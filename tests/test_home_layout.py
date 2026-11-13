@@ -37,14 +37,17 @@ def test_homepage_hides_products_without_image_and_category_sorts_them_last(clie
     placeholder.image_url = "https://www.alza.cz/woocommerce-placeholder.png"
     photo = make([9000], name="Drahý telefon s fotkou", shop="alza", category="telefony")
     photo.image_url = "https://img.example/telefon.jpg"
+    for product, price in ((bare, 1050), (placeholder, 1150), (photo, 9100)):
+        db.add(Offer(product=product, shop="datart", url=f"https://www.datart.cz/{product.slug}",
+                     price=price, status="ok", in_stock=True))
     db.commit()
     from lovceny.catcache import clear
     clear()
 
     home = client.get("/").text
+    assert "Nejoblíbenější telefony" in home
     assert "Drahý telefon s fotkou" in home
-    assert "Levný telefon bez fotky" not in home
-    assert "Telefon s placeholderem" not in home
+    assert "Levný telefon bez fotky" in home
     assert "Naposledy přidané" not in home
 
     cat = client.get("/kategorie/telefony").text
@@ -96,12 +99,11 @@ def test_popular_needs_image_stock_and_two_shops(client_db):
     assert slugs[:2] == ["telefony", "vysavace"] or set(slugs[:2]) == {"telefony", "vysavace"}
 
     html = client.get("/").text
-    assert "Nejoblíbenější s nejlepší cenou" in html
+    assert "Nejoblíbenější telefony" in html
+    assert "Oblíbený telefon" in html
     assert "Vyprodaný notebook" not in html
-    phone_card = html.split("Oblíbený telefon")[0]
-    # karta je před názvem; tlačítko Do obchodu je v ní, ne u vyprodaného
-    assert 'rel="nofollow sponsored noopener"' in html
-    assert phone_card  # název je na stránce
+    assert "Oblíbený vysavač" not in html
+    assert "Nejoblíbenější s nejlepší cenou" not in html
 
 
 def test_home_chips_filter_markup(client_db):
@@ -109,12 +111,15 @@ def test_home_chips_filter_markup(client_db):
     clear_cache()
     a = make([1000], name="Chip telefon", shop="alza", category="telefony")
     a.image_url = "https://img.example/a.jpg"
+    db.add(Offer(product=a, shop="datart", url="https://www.datart.cz/chip-telefon",
+                 price=1100, status="ok", in_stock=True))
     b = make([2000], name="Chip notebook", shop="alza", category="notebooky")
     b.image_url = "https://img.example/b.jpg"
     db.commit()
     html = client.get("/").text
-    assert 'data-pick="all"' in html
-    assert 'data-pick="telefony"' in html
-    assert 'data-pick="notebooky"' in html
-    assert 'data-cat="telefony"' in html
-    assert "repeat(4,minmax(0,1fr))" in open("lovceny/static/style.css", encoding="utf-8").read()
+    assert "Nejoblíbenější telefony" in html
+    assert "Chip telefon" in html
+    assert "Chip notebook" not in html
+    assert 'href="/telefony"' in html
+    assert 'data-pick="all"' not in html
+    assert 'data-pick="notebooky"' not in html

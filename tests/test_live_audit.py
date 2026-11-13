@@ -157,7 +157,9 @@ def test_accessory_product_is_hidden_and_station_offer_detached(client_db):
     assert station.withheld is True
     gone = c.get(f"/produkt/{grip.id}", follow_redirects=False)
     assert gone.status_code == 301
-    assert gone.headers["location"] == "/kategorie/fotoaparaty"
+    assert gone.headers["location"] == "/"
+    vacuum.category_slug = "telefony"
+    db.commit()
     page = c.get(f"/produkt/{vacuum.id}").text
     assert "Softcom" not in page
 
@@ -165,7 +167,7 @@ def test_accessory_product_is_hidden_and_station_offer_detached(client_db):
 def test_offers_sort_by_price_and_card_ignores_hidden(client_db):
     from lovceny.models import Offer
     c, db, make = client_db
-    product = make([799], name="Swissten ANC Focus černá", shop="bscom", category="sluchatka")
+    product = make([799], name="Swissten ANC Focus černá", shop="bscom", category="telefony")
     cheap = Offer(
         product=product, shop="allegro",
         url="https://allegro.cz/nabidka/swissten-focus-759",
@@ -181,7 +183,7 @@ def test_offers_sort_by_price_and_card_ignores_hidden(client_db):
     ordered = sort_offers_for_display(product.offers)
     assert [float(o.price) for o in ordered] == [759, 799]
     assert visible_offer_count(product.offers) == 2
-    html = c.get("/kategorie/sluchatka").text
+    html = c.get("/kategorie/telefony").text
     assert "2 obchodů" in html
     page = c.get(f"/produkt/{product.id}").text
     assert page.index("759") < page.index("799")
@@ -218,7 +220,7 @@ def test_price_fetch_does_not_republish_a_used_phone(client_db):
     assert phone.needs_review is False
     gone = c.get(f"/produkt/{phone.id}-{phone.slug}", follow_redirects=False)
     assert gone.status_code == 301
-    assert gone.headers["location"] == "/kategorie/telefony"
+    assert gone.headers["location"] == "/telefony"
 
 
 def test_feed_item_roundtrip_types():

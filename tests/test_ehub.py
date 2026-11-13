@@ -642,7 +642,7 @@ def test_pocitace24_feed_keeps_pcs_and_notebooks_drops_accessories():
 def test_pocitace24_product_page_ehub_rel_and_oos(client_db, monkeypatch):
     monkeypatch.delenv("EHUB_AID", raising=False)
     c, db, make = client_db
-    p = make([8999], name="Lenovo ThinkPad E14 Počítače24", shop="pocitace24", category="notebooky")
+    p = make([8999], name="Lenovo ThinkPad E14 Počítače24", shop="pocitace24")
     o = p.offers[0]
     o.url = "https://www.pocitace24.cz/repasovane-notebooky/lenovo-thinkpad-e14-page/"
     o.in_stock = True
@@ -670,7 +670,7 @@ def test_pocitace24_product_page_ehub_rel_and_oos(client_db, monkeypatch):
 def test_evolveo_product_page_ehub_rel(client_db, monkeypatch):
     monkeypatch.delenv("EHUB_AID", raising=False)
     c, db, make = client_db
-    p = make([1990], name="EVOLVEO BonePro sluchátka", shop="evolveo", category="sluchatka")
+    p = make([1990], name="EVOLVEO BonePro sluchátka", shop="evolveo")
     o = p.offers[0]
     o.url = "https://eshop.evolveo.cz/evolveo-bonepro-page-test/"
     o.in_stock = True
@@ -823,7 +823,7 @@ def test_jbl_seed_pick_collapses_colors_and_skips_speakers():
 def test_jbl_product_page_ehub_rel_and_oos(client_db, monkeypatch):
     monkeypatch.delenv("EHUB_AID", raising=False)
     c, db, make = client_db
-    p = make([1490], name="JBL Tune 510BT Black", shop="jbl", category="sluchatka")
+    p = make([1490], name="JBL Tune 510BT Black", shop="jbl", category="telefony")
     o = p.offers[0]
     o.url = "https://www.jbl.cz/jbl-tune-510bt-black-page/"
     o.in_stock = True

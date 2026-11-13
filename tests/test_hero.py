@@ -120,20 +120,15 @@ def test_home_renders_hero_picks():
     clear_cache()
     init_db()
     db = SessionLocal()
-    _seed(db, name="Hero na homepage", prices=[3000] * 9 + [2100],
-          category_slug="notebooky", category="Notebooky")
+    _seed(db, name="Apple iPhone 16 128GB", prices=[3000] * 9 + [2100],
+          category_slug="telefony", category="Mobilní telefony", shops=("mironet", "alza"))
     html = TestClient(app).get("/").text
-    assert "Teď stojí za to" in html
-    assert "hero-picks" in html
-    assert "Hero na homepage" in html
-    assert 'class="hero-pick-cat">Notebooky' in html
-    assert html.find('action="/hledat"') < html.find('class="hero-picks"')
+    assert "Nejoblíbenější telefony" in html
+    assert "phone-card" in html
+    assert "Apple iPhone 16" in html
+    assert "Notebooky" not in html
+    assert html.find('action="/hledat"') < html.find("phone-grid")
     assert "Naposledy přidané" not in html
-    assert "Nejlevněji v" in html and "srovnáno" in html
-    assert 'rel="nofollow sponsored noopener"' in html
-    assert 'href="/go/' in html
-    assert 'target="_blank"' in html
-    assert "hero-art" not in html
     db.close()
 
 
@@ -266,7 +261,8 @@ def test_hero_oos_not_buyable_and_accessory_not_filed_as_main():
     ok = _seed(db, name="Lenovo IdeaPad koupit", prices=[12000],
                category_slug="notebooky", category="Notebooky", in_stock=True)
     phone = _seed(db, name="Samsung Galaxy A55", prices=[8000],
-                  category_slug="telefony", category="Mobilní telefony", in_stock=True)
+                  category_slug="telefony", category="Mobilní telefony", in_stock=True,
+                  shops=("mironet", "datart"))
     cheap = Offer(product=phone, shop="alza", url=f"https://www.alza.cz/oos-{phone.id}",
                   price=1000, status="ok", in_stock=False)
     db.add(cheap)
@@ -284,10 +280,13 @@ def test_hero_oos_not_buyable_and_accessory_not_filed_as_main():
     assert phone_pick.best.shop != "alza"
     html = TestClient(app).get("/").text
     assert cheap.url not in html
-    assert f'href="/go/{phone_pick.best.id}"' in html
+    assert "USB-C kabel" not in html
+    assert "Galaxy A55" in html
+    assert "Nejoblíbenější telefony" in html
+    page = TestClient(app).get(f"/produkt/{phone.id}").text
+    assert f'href="/go/{phone_pick.best.id}"' in page
     hop = TestClient(app).get(f"/go/{phone_pick.best.id}", follow_redirects=False)
     assert hop.status_code == 302 and hop.headers["location"] == phone_pick.best.url
-    assert "hero-pick-buy" in html
-    assert 'rel="nofollow sponsored noopener"' in html
+    assert 'rel="nofollow noopener"' in page
     assert all("kabel" not in n.lower() for n in names)
     db.close()

@@ -111,7 +111,7 @@ def site_banner():
     from . import blackfriday as bfmod
     if not bfmod.banner_active():
         return None
-    return {"year": bfmod.season().year, "text": bfmod.countdown_text()}
+    return {"year": bfmod.season().year, "text": bfmod.countdown_text(), "short": bfmod.banner_short()}
 
 
 tpl.env.globals["site_banner"] = site_banner
@@ -244,8 +244,9 @@ def _catalog_redirect(db, p: Product) -> str:
     if target is not None and target.catalog_hidden is not True:
         if not is_non_new(target.name or "", shop_category=target.category):
             return f"/produkt/{target.id}-{pslug(target)}"
-    cat = BY_SLUG.get(p.category_slug or "")
-    return f"/kategorie/{cat.slug}" if cat else "/"
+    if p.category_slug == "telefony":
+        return "/telefony"
+    return "/"
 
 
 def product_summary(p: Product):
@@ -414,25 +415,155 @@ def _drop_broken_home_images(featured, extras, popular):
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(request: Request, db=Depends(get_db)):
-    from .offer_trust import use_cutoffs
-    use_cutoffs(db)
-    from .hero import home_board
-    from .images import has_working_image
-    from .popular import popular_picks
-    featured, extras, chips = home_board(db)
-    popular = popular_picks(db, limit=8)
-    featured, extras, popular = _drop_broken_home_images(featured, extras, popular)
-    deals = [r for r in real_deals(db, top=12)["buys"] if has_working_image(r.product.image_url)][:3]
-    cat_counts = listing_category_counts(db)
+    from .phones import BANDS, GUIDES, brands_in, buying_signal, home_models, phone_models
+    models = phone_models(db)
+    confirmed = [model for model in models if model.price_shops >= 2 and model.lowest is not None]
+    drops = []
+    for model in confirmed:
+        verdict = buying_signal(model)
+        if verdict is not None and verdict.code == "buy":
+            drops.append((model, verdict))
+        if len(drops) == 3:
+            break
     return tpl.TemplateResponse(request, "index.html", {
-        "deals": deals,
-        "thin_history": price_history_thin(db),
-        "home_picks": [(h, False) for h in featured] + [(h, True) for h in extras],
-        "pick_chips": chips,
-        "popular": popular,
-        "cat_counts": cat_counts,
-        "landings": _home_landings(db),
+        "models": home_models(models),
+        "drops": drops,
+        "brands": brands_in(models),
+        "bands": BANDS,
+        "guides": GUIDES,
+        "brand": "",
+        "model_count": len(models),
+        "shop_count": len({offer.shop for model in models for offer in model.offers}),
         "ld": [seo.website_ld(), seo.organization_ld()],
+    })
+
+
+def _phone_or_home(product: Product):
+    """Cizí kategorie na webu nezůstane. Data v databázi se nemažou."""
+    if product.category_slug and product.category_slug != "telefony":
+        return RedirectResponse("/", status_code=301)
+    from .categories import is_accessory_text
+    from .exclusions import is_excluded_brand
+    from .phones import is_tablet_text
+    if product.category_slug == "telefony" and (
+        is_accessory_text(product.name or "") or is_excluded_brand(product.name or "")
+        or is_tablet_text(product.name or "")
+    ):
+        return RedirectResponse("/telefony", status_code=301)
+    return None
+
+
+@app.get("/telefony", response_class=HTMLResponse)
+def phones_page(request: Request, znacka: str = "", pasmo: str = "", db=Depends(get_db)):
+    from .phones import BANDS, brands_in, filter_models, phone_models
+    models = phone_models(db)
+    brand = znacka.strip()
+    band = pasmo.strip()
+    shown = filter_models(models, brand=brand, band=band)
+    spec = next((item for item in BANDS if item[0] == band), None)
+    crumbs = [("Lovceny", "/"), ("Telefony", "/telefony")]
+    return tpl.TemplateResponse(request, "phones.html", {
+        "models": shown, "brands": brands_in(models), "bands": BANDS,
+        "brand": brand, "band": band, "band_label": spec[1] if spec else "",
+        "crumbs": crumbs,
+        "canonical_path": "/telefony",
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/telefon/{slug}", response_class=HTMLResponse)
+def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = "", db=Depends(get_db)):
+    from .phones import find_model, select_variant, storage_label
+    model = find_model(db, slug)
+    if model is None:
+        raise HTTPException(404)
+    storage_query = pamet.strip()
+    if not storage_query:
+        def _label(offer) -> str:
+            for product in model.products:
+                if product.id == offer.product_id:
+                    return storage_label(product.name or "") or ""
+            return ""
+        confirmed = [
+            offer for offer in model.offers
+            if _label(offer) not in model.disputed and offer_is_buyable(offer)
+        ] or [
+            offer for offer in model.offers if _label(offer) not in model.disputed
+        ]
+        pool = confirmed or [offer for offer in model.offers if offer_is_buyable(offer)] or list(model.offers)
+        if pool:
+            cheapest = min(pool, key=lambda offer: float(offer.price))
+            storage_query = _label(cheapest)
+    products = select_variant(model, storage=storage_query, color=barva.strip())
+    product_ids = {product.id for product in products}
+    offers = [offer for offer in model.offers if offer.product_id in product_ids]
+    points = [point for offer in offers for point in offer.points]
+    offers.sort(key=lambda offer: (not offer_is_buyable(offer), float(offer.price)))
+    buyable = [offer for offer in offers if offer_is_buyable(offer)]
+    shown = buyable[0] if buyable else (offers[0] if offers else None)
+    current = float(shown.price) if shown is not None and shown.price is not None else None
+    verdict = compute(points, current, getattr(shown, "original_price", None) if shown else None)
+    ranges = build_chart(points, verdict=verdict, live_price=current)
+    from .phones import anchor_product, phone_models, shop_offer_rows, storage_deals
+    deals = storage_deals(model)
+    peers = []
+    for item in phone_models(db):
+        if item.slug == model.slug or item.lowest is None:
+            continue
+        product = anchor_product(item)
+        if product is None or product_summary(product)[0] is None:
+            continue
+        peers.append(item)
+    peers.sort(key=lambda item: abs(item.lowest - (model.lowest or item.lowest)))
+    compare_products = []
+    for item in [model, *peers[:2]]:
+        product = anchor_product(item)
+        if product is not None and product_summary(product)[0] is not None:
+            compare_products.append(product)
+    compare_href = ""
+    if len(compare_products) >= 2:
+        compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
+    active_storage = storage_query
+    crumbs = [("Lovceny", "/"), ("Telefony", "/telefony"), (model.name, f"/telefon/{model.slug}")]
+    return tpl.TemplateResponse(request, "phone_model.html", {
+        "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
+        "active_storage": active_storage,
+        "shown_price": current, "buyable": bool(buyable), "verdict": verdict, "v": verdict,
+        "offer_rows": shop_offer_rows(model, offers),
+        "storage_deals": deals, "compare_href": compare_href,
+        "chart_ranges": ranges, "chart_note": verdict_note(verdict, ranges), "crumbs": crumbs,
+        "canonical_path": f"/telefon/{model.slug}", "get_shop": get_shop,
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/pruvodce", response_class=HTMLResponse)
+def guides_page(request: Request):
+    from .phones import GUIDES
+    crumbs = [("Lovceny", "/"), ("Průvodci", "/pruvodce")]
+    return tpl.TemplateResponse(request, "guides.html", {
+        "guides": GUIDES, "crumbs": crumbs, "canonical_path": "/pruvodce",
+        "ld": [seo.breadcrumb_ld(crumbs)],
+    })
+
+
+@app.get("/pruvodce/{slug}", response_class=HTMLResponse)
+def guide_page(request: Request, slug: str, db=Depends(get_db)):
+    from .phones import GUIDE_BY_SLUG, guide_models, phone_models
+    guide = GUIDE_BY_SLUG.get(slug)
+    if guide is None:
+        raise HTTPException(404)
+    models = guide_models(guide, phone_models(db))
+    columns = []
+    if guide.versus:
+        for brand in guide.brands:
+            columns.append((brand, [model for model in models if model.brand == brand]))
+    crumbs = [("Lovceny", "/"), ("Průvodci", "/pruvodce"), (guide.title, f"/pruvodce/{guide.slug}")]
+    return tpl.TemplateResponse(request, "guide.html", {
+        "guide": guide, "models": models, "columns": columns, "crumbs": crumbs,
+        "get_shop": get_shop,
+        "canonical_path": f"/pruvodce/{guide.slug}",
+        "ld": [seo.breadcrumb_ld(crumbs)],
     })
 
 
@@ -450,7 +581,10 @@ def kontakt_get():
 
 @app.get("/slevy", response_class=HTMLResponse)
 def deals_page(request: Request, db=Depends(get_db)):
+    from .phones import is_public_phone
     data = real_deals(db)
+    for key in ("buys", "fakes"):
+        data[key] = [row for row in data.get(key, []) if getattr(row, "product", None) and is_public_phone(row.product)]
     assign_display_names([r.product for r in data.get("buys", []) + data.get("fakes", []) if getattr(r, "product", None)])
     # Karty a „blízko minima“ jsou jen prázdný stav. Když Kupuj existuje, šablona je nečte
     # a jejich selectinload historie by zbytečně držel TTFB.
@@ -500,8 +634,9 @@ def search(request: Request, q: str = "", zive: int = 0, razeni: str = "",
     results = []
     from .categories import is_non_new
     from .exclusions import is_excluded_brand
+    from .phones import is_tablet_text
     for p in products:
-        if is_excluded_brand(p.name or "") or is_accessory_text(p.name or "", p.category) or is_non_new(p.name, shop_category=p.category):
+        if is_excluded_brand(p.name or "") or is_accessory_text(p.name or "", p.category) or is_tablet_text(p.name or "") or is_non_new(p.name, shop_category=p.category):
             continue
         best, v = product_summary(p)
         # Do výsledků i OOS (poslední cena) – bez CTA „Do obchodu“ v šabloně.
@@ -626,6 +761,9 @@ def product(request: Request, pid: int, slug: str = "", msg: str = "", ok: str =
     p = db.get(Product, pid)
     if not p:
         raise HTTPException(404)
+    away = _phone_or_home(p)
+    if away is not None:
+        return away
     from .exclusions import is_excluded_brand
     if is_excluded_brand(p.name or ""):
         return RedirectResponse(_catalog_redirect(db, p), status_code=301)
@@ -833,6 +971,33 @@ def compare_legacy(ids: str = "", pridat: str = "", db=Depends(get_db)):
     return RedirectResponse("/porovnat" + (f"?{q}" if q else ""), 301)
 
 
+def _phone_compare_rows(db, products: list) -> list[dict] | None:
+    """Srovnání telefonů je po modelech. Cizí výrobek nechá původní stránku."""
+    from .phones import buying_signal, is_public_phone, phone_models, storage_deals
+    if not products or not all(is_public_phone(product) for product in products):
+        return None
+    catalog = phone_models(db)
+    by_product = {product.id: model for model in catalog for product in model.products}
+    rows = []
+    seen = set()
+    for product in products:
+        model = by_product.get(product.id)
+        if model is None or model.slug in seen:
+            continue
+        seen.add(model.slug)
+        offer = model.price_offer
+        if offer is None and model.offers:
+            offer = model.offers[0]
+        rows.append({
+            "model": model,
+            "offer": offer,
+            "shop": get_shop(offer.shop) if offer else None,
+            "deals": storage_deals(model),
+            "verdict": buying_signal(model),
+        })
+    return rows
+
+
 @app.get("/porovnat", response_class=HTMLResponse)
 def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db)):
     from .verdict import daily_best
@@ -844,6 +1009,13 @@ def compare(request: Request, p: str = "", pridat: str = "", db=Depends(get_db))
         extra = db.get(Product, int(pridat))
         if extra and all(x.id != extra.id for x in products):
             products.append(extra)
+    phone_rows = _phone_compare_rows(db, products)
+    if phone_rows is not None:
+        priced = [row for row in phone_rows if row["model"].lowest is not None]
+        cheapest = min(priced, key=lambda row: row["model"].lowest)["model"].slug if len(priced) > 1 else None
+        return tpl.TemplateResponse(request, "phone_compare.html", {
+            "rows": phone_rows, "cheapest": cheapest, "noindex": True, "get_shop": get_shop,
+        })
     assign_display_names(products)
     now = datetime.now(timezone.utc)
     items = []
@@ -1127,16 +1299,15 @@ CAT_VIEWS = {
 
 @app.get("/kategorie", response_class=HTMLResponse)
 def categories_index(request: Request, db=Depends(get_db)):
-    counts = listing_category_counts(db)
-    crumbs = [("Lovceny", "/"), ("Kategorie", "/kategorie")]
-    return tpl.TemplateResponse(request, "categories.html", {"counts": counts, "crumbs": crumbs,
-                                                             "ld": [seo.breadcrumb_ld(crumbs)]})
+    return RedirectResponse("/telefony", status_code=301)
 
 
 @app.get("/kategorie/{slug}", response_class=HTMLResponse)
 @app.get("/kategorie/{slug}/{view}", response_class=HTMLResponse)
 def category(request: Request, slug: str, view: str = "", db=Depends(get_db),
              znacka: str = "", od: str = "", do: str = "", skladem: str = "", strana: str = ""):
+    if slug != "telefony":
+        return RedirectResponse("/telefony", status_code=301)
     c = _cat_or_404(slug)
     if view not in CAT_VIEWS:
         raise HTTPException(404)

@@ -196,16 +196,19 @@ def test_unreviewed_products_stay_on_their_page_but_not_in_listings(client_db):
     db.expire_all()
     assert named.needs_review is False and bare.needs_review and not ok.needs_review
     home = client.get("/").text
-    cat = client.get("/kategorie/chytre-hodinky").text
+    cat = client.get("/kategorie/chytre-hodinky", follow_redirects=False)
     sm = client.get("/sitemap.xml").text
     assert "Monitor bez kategorie" not in home
-    assert "xiaomi" in cat.lower()
+    assert "xiaomi watch" not in home.lower()
+    assert cat.status_code == 301 and cat.headers["location"] == "/telefony"
+    assert "xiaomi watch" not in client.get("/telefony").text.lower()
     assert f"/produkt/{bare.id}-" not in sm and f"/produkt/{ok.id}-" in sm
+    watch = client.get(f"/produkt/{named.id}", follow_redirects=False)
+    assert watch.status_code == 301 and watch.headers["location"] == "/"
     page = client.get(f"/produkt/{bare.id}")
     assert page.status_code == 200
     assert 'name="robots" content="noindex' in page.text
     assert "btn-buy" not in page.text
-    assert "xiaomi" in client.get("/kategorie/chytre-hodinky").text.lower()
 
 
 def test_repair_catalog_previews_unless_apply_and_admin_can_run_it(monkeypatch):

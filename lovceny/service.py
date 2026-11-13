@@ -655,9 +655,14 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
                 else:
                     created += 1
                     stats["created"] += 1
-            elif create_identified and res.action == "high" and res.slug in BY_SLUG:
-                # Nový produkt jen z jisté cesty kategorie a z GTIN nebo jednoho kódu.
-                # Shoda jen podle názvu se sem nedostane: ta už skončila jako hidden.
+            elif create_identified and res.action == "high" and res.slug == "telefony":
+                # Nový produkt jen u telefonů, s jistou kategorií a GTIN nebo jedním kódem.
+                # Kryt, sklo, kabel ani nabíječka se jako telefon nezaloží.
+                from .categories import is_accessory_text
+                from .phones import is_tablet_text
+                if is_accessory_text(it.name or "") or is_tablet_text(it.name or ""):
+                    stats["skipped_accessory"] += 1
+                    continue
                 part = None if gtin else single_part_code(it.name or "")
                 if not gtin and part is None:
                     stats["skipped"] += 1
@@ -715,6 +720,9 @@ def apply_feed(db: Session, shop_slug: str, items: list[FeedItem], create_missin
         elif o is not None and not fresh:
             stats["matched"] += 1
         if o is None:
+            continue
+        if create_identified and (o.product.category_slug or "") != "telefony":
+            stats["skipped_not_phone"] = stats.get("skipped_not_phone", 0) + 1
             continue
         if conflicts_with(o.product, it, clean):
             propose_detach(o, it, clean)

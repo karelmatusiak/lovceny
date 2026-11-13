@@ -362,7 +362,7 @@ def test_apply_feed_creates_phone_hides_case_and_page_links(client_db, monkeypat
     assert "ehub.cz/system/scripts/click.php" in hop.headers["location"]
     assert "a_bid=2bcd6f9d" in hop.headers["location"]
 
-    p = make([1990], name="TESLA Sound EB10", shop="tesla", category="sluchatka")
+    p = make([1990], name="TESLA Sound EB10", shop="tesla", category="telefony")
     o = p.offers[0]
     o.url = "https://eshop.tesla-electronics.eu/eb10-page"
     o.in_stock = True

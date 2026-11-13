@@ -85,13 +85,13 @@ def test_existing_gtin_attaches_instead_of_creating():
 
 def test_part_code_attaches_before_create():
     db, first = run([item(
-        name="Samsung QE55Q80C", url="https://www.alza.cz/qe55.htm", ean=None,
-        category="Televize", price=18000, image=None,
+        name="Apple iPhone 16 A3287", url="https://www.alza.cz/iphone-16.htm", ean=None,
+        category="Mobilní telefony", price=18990, image=None,
     )])
     assert first["created"] == 1
     stats = apply_feed(db, "datart", [item(
-        name="Samsung QE55Q80C", url="https://www.datart.cz/qe55.htm", ean=None,
-        category="Televize", price=17000, item_id="TV2",
+        name="Apple iPhone 16 A3287", url="https://www.datart.cz/iphone-16.htm", ean=None,
+        category="Mobilní telefony", price=18490, item_id="IP2",
     )], create_identified=True)
     assert stats["created"] == 0 and stats.get("second_offer") == 1
     assert db.query(Product).count() == 1

@@ -79,18 +79,18 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     client, db, make = client_db
     raw = "Originální Drátová Sluchátka Jbl Tune 500 Na Uši S Mikrofonem, Černá"
     xss = '<img src=x onerror="alert(1)"> Sony WH-CH720N'
-    jbl = make([1990], name=raw, shop="alza", category="sluchatka")
-    jbl.category = "Sluchátka"
-    nasty = make([890], name=xss, shop="alza", category="sluchatka")
-    nasty.category = "Sluchátka"
-    plain = make([500], name="JBL Tune 500 černá", shop="alza", category="sluchatka")
+    jbl = make([1990], name=raw, shop="alza", category="telefony")
+    jbl.category = "Mobilní telefony"
+    nasty = make([890], name=xss, shop="alza", category="telefony")
+    nasty.category = "Mobilní telefony"
+    plain = make([500], name="JBL Tune 500 černá", shop="alza", category="telefony")
     db.commit()
 
     assert jbl.name == raw
     assert jbl.slug == slugify(raw)
     assert search_db(db, "Originální Drátová")[0].id == jbl.id
 
-    html = client.get("/kategorie/sluchatka").text
+    html = client.get("/kategorie/telefony").text
     assert "JBL Tune 500, Černá" in html
     assert f'title="{raw}"' in html
     assert "Celý název:" in html and raw in html
@@ -105,7 +105,7 @@ def test_card_keeps_stored_identity_search_and_escapes(client_db):
     assert h1 == "JBL Tune 500, Černá"
     ld = product_ld(SimpleNamespace(
         id=jbl.id, slug=jbl.slug, name=jbl.name, display_name=short_name(jbl.name),
-        image_url=None, ean=None, category_slug="sluchatka", category="Sluchátka",
+        image_url=None, ean=None, category_slug="telefony", category="Mobilní telefony",
     ), [])
     assert ld["name"] == short_name(raw)
     assert ld["name"] != card_label(raw)
@@ -141,9 +141,9 @@ def test_detail_compare_and_schema_keep_identity(client_db):
     sony_raw = "Sony MDR-ZX310APR Sluchátka, červená"
     jbl_raw = "Originální Drátová Sluchátka Jbl Tune 500 Na Uši S Mikrofonem, Černá"
     generic_raw = "Bezdrátová Sluchátka Bluetooth 5.3 Anc Enc Dokanálový Mikrofon Černá"
-    sony = make([528], name=sony_raw, shop="alza", category="sluchatka")
-    jbl = make([1990], name=jbl_raw, shop="alza", category="sluchatka")
-    generic = make([707], name=generic_raw, shop="allegro", category="sluchatka")
+    sony = make([528], name=sony_raw, shop="alza", category="telefony")
+    jbl = make([1990], name=jbl_raw, shop="alza", category="telefony")
+    generic = make([707], name=generic_raw, shop="allegro", category="telefony")
     db.commit()
     assert sony.name == sony_raw and sony.slug == slugify(sony_raw)
     assert search_db(db, "Sluchátka, červená")[0].id == sony.id

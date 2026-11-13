@@ -12,39 +12,45 @@ def test_category_pages_unique_titles_and_meta(client_db):
     client, db, make = client_db
     make([12990, 12490], name="Apple iPhone 15 128GB SEO", category="telefony")
     titles, descs = set(), set()
+    for suffix in ("", "/nejlevnejsi", "/ve-sleve"):
+        r = client.get(f"/kategorie/telefony{suffix}")
+        assert r.status_code == 200, suffix
+        t = re.search(r"<title>(.*?)</title>", r.text).group(1)
+        d = re.search(r'<meta name="description" content="(.*?)">', r.text).group(1)
+        assert t not in titles and d not in descs
+        titles.add(t), descs.add(d)
+        assert f'<link rel="canonical" href="https://lovceny.cz/kategorie/telefony{suffix}">' in r.text
+        assert 'property="og:title"' in r.text and 'property="og:url"' in r.text
+        types = {o["@type"] for o in _ld(r.text)}
+        assert "BreadcrumbList" in types
     for c in CATEGORIES:
+        if c.slug == "telefony":
+            continue
         for suffix in ("", "/nejlevnejsi", "/ve-sleve"):
-            r = client.get(f"/kategorie/{c.slug}{suffix}")
-            assert r.status_code == 200, (c.slug, suffix)
-            t = re.search(r"<title>(.*?)</title>", r.text).group(1)
-            d = re.search(r'<meta name="description" content="(.*?)">', r.text).group(1)
-            assert t not in titles and d not in descs
-            titles.add(t), descs.add(d)
-            assert f'<link rel="canonical" href="https://lovceny.cz/kategorie/{c.slug}{suffix}">' in r.text
-            assert 'property="og:title"' in r.text and 'property="og:url"' in r.text
-            types = {o["@type"] for o in _ld(r.text)}
-            assert "BreadcrumbList" in types
+            gone = client.get(f"/kategorie/{c.slug}{suffix}", follow_redirects=False)
+            assert gone.status_code == 301 and gone.headers["location"] == "/telefony", (c.slug, suffix)
     html = client.get("/kategorie/telefony").text
     assert "Apple iPhone 15 128GB SEO" in html and "Mobilní telefony" in html
-    assert client.get("/kategorie/neexistuje").status_code == 404
+    missing = client.get("/kategorie/neexistuje", follow_redirects=False)
+    assert missing.status_code == 301 and missing.headers["location"] == "/telefony"
     assert client.get("/kategorie/telefony/blbost").status_code == 404
 
 
 def test_category_sorted_by_price_and_ve_sleve(client_db):
     client, db, make = client_db
-    make([30000] * 10, name="TV drahá SEO", category="televize")
-    make([9000] * 10, name="TV levná SEO", category="televize")
-    make([20000] * 60 + [15000] * 3, name="TV ve slevě SEO", category="televize")
-    html = client.get("/kategorie/televize/nejlevnejsi").text
+    make([30000] * 10, name="TV drahá SEO", category="telefony")
+    make([9000] * 10, name="TV levná SEO", category="telefony")
+    make([20000] * 60 + [15000] * 3, name="TV ve slevě SEO", category="telefony")
+    html = client.get("/kategorie/telefony/nejlevnejsi").text
     assert html.index("TV levná SEO") < html.index("TV ve slevě SEO") < html.index("TV drahá SEO")
-    sale = client.get("/kategorie/televize/ve-sleve").text
+    sale = client.get("/kategorie/telefony/ve-sleve").text
     assert "TV ve slevě SEO" in sale and "TV drahá SEO" not in sale
 
 
 def test_product_jsonld_and_canonical(client_db, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://lovceny.cz")
     client, db, make = client_db
-    p = make([1500, 1490], name="Sony WH-1000XM5 SEO", category="sluchatka")
+    p = make([1500, 1490], name="Sony WH-1000XM5 SEO", category="telefony")
     html = client.get(f"/produkt/{p.id}-{p.slug}?msg=x").text
     assert f'<link rel="canonical" href="https://lovceny.cz/produkt/{p.id}-{p.slug}">' in html
     lds = {o["@type"]: o for o in _ld(html)}
@@ -53,8 +59,8 @@ def test_product_jsonld_and_canonical(client_db, monkeypatch):
     assert prod["offers"]["@type"] == "AggregateOffer" and prod["offers"]["lowPrice"] == "1490.00"
     assert prod["offers"]["priceCurrency"] == "CZK" and prod["offers"]["offerCount"] == 1
     crumbs = lds["BreadcrumbList"]["itemListElement"]
-    assert [c["name"] for c in crumbs] == ["Lovceny", "Sluchátka", "Sony WH-1000XM5 SEO"]
-    assert crumbs[1]["item"] == "https://lovceny.cz/kategorie/sluchatka"
+    assert [c["name"] for c in crumbs] == ["Lovceny", "Mobilní telefony", "Sony WH-1000XM5 SEO"]
+    assert crumbs[1]["item"] == "https://lovceny.cz/kategorie/telefony"
     assert 'property="og:type" content="product"' in html
     assert re.search(r"<title>Sony WH-1000XM5 SEO – cena od 1\xa0490\xa0Kč", html)
 

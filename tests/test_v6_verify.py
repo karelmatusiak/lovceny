@@ -230,11 +230,14 @@ def test_home_entry_point():
     from fastapi.testclient import TestClient
     from lovceny.main import app
     html = TestClient(app).get("/").text
-    assert "Ověř slevu z našeho katalogu" in html and html.count('action="/over-slevu"') == 1
+    assert "Ověř slevu z našeho katalogu" not in html
+    assert html.count('action="/over-slevu"') == 0
     assert "jakéhokoli" not in html
-    assert 'href="/over-slevu"' in html and "nebo ověř slevu z odkazu" in html
-    assert 'href="/#hledat"' in html and "Prověřit cenu" not in html and ">Hledat<" in html
-    assert 'class="btn btn-verify" href="/over-slevu"' not in html  # removed from nav CTA
+    assert 'href="/over-slevu"' in html
+    assert "nebo ověř slevu z odkazu" not in html
+    assert "Prověřit cenu" not in html and ">Hledat<" in html
+    assert "Nejoblíbenější telefony" in html
+    assert 'class="btn btn-verify" href="/over-slevu"' not in html
 
 
 def test_pretty_name():
