@@ -127,7 +127,11 @@ def test_priced_cards_and_thin_history_helpers():
 def test_home_hero_clarity():
     init_db()
     html = TestClient(app).get("/").text
-    assert "Hlídáme ceny" in html
+    assert "Ulovte telefon za férovou cenu." in html
+    assert "<title>Ulovte telefon za férovou cenu. | Lovceny</title>" in html
+    assert 'property="og:title" content="Ulovte telefon za férovou cenu. | Lovceny"' in html
+    assert 'name="description" content="Ulovte telefon za férovou cenu.' in html
+    assert 'property="og:description" content="Ulovte telefon za férovou cenu.' in html
     assert "Jak to funguje" not in html
     assert "Nejvíc nabízené modely" in html
     assert "Nejnižší cena z českých e-shopů" in html

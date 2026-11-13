@@ -8,7 +8,7 @@ def test_homepage_uses_line_icons_and_places_labels(client_db):
     assert "🛍️" not in html and "⚖️" not in html and "📲" not in html
     assert 'class="ico"' in html
     title = html.split('class="logo-slogan"', 1)[1].split("</p>", 1)[0]
-    assert "Hlídáme ceny." in title and "Řekneme na rovinu." in title
+    assert "Ulovte telefon za férovou cenu." in title
     assert "<i>Nově</i>" not in html
     assert "Specialista na mobilní telefony" in html
     assert "Nejvíc nabízené modely" in html
