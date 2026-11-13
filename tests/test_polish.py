@@ -7,8 +7,10 @@ def test_homepage_uses_line_icons_and_places_labels(client_db):
     html = client.get("/").text
     assert "🛍️" not in html and "⚖️" not in html and "📲" not in html
     assert 'class="ico"' in html
-    title = html.split('class="hero-title"', 1)[1].split("</div>", 1)[0]
-    assert "<i>Nově</i>" in title
+    title = html.split('class="logo-slogan"', 1)[1].split("</p>", 1)[0]
+    assert "Hlídáme ceny." in title and "Řekneme na rovinu." in title
+    assert "<i>Nově</i>" not in html
+    assert "Poctivý hlídač cen elektroniky, bez placených pozic" in html
     promise = html.split('id="nezavislost"', 1)[1].split('id="vydelavame"', 1)[0]
     assert 'aria-label="Možné verdikty"' in promise
     css = open("lovceny/static/app.css", encoding="utf-8").read().replace(" ", "")

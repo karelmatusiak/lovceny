@@ -16,7 +16,9 @@ def test_nav_simplified_links():
     assert 'href="/o-nas"' in nav
     assert 'href="/kdy-nakupovat"' not in nav  # přesunuto do patičky
     assert 'href="/kdy-nakupovat"' in html  # zůstává ve footeru / obsahu
-    assert ">Prověřit cenu<" in html or ">Prověřit cenu</a>" in html
+    assert "Prověřit cenu" not in html
+    assert 'id="nav-find"' in html
+    assert ">Hledat<" in html
     assert 'class="btn btn-verify"' not in html
     assert 'class="nav-verify"' not in html
     assert html.count('href="/over-slevu"') >= 2
