@@ -1,0 +1,54 @@
+name: Přenos z Neonu
+# Jednou denně zkusí jeden přenos Neon → SQLite → R2. Po úspěchu se vypne.
+# Kvóta se v jednom běhu nezkouší podruhé. Web se odsud nenasazuje.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 4 * * *"
+concurrency:
+  group: fetch-prices
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: write
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      status: ${{ steps.migrate.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Jeden přenos
+        id: migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set +e
+          python -m lovceny.migrate_neon --out db/lovceny.db | tee migrate.log
+          code=${PIPESTATUS[0]}
+          set -e
+          status=$(grep -m1 '^STATUS ' migrate.log | awk '{print $2}')
+          echo "status=${status:-error}" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "75" ]; then
+            echo "Neon je po kvótě. Další pokus je až zítřejší plán."
+            exit 0
+          fi
+          if [ "$code" = "78" ]; then
+            echo "R2 není nastavené, Neon se nevolal."
+            exit 0
+          fi
+          exit "$code"
+      - name: Vypnout plán po úspěchu
+        if: steps.migrate.outputs.status == 'ok' || steps.migrate.outputs.status == 'already-done'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable migrate-neon.yml

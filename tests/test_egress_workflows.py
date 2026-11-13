@@ -15,15 +15,23 @@ def test_fetch_has_one_clock_and_no_chained_static_build():
     assert "fetch-prices" in FETCH
 
 
-def test_static_build_reads_the_snapshot_and_never_the_prod_database():
+def test_static_build_reads_r2_and_never_the_prod_database():
     assert "secrets.DATABASE_URL" not in STATIC
+    assert "secrets.DATABASE_URL" not in FETCH
+    assert "sqlite:///db/lovceny.db" in FETCH
+    assert "lovceny.r2store publish" in FETCH
+    assert "group: fetch-prices" in FETCH
     assert "sqlite:///snapshot/lovceny.sqlite" in STATIC
-    assert "lovceny-snapshot" in STATIC
+    assert "lovceny.r2store download" in STATIC
     assert "Neon se nevolá" in STATIC
-    assert 'cron: "30 6 * * *"' in STATIC
+    assert "schedule:" not in STATIC
     snapshot = (ROOT / ".github/workflows/snapshot.yml").read_text(encoding="utf-8")
+    migrate = (ROOT / ".github/workflows/migrate-neon.yml").read_text(encoding="utf-8")
     assert "pull_request" not in snapshot
-    assert 'cron: "15 6 * * *"' in snapshot
-    assert "name: lovceny-snapshot" in snapshot
-    assert "secrets.DATABASE_URL" in snapshot
-    assert "github.ref == 'refs/heads/main'" in snapshot
+    assert "schedule:" not in snapshot
+    assert "secrets.DATABASE_URL" not in snapshot
+    assert "Neon se nevolá" in snapshot
+    assert "secrets.DATABASE_URL" in migrate
+    assert 'cron: "0 4 * * *"' in migrate
+    assert "workflow disable" in migrate
+    assert "pages deploy" not in migrate

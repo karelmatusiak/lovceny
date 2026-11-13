@@ -2,9 +2,7 @@ name: Statický web
 on:
   pull_request:
   workflow_dispatch: {}
-  # Jednou denně po ranním stažení cen (cron-job.org v 6:00 Praha).
-  schedule:
-    - cron: "30 6 * * *"
+  # Denní nasazení je ve Stažení cen, hned po nahrání SQLite do R2.
   # Stejný běh jako ruční Run workflow (workflow 414497804).
   repository_dispatch:
     types: [static-site]
@@ -15,8 +13,8 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: static-site-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: fetch-prices
+  cancel-in-progress: false
 jobs:
   build:
     # Fork PR nedostane DATABASE_URL. Nasazení je jen z main, ne z pull_request.
@@ -45,21 +43,26 @@ jobs:
               echo "${name}=${value}" >> "$GITHUB_ENV"
             fi
           done
-      - name: Stáhnout snapshot katalogu
+      - name: Stáhnout databázi z R2
         id: snapshot
         env:
-          GH_TOKEN: ${{ github.token }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          # Web se staví jen ze SQLite artefaktu. Chybí-li, běh skončí bez Neonu a bez nasazení.
+          # Web se staví jen ze SQLite v R2. Chybí-li, běh skončí bez Neonu a bez nasazení.
           set +e
-          gh run download --repo "${{ github.repository }}" --name lovceny-snapshot --dir snapshot \
-            $(gh run list --repo "${{ github.repository }}" --workflow snapshot.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          python -m lovceny.r2store download --out snapshot/lovceny.sqlite --counts snapshot/counts.txt
+          code=$?
           set -e
-          if [ -f snapshot/lovceny.sqlite ]; then
+          if [ "$code" = "0" ]; then
             echo "have=true" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$code" = "2" ] || [ "$code" = "3" ]; then
             echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "Snapshot lovceny-snapshot na main není, generování přeskakuji. Neon se nevolá."
+            echo "Databáze v R2 není, generování přeskakuji. Neon se nevolá."
+          else
+            exit "$code"
           fi
       - name: Vygenerovat web ze snapshotu
         if: steps.snapshot.outputs.have == 'true'

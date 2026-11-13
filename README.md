@@ -122,12 +122,12 @@ Nové (volitelné) proměnné prostředí v7 – nic není povinné, výchozí h
 | `BF_DIGEST_DAYS` | dny Black Friday push přehledu, čárkami: `bf`, `cm` nebo datum (výchozí `bf,cm`) |
 | `BF_DIGEST_HOUR` | od kolika hodin (Praha) se přehled smí poslat (výchozí `7`) |
 
-Workflow se neměnily: hlídání rozpočtu i Black Friday přehled běží v existujícím `fetch.yml` (používá už nastavené `DATABASE_URL`, `VAPID_*`, `EMAIL_BACKEND`, `PUBLIC_URL`).
+Hlídání rozpočtu i Black Friday přehled běží v existujícím `fetch.yml` nad SQLite z R2 (`VAPID_*`, `EMAIL_BACKEND`, `PUBLIC_URL`).
 
 ## Lokální spuštění
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-export DATABASE_URL=postgresql://lovceny:lovceny@localhost/lovceny   # bez proměnné se použije SQLite ./lovceny.db
+# bez DATABASE_URL se použije SQLite ./lovceny.db
 .venv/bin/python seed.py               # produkty + demo historie
 .venv/bin/python fetch_prices.py       # aktualizace cen
 .venv/bin/uvicorn lovceny.main:app --reload   # http://localhost:8000
@@ -141,9 +141,10 @@ Tabulky se vytvoří automaticky (`create_all`). Pro další vývoj doporučujem
 
 Veřejný web je statický export. Návštěvník se k databázi nedostane.
 
-1. **Statický web.** Workflow **Statický web** (`.github/workflows/static.yml`) z Neon databáze vygeneruje HTML (`build_static.py`) a na větvi `main` ho nasadí na Cloudflare Pages, projekt **lovceny** (`wrangler pages deploy --project-name=lovceny --branch=main`). Spuštění: push na `main` ho nespouští sám; produkci startuje `repository_dispatch` s `event_type` `static-site`, nebo ručně *Run workflow*.
+1. **Statický web.** Workflow **Stažení cen** stáhne `lovceny.db` z R2, zapíše nové ceny, nahraje soubor zpátky a z něj vygeneruje HTML (`build_static.py`). Na větvi `main` ho nasadí na Cloudflare Pages, projekt **lovceny** (`wrangler pages deploy --project-name=lovceny --branch=main`). Ruční přegenerování bez stažení cen je workflow **Statický web**. Push na `main` ho nespouští.
 2. **Pages Functions.** Build zapíše `dist/functions`. `/go/*` (`lovceny/go.py`) přesměruje na obchod. Odkazy na stránkách mají `rel="nofollow sponsored"`. `/produkt/*` (`lovceny/staticsite.py`) vyřeší 301, které se nevejdou do souboru `_redirects`.
-3. **Neon.** Secret `DATABASE_URL` je Postgres na Neon. Čte ho generování webu, stahování cen i naplnění katalogu.
+3. **R2.** Kanónická databáze je jeden SQLite soubor `lovceny.db` v bucketu `lovceny-data`. Zálohy `backups/lovceny-YYYY-MM-DD.db` se drží 14 dní. Nahrání se přeskočí, když u tabulky s aspoň 50 řádky klesne počet pod 80 %. Secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+4. **Přenos z Neonu.** Workflow **Přenos z Neonu** jednou denně (4:00 UTC) zkusí jeden průchod: každá tabulka jedním `SELECT *`, ověření počtu v SQLite, nahrání do R2. Když Neon odmítne kvótu, běh se neopakuje a plán zůstane na další den. Po úspěchu se workflow samo vypne a další den už Neon neotevře. `DATABASE_URL` potřebuje jen tenhle běh.
 4. **Ceny.** Workflow **Stažení cen** (`.github/workflows/fetch.yml`) stahuje feedy. Soukromé adresy jsou v jednom secretu `FEED_URLS` (JSON objekt, klíče jako `ISTYLE_FEED_URL`). Vlastní proměnná obchodu má přednost. Prázdná nebo neplatná hodnota obchod přeskočí a běh nespadne. Primární budík je [cron-job.org](https://cron-job.org) třikrát denně v **6:00, 12:00 a 18:00** (Europe/Prague, cron `0 6,12,18 * * *`), metoda POST:
 
 ```bash
@@ -157,7 +158,7 @@ curl -sS -X POST \
 
 Token je **fine-grained personal access token** jen pro repozitář `karelmatusiak/lovceny` s oprávněním **Contents: Read and write** (`contents:write`). To stačí na `repository_dispatch`. GitHub cron `17 5,11,17 * * *` UTC je jen záloha. Tlačítko *Run workflow* stáhne ceny vždy. Když cron i externí budík vyjdou naráz, sdílejí concurrency group `fetch-prices` a druhý se po úspěchu mladším než 3 hodiny přeskočí.
 
-Secrets pro web a fetch: `DATABASE_URL`, `FEED_URLS`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Affiliate (`DOGNET_CHID`, `EHUB_AID`, …) a Web Push (`VAPID_*`) podle potřeby. `PUBLIC_URL` ve statickém buildu je `https://lovceny.cz`.
+Secrets pro web a fetch: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `FEED_URLS`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. `DATABASE_URL` je jen pro jednorázový přenos z Neonu. Affiliate (`DOGNET_CHID`, `EHUB_AID`, …) a Web Push (`VAPID_*`) podle potřeby. `PUBLIC_URL` ve statickém buildu je `https://lovceny.cz`.
 
 E-mailový kód (Brevo, `lovceny/notify.py`, šablony v `templates/email/`) zůstává. Používají ho testy a hlídání ceny, když je `EMAIL_BACKEND=brevo` a `BREVO_API_KEY`. Veřejný web ho nepotřebuje. Bez klíče se e-maily jen logují.
 

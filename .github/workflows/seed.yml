@@ -21,10 +21,29 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt
+      - name: Stáhnout databázi z R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store download --out db/lovceny.db --counts db/counts-before.txt
       - name: Seed
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: sqlite:///db/lovceny.db
           ARGS: ${{ github.event.client_payload.args || inputs.args || '--no-demo' }}
           # --from-feeds čte FEED_URLS. Prázdný nebo rozbitý JSON dané obchody přeskočí.
           FEED_URLS: ${{ secrets.FEED_URLS }}
         run: python seed.py $ARGS
+      - name: Nahrát databázi do R2
+        env:
+          ARGS: ${{ github.event.client_payload.args || inputs.args || '--no-demo' }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          case " $ARGS " in
+            *" --dry-run "*) echo "dry-run, databázi nenahrávám"; exit 0 ;;
+          esac
+          python -m lovceny.r2store publish --path db/lovceny.db --before db/counts-before.txt

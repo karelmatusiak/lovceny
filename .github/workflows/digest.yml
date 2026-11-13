@@ -9,21 +9,28 @@ on:
         description: "Poslat hned (bez kontroly času)"
         type: boolean
         default: false
-concurrency: { group: weekly-digest, cancel-in-progress: false }
+concurrency: { group: fetch-prices, cancel-in-progress: false }
 permissions:
   contents: read
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt
+      - name: Stáhnout databázi z R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store download --out db/lovceny.db --counts db/counts-before.txt
       - name: Přehled + upozornění
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: sqlite:///db/lovceny.db
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:ahoj@lovceny.cz' }}
@@ -34,3 +41,10 @@ jobs:
           EMAIL_FROM_NAME: Lovceny
           PUBLIC_URL: ${{ vars.PUBLIC_URL || 'https://lovceny.cz' }}
         run: python weekly_digest.py ${{ inputs.force && '--force' || '' }}
+      - name: Nahrát databázi do R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store publish --path db/lovceny.db --before db/counts-before.txt
