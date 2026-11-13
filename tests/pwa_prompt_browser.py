@@ -389,7 +389,7 @@ async def run(chrome_port):
         await goto(BASE + "/", 1280, 900)
         shown = await drive_auto()
         assert shown["hidden"] is False, shown
-        await goto(BASE + "/kategorie", 1280, 900)
+        await goto(BASE + "/telefony", 1280, 900)
         shown = await drive_auto()
         assert shown["hidden"] is True, shown
 
@@ -440,7 +440,7 @@ async def run(chrome_port):
         shots = screenshot_dir()
         for width, name in ((1280, "pwa-fixture-1280.png"), (390, "pwa-fixture-390.png"), (360, "pwa-fixture-360.png")):
             await evaluate("sessionStorage.removeItem('lovceny-pwa-prompted')")
-            await goto(BASE + "/kategorie/sluchatka", width, 1600 if width > 500 else 2200)
+            await goto(BASE + "/kategorie/telefony", width, 1600 if width > 500 else 2200)
             shown = await evaluate(f"""(() => {{
               sessionStorage.removeItem('lovceny-pwa-prompted');
               lovcenyPwa.onBeforeInstallPrompt({FAKE});
