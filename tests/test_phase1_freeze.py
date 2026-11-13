@@ -40,7 +40,9 @@ def test_mironet_captcha_offer_is_hidden_history_stays(client_db):
     assert "20\xa0000" in html.split('class="price">', 1)[1].split("<", 1)[0]
     assert "Do obchodu" in html.split("btn-primary btn-buy", 1)[1].split("</a>", 1)[0]
     assert "Koupit za 2\xa0222" not in html
-    assert "1\xa0111" not in client.get("/").text
+    home = client.get("/").text
+    assert "pixel-captcha-skryta" not in home
+    assert "Nejvíc nabízené modely" in home
     db.expire_all()
     assert db.get(Offer, hidden.id).points[0].price == 1111
 

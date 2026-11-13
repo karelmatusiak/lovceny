@@ -73,10 +73,10 @@ def test_compare_tray_reserves_room_above_the_bar():
     init_db()
     db = SessionLocal()
     p = _product(db, "Sony MDR-ZX310APR Sluchátka, červená", 528)
-    p.category_slug = "sluchatka"
+    p.category_slug = "telefony"
     db.commit()
     c = TestClient(app)
-    page = c.get("/kategorie/sluchatka?znacka=Sony&od=1&do=1&skladem=1").text
+    page = c.get("/kategorie/telefony?znacka=Sony&od=1&do=1&skladem=1").text
     assert "Žádný produkt neodpovídá filtrům" in page
     assert 'id="hlidat-rozpocet"' not in page and 'id="bw-max"' not in page
     assert 'id="cmp-bar" class="cmp-bar" hidden' in page

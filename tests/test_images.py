@@ -148,7 +148,7 @@ def test_allegro_get_downloads_sized_rendition_not_original():
 
 def test_allegro_templates_skip_wsrv_and_local_proxy(client_db):
     client, db, make = client_db
-    p = make([6990], name="Sluchátka Allegro XM5", category="sluchatka")
+    p = make([6990], name="Sluchátka Allegro XM5", category="telefony")
     p.image_url = ALLEGRO_ORIG
     db.commit()
     html = client.get(f"/produkt/{p.id}").text
@@ -159,7 +159,7 @@ def test_allegro_templates_skip_wsrv_and_local_proxy(client_db):
     assert '"/img/' not in html
     assert "data-fallback=" not in html  # onerror nespouští lokální /img
     assert "onerror=" in html
-    cat = client.get("/kategorie/sluchatka").text
+    cat = client.get("/kategorie/telefony").text
     assert ALLEGRO_S256 in cat
     assert "/original/" not in cat
     assert "wsrv.nl" not in cat
@@ -512,7 +512,7 @@ def test_fast_180px_card_src_is_not_640_and_stays_on_local_proxy():
     from pathlib import Path
 
     hero = Path(__file__).resolve().parents[1].joinpath("lovceny/templates/index.html").read_text()
-    assert "shop_img(h.product.image_url, 180" in hero
+    assert "shop_img(model.image, 160" in hero
 
     assert images.wsrv_blocked(FAST_IPHONE)
     card = images.srcset(FAST_IPHONE, 180)

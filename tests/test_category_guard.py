@@ -46,6 +46,8 @@ def test_vacuum_offer_on_a_watch_is_not_a_discount(client_db):
     clear_cache()
     picks = {h.product.id: h for h in hero_showcase(db, limit=12)}
     assert watch.id not in picks
+    watch.category_slug = "telefony"
+    db.commit()
     page = client.get(f"/produkt/{watch.id}")
     shown = page.text.split('class="price">', 1)[1].split("<", 1)[0]
     assert "1\u00a0523" not in shown

@@ -14,7 +14,7 @@ def _mk(db, name, history, current, original=None, demo=False):
     old = db.scalar(select(Product).where(Product.name == name))
     if old:
         return old
-    p = Product(name=name, slug=name.lower().replace(" ", "-"))
+    p = Product(name=name, slug=name.lower().replace(" ", "-"), category_slug="telefony", category="Mobilní telefony")
     o = Offer(product=p, shop="mironet", url=f"https://www.mironet.cz/{p.slug}", price=current,
               original_price=original, status="ok")
     db.add(p)
@@ -31,11 +31,11 @@ def _mk(db, name, history, current, original=None, demo=False):
 def _seed():
     init_db()
     db = SessionLocal()
-    big = _mk(db, "Slevy Lednice Velka", lambda d: 20000, 15000)     # −25 %, −5000 Kč
-    small = _mk(db, "Slevy Mixer Maly", lambda d: 1000, 800)          # −20 %, −200 Kč
-    fake = _mk(db, "Slevy TV Levneji", lambda d: 1000, 990, original=1500)
-    demo = _mk(db, "Slevy Demo Pracka", lambda d: 50000, 10000, demo=True)
-    wait = _mk(db, "Slevy Pockej Vysavac", lambda d: 800, 1000)
+    big = _mk(db, "Samsung Galaxy A55 Sleva Velka", lambda d: 20000, 15000)     # −25 %, −5000 Kč
+    small = _mk(db, "Samsung Galaxy A35 Sleva Mala", lambda d: 1000, 800)          # −20 %, −200 Kč
+    fake = _mk(db, "Apple iPhone 16 Sleva Levneji", lambda d: 1000, 990, original=1500)
+    demo = _mk(db, "Samsung Galaxy A15 Sleva Demo", lambda d: 50000, 10000, demo=True)
+    wait = _mk(db, "Xiaomi Redmi Note Sleva Pockej", lambda d: 800, 1000)
     db.close()
     return big, small, fake, demo, wait
 
@@ -46,18 +46,18 @@ def test_ranking_sorted_by_real_savings_and_excludes_demo(monkeypatch):
     with SessionLocal() as db:
         r = real_deals(db)
     names = [x.product.name for x in r["buys"]]
-    assert names.index("Slevy Lednice Velka") < names.index("Slevy Mixer Maly")
-    assert "Slevy Demo Pracka" not in names and "Slevy Pockej Vysavac" not in names
-    top = next(x for x in r["buys"] if x.product.name == "Slevy Lednice Velka")
+    assert names.index("Samsung Galaxy A55 Sleva Velka") < names.index("Samsung Galaxy A35 Sleva Mala")
+    assert "Samsung Galaxy A15 Sleva Demo" not in names and "Xiaomi Redmi Note Sleva Pockej" not in names
+    top = next(x for x in r["buys"] if x.product.name == "Samsung Galaxy A55 Sleva Velka")
     assert round(top.savings_czk) == 5000 and round(top.savings_pct) == 25
-    assert "Slevy TV Levneji" in [x.product.name for x in r["fakes"]]
+    assert "Apple iPhone 16 Sleva Levneji" in [x.product.name for x in r["fakes"]]
 
 
 def test_demo_included_only_with_flag_and_labelled(monkeypatch):
     _seed()
     monkeypatch.setenv("LOVCENY_INCLUDE_DEMO", "1")
     h = TestClient(app).get("/slevy").text
-    assert "Slevy Demo Pracka" in h and "DEMO" in h and "započítává" in h
+    assert "Sleva Demo" in h and "DEMO" in h and "započítává" in h
 
 
 def test_slevy_page_and_home_teaser():
@@ -68,7 +68,9 @@ def test_slevy_page_and_home_teaser():
     assert "Za 30 dní bylo levněji" in h and "§ 12a" in h and "Nejnižší cena za posledních 30 dní byla" in h and "falešn" not in h.lower()
     assert "−25&nbsp;%" in h and "ušetříš 5\xa0000\xa0Kč" in h
     home = c.get("/").text
-    assert "Slevy dne" in home and 'href="/slevy"' in home and "Jak vyděláváme" in home
+    assert "Slevy dne" not in home
+    assert 'href="/slevy"' in home and "Jak vyděláváme" in home
+    assert "Nejvíc nabízené modely" in home
 
 
 def test_slevy_empty_state(monkeypatch):

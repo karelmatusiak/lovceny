@@ -33,7 +33,7 @@ def test_title_brand_matches_card_rules_and_does_not_guess():
 def test_product_jsonld_brand_gtin_and_aggregate(client_db, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://lovceny.cz")
     client, db, make = client_db
-    p = make([1500, 1490], name="Sony WH-1000XM5 SEO", category="sluchatka")
+    p = make([1500, 1490], name="Sony WH-1000XM5 SEO", category="telefony")
     p.ean = "4548736132605"
     p.image_url = "https://www.mironet.cz/Foto/wh1000.jpg"
     p.offers[0].in_stock = True
@@ -71,7 +71,7 @@ def test_product_jsonld_brand_gtin_and_aggregate(client_db, monkeypatch):
     assert validate_product_ld(forced) == []
 
     # neznámá značka a neplatný kód se do JSON-LD nedávají
-    unknown = make([990], name="pákový tlakový kávovar Srebny 20 Bar", category="kavovary")
+    unknown = make([990], name="pákový tlakový kávovar Srebny 20 Bar", category="telefony")
     unknown.ean = "abc-12"
     unknown.image_url = "https://www.example.com/kavovar.jpg"
     db.commit()

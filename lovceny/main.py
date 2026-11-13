@@ -487,12 +487,19 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
     ranges = build_chart(points, verdict=verdict, live_price=current)
     from .phones import anchor_product, phone_models, storage_deals
     deals = storage_deals(model)
-    peers = [item for item in phone_models(db) if item.slug != model.slug and item.lowest is not None]
+    peers = []
+    for item in phone_models(db):
+        if item.slug == model.slug or item.lowest is None:
+            continue
+        product = anchor_product(item)
+        if product is None or product_summary(product)[0] is None:
+            continue
+        peers.append(item)
     peers.sort(key=lambda item: abs(item.lowest - (model.lowest or item.lowest)))
     compare_products = []
     for item in [model, *peers[:2]]:
         product = anchor_product(item)
-        if product is not None:
+        if product is not None and product_summary(product)[0] is not None:
             compare_products.append(product)
     compare_href = ""
     if len(compare_products) >= 2:

@@ -101,8 +101,8 @@ def test_pages_manage_edit_delete(client_db, vapid):
     assert "privatekey" not in h
     pv = client.get("/hlidat-rozpocet?kategorie=chytre-hodinky&hledat=spravahodinky&max=1000").text
     assert "Teď v rozpočtu" in pv and "Hodinky spravahodinky" in pv and 'content="noindex' in pv
-    cat = client.get("/kategorie/chytre-hodinky").text
-    assert 'id="hlidat-rozpocet"' in cat and 'name="category" value="chytre-hodinky"' in cat
+    cat = client.get("/kategorie/telefony").text
+    assert 'id="hlidat-rozpocet"' in cat and 'name="category" value="telefony"' in cat
     tok = client.post("/api/rozpocet", json={"category": "chytre-hodinky", "keyword": "spravahodinky", "max_price": 1000,
                                              "subscription": {**SUB, "endpoint": SUB["endpoint"] + "-sprava"}}).json()["token"]
     m = client.get(f"/hlidat-rozpocet/{tok}").text

@@ -116,7 +116,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
         category_slug="telefony", category="Mobilní telefony",
     )
     oos = Product(
-        name="Samsung Galaxy A15 není skladem", slug="samsung-galaxy-a15-oos",
+        name="Samsung Galaxy A15 vyprodany", slug="samsung-galaxy-a15-oos",
         category_slug="telefony", category="Mobilní telefony",
     )
     stale = Product(
@@ -171,7 +171,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     dirty_name = '55\\" LED Samsung OM55N-S FHD 4000cd/mi SO 24/7'
     dirty = Product(
         name=dirty_name, slug=slugify(dirty_name),
-        category_slug="televize", category="Televize",
+        category_slug="telefony", category="Mobilní telefony",
     )
     db.add_all([
         good, thin, oos, stale, accessory, laptop, gpu, perfume, hidden, review, merged, dirty,
@@ -260,9 +260,9 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "– strana 2" in page2.split("</title>", 1)[0]
     assert 'rel="canonical" href="https://lovceny.cz/kategorie/telefony/strana/2"' in page2
     assert "– strana" not in phones.split("</title>", 1)[0]
-    notebooks = (out / "kategorie" / "notebooky.html").read_text()
-    assert "A16" not in notebooks and "Gigabyte" not in notebooks and "RTX 4070" not in notebooks
+    assert not (out / "kategorie" / "notebooky.html").exists()
     assert not (out / "produkt" / f"{laptop.id}-{laptop.slug}.html").exists()
+    assert not (out / "produkt" / f"{accessory.id}-{accessory.slug}.html").exists()
 
     index = json.loads((out / "data" / "katalog.json").read_text())
     names = {row["n"] for row in index}
@@ -273,8 +273,7 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
     assert "Nejistý iPhone 16e" not in names
     assert "Skrytý iPhone 16" not in names
     from lovceny.names import card_label
-    kryt = next(row for row in index if row["n"] == card_label(accessory_name))
-    assert kryt["a"] == 1 and kryt["h"].startswith("/go/") and "nofollow sponsored" in kryt["r"]
+    assert card_label(accessory_name) not in names
     urls = json.loads((out / "data" / "url.json").read_text())
     assert urls[norm_offer_url("https://www.alza.cz/samsung-galaxy-a55")] == f"/produkt/{good.id}-{good.slug}"
 
@@ -336,8 +335,11 @@ def test_build_matches_live_urls_and_hides_unsafe_offers(client_db, tmp_path, mo
 
     assert f"/produkt/{merged.id}-{merged.slug} /produkt/{good.id}-{good.slug} 301" in redirects
     for gone in (hidden, used, used_blue):
-        assert f"/produkt/{gone.id}-{gone.slug} /kategorie/telefony 301" in redirects
-        assert f"/produkt/{gone.id} /kategorie/telefony 301" in redirects
+        assert f"/produkt/{gone.id}-{gone.slug} /telefony 301" in redirects
+        assert f"/produkt/{gone.id} /telefony 301" in redirects
+    assert "/kategorie/notebooky /telefony 301" in redirects
+    away = live.get(f"/produkt/{accessory.id}", follow_redirects=False)
+    assert away.status_code == 301 and away.headers["location"] == "/telefony"
     assert f"/produkt/{no_category.id}-{no_category.slug} / 301" in redirects
     assert f"/produkt/{no_category.id} / 301" in redirects
     assert not any(

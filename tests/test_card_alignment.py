@@ -28,19 +28,19 @@ def test_shared_card_rows_keep_cta_and_full_title(client_db):
         "Sony bezdrátová sluchátka WH-1000XM5 s velmi dlouhým českým názvem "
         "pro kontrolu zalomení řádku a zarovnání ceny i tlačítka"
     )
-    buy = make([8990] * 12, name=long_name, shop="mironet", category="sluchatka")
-    buy.category = "Sluchátka"
-    thin = make([534], name="JBL Tune 500 černá", shop="xm", category="sluchatka")
-    thin.category = "Sluchátka"
+    buy = make([8990] * 12, name=long_name, shop="mironet", category="telefony")
+    buy.category = "Mobilní telefony"
+    thin = make([534], name="JBL Tune 500 černá", shop="xm", category="telefony")
+    thin.category = "Mobilní telefony"
     db.add(Offer(
         product=thin, shop="allegro", url="https://allegro.cz/nabidka/jbl-tune-500-align",
         price=707, status="ok", in_stock=True,
     ))
-    oos = make([12000], name="Bose QuietComfort Ultra OOS", shop="alza", category="sluchatka")
+    oos = make([12000], name="Bose QuietComfort Ultra OOS", shop="alza", category="telefony")
     oos.offers[0].in_stock = False
     db.commit()
 
-    html = c.get("/kategorie/sluchatka").text
+    html = c.get("/kategorie/telefony").text
     buy_card = _card(html, buy.id)
     thin_card = _card(html, thin.id)
     oos_card = _card(html, oos.id)

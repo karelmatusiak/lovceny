@@ -139,7 +139,7 @@ def test_merge_duplicates_keeps_survivor_url_and_history():
     c = TestClient(app)
     r = c.get(f"/produkt/{gone.id}-{gone.slug}", follow_redirects=False)
     assert r.status_code == 301
-    assert r.headers["location"] == f"/produkt/{live.id}-{live.slug}"
+    assert r.headers["location"] == "/"
     # podruhé nic
     assert repair_catalog(db, dry_run=False)["products_merged"] == 0
     # jiné příkony se nesloučí
@@ -180,10 +180,9 @@ def test_category_hygiene_controllers_and_surface():
     assert not is_accessory_text(ps5.name)
     assert classify(surface.name) == "notebooky"
     assert same_model(ps5.name, "konzole", ps5b.name, "konzole")
-    # Ovladač je příslušenství, do výpisu nepatří. Surface má slug konzole, stránka produktu
-    # ho tak ukáže, takže ve výpisu konzolí je – dokud úklid slug neopraví.
-    html = TestClient(app).get("/kategorie/konzole").text
-    assert "DualSense" not in html and "PlayStation 5" in html and "Surface" in html
+    # Veřejný web už kategorie konzolí nemá. Ovladač, Surface i PlayStation zůstávají v datech.
+    konzole = TestClient(app).get("/kategorie/konzole", follow_redirects=False)
+    assert konzole.status_code == 301 and konzole.headers["location"] == "/telefony"
     st = repair_catalog(db, dry_run=False)
     assert st["accessories_cleared"] >= 2 and st["recategorized"] >= 1 and st["products_merged"] == 1
     approve_pending(db)
@@ -194,8 +193,8 @@ def test_category_hygiene_controllers_and_surface():
     assert len(survivors) == 1
     loser = db.get(Product, ps5b.id if survivors[0].id == ps5.id else ps5.id)
     assert loser.redirect_product_id == survivors[0].id
-    nb = TestClient(app).get("/kategorie/notebooky").text
-    assert "Surface Pro" in nb
+    nb = TestClient(app).get("/kategorie/notebooky", follow_redirects=False)
+    assert nb.status_code == 301 and nb.headers["location"] == "/telefony"
     db.close()
 
 
@@ -296,10 +295,16 @@ def test_listing_keeps_products_classify_mislabels():
     db.commit()
     phones = client.get("/kategorie/telefony").text
     assert "EDGE 70" in phones and "DualSense" not in phones and "vyřazený" not in phones
-    assert "Katana" in client.get("/kategorie/notebooky").text
-    assert "Quantum 910X" in client.get("/kategorie/sluchatka").text
-    page = client.get("/produkt/" + str(db.query(Product).filter(Product.slug == "edge-70").one().id)).text
+    for slug in ("notebooky", "sluchatka"):
+        gone = client.get(f"/kategorie/{slug}", follow_redirects=False)
+        assert gone.status_code == 301 and gone.headers["location"] == "/telefony"
+    assert "Katana" not in phones and "Quantum 910X" not in phones
+    edge = db.query(Product).filter(Product.slug == "edge-70").one()
+    page = client.get(f"/produkt/{edge.id}").text
     assert "Mobilní telefony" in page and "Do obchodu" in page and "btn-buy" in page
+    katana = db.query(Product).filter(Product.slug == "katana-16").one()
+    away = client.get(f"/produkt/{katana.id}", follow_redirects=False)
+    assert away.status_code == 301 and away.headers["location"] == "/"
     assert "EDGE 70" in client.get("/hledat", params={"q": "Motorola EDGE 70"}).text
     db.close()
 
@@ -392,7 +397,7 @@ def test_surface_offer_comes_back_and_dualsense_redirects():
     assert pad_fresh.retired_at is not None and pad_fresh.category_slug == "konzole"
     c = TestClient(app)
     r = c.get(f"/produkt/{pad.id}-x", follow_redirects=False)
-    assert r.status_code == 301 and r.headers["location"] == "/kategorie/konzole"
+    assert r.status_code == 301 and r.headers["location"] == "/"
     phone_fresh = db.get(Product, phone.id)
     assert phone_fresh.retired_at is None and phone_fresh.slug == phone_slug
     assert phone_fresh.offers and "8128gb" in phone_fresh.offers[0].url

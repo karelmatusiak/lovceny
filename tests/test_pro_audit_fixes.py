@@ -43,7 +43,7 @@ def test_footer_sidlo(client_db):
 
 def test_single_shop_coverage_copy(client_db):
     c, db, make = client_db
-    p = make([4990], name="Test One Shop Coverage", shop="mironet", category="telefony")
+    p = make([4990], name="Samsung Galaxy A55 jediny obchod", shop="mironet", category="telefony")
     html = c.get(f"/produkt/{p.id}-{p.slug}").text
     assert "jednoho obchodu" in html
     assert "rozšiřujeme" in html
@@ -51,7 +51,8 @@ def test_single_shop_coverage_copy(client_db):
     about = c.get("/o-nas").text
     assert "Nepokrýváme celý trh" in about
     home = c.get("/").text
-    assert "Pokrytí roste" in home
+    assert "Nejvíc nabízené modely" in home
+    assert "Pokrytí roste" not in home
 
 
 def test_pcard_no_duplicate_sledujeme(client_db):
@@ -66,13 +67,14 @@ def test_pcard_no_duplicate_sledujeme(client_db):
 def test_quiet_slevy_dne_kept(client_db):
     c, db, make = client_db
     home = c.get("/").text
-    assert "Slevy dne" in home or "Skutečné slevy" in home
-    assert "tu nejlepší skutečné" not in home
-    # empty teaser or quiet history note uses the softer badge treatment
-    assert "expect-badge" in home or "expect-note-quiet" in home or "teaser-empty-quiet" in home
+    assert "Skutečné slevy" in home
+    assert "Slevy dne" not in home
+    assert "expect-badge" not in home and "teaser-empty-quiet" not in home
     css = open("lovceny/static/app.css", encoding="utf8").read()
     assert "expect-note-quiet" in css and "teaser-empty-quiet" in css
-    assert "ukážeme nejlepší skutečné slevy" in open("lovceny/templates/index.html", encoding="utf8").read()
+    index = open("lovceny/templates/index.html", encoding="utf8").read()
+    assert "Nejvíc nabízené modely" in index
+    assert "ukážeme nejlepší skutečné slevy" not in index
 
 
 def test_stav_no_ok_without_metrics(client_db):

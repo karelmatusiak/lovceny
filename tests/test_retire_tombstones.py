@@ -10,9 +10,9 @@ def test_restore_tombstones_redirects(client_db):
     assert restore_tombstones(db) == 0  # idempotent
     # representative phones
     r = c.get("/produkt/160-iphone-17e-256-gb-bily", follow_redirects=False)
-    assert r.status_code == 301 and r.headers["location"] == "/kategorie/telefony"
+    assert r.status_code == 301 and r.headers["location"] == "/telefony"
     r = c.get("/produkt/167-apple-iphone-16-128gb-ruzovy", follow_redirects=False)
-    assert r.status_code == 301 and r.headers["location"] == "/kategorie/telefony"
+    assert r.status_code == 301 and r.headers["location"] == "/telefony"
     # no category → home
     r = c.get("/produkt/300-mikrotik", follow_redirects=False)
     assert r.status_code == 301 and r.headers["location"] == "/"

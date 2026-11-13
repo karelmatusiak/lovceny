@@ -132,9 +132,11 @@ def test_seed_does_not_create_display_and_fetch_does_not_restore_category(client
     db.refresh(mon)
     assert mon.category_slug is None
     assert float(mon_offer.price) == 12990
-    html = c.get("/kategorie/sluchatka").text
-    assert "ThinkVision" not in html
-    assert "AirPods Max" in html
+    gone = c.get("/kategorie/sluchatka", follow_redirects=False)
+    assert gone.status_code == 301 and gone.headers["location"] == "/telefony"
+    phones = c.get("/kategorie/telefony").text
+    assert "ThinkVision" not in phones
+    assert "AirPods Max" not in phones
 
 
 def test_retire_does_not_delete_display_history(client_db, monkeypatch):

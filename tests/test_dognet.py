@@ -313,7 +313,7 @@ def test_obchody_lists_dognet_feeds(client_db, monkeypatch):
 def test_product_page_dognet_rel(client_db, monkeypatch):
     monkeypatch.delenv("DOGNET_CHID", raising=False)
     c, db, make = client_db
-    p = make([19090], name="Dyson V15 Detect page", shop="dyson", category="vysavace")
+    p = make([19090], name="Dyson V15 Detect page", shop="dyson", category="telefony")
     o = p.offers[0]
     o.url = "https://www.dyson.cz/v15-detect-page-test"
     o.in_stock = True
@@ -330,7 +330,7 @@ def test_product_page_dognet_rel(client_db, monkeypatch):
 def test_oos_hides_buy(client_db, monkeypatch):
     monkeypatch.delenv("DOGNET_CHID", raising=False)
     c, db, make = client_db
-    p = make([12990], name="Electrolux pračka OOS", shop="electrolux", category="pracky")
+    p = make([12990], name="Electrolux pračka OOS", shop="electrolux", category="telefony")
     o = p.offers[0]
     o.url = "https://www.electrolux.cz/washer-oos-test"
     o.in_stock = False

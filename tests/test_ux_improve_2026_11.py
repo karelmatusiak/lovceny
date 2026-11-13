@@ -101,12 +101,12 @@ def test_category_filters_brand_price_stock():
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     for name, price, stock in [
-        ("Samsung QLED TV", 12000, True),
-        ("LG QLED TV", 9000, True),
-        ("Samsung QLED OOS", 11000, False),
+        ("Samsung Galaxy A55", 12000, True),
+        ("Xiaomi Redmi Note 13", 9000, True),
+        ("Samsung Galaxy A35 OOS", 11000, False),
     ]:
-        p = Product(name=name, slug=name.lower().replace(" ", "-"), category_slug="televize",
-                    category="Televize")
+        p = Product(name=name, slug=name.lower().replace(" ", "-"), category_slug="telefony",
+                    category="Mobilní telefony")
         o = Offer(product=p, shop="mironet", url=f"https://www.mironet.cz/{p.slug}",
                   price=price, in_stock=stock, status="ok")
         db.add(p)
@@ -115,17 +115,17 @@ def test_category_filters_brand_price_stock():
     db.commit()
     db.close()
     c = TestClient(app)
-    html = c.get("/kategorie/televize").text
+    html = c.get("/kategorie/telefony").text
     assert "cat-filters" in html
-    assert "Samsung" in html and "LG" in html
-    html_b = c.get("/kategorie/televize", params={"znacka": "Samsung"}).text
-    assert "Samsung QLED TV" in html_b
-    assert "LG QLED TV" not in html_b
-    html_p = c.get("/kategorie/televize", params={"do": "10000"}).text
-    assert "LG QLED TV" in html_p
-    assert "Samsung QLED TV" not in html_p
-    html_s = c.get("/kategorie/televize", params={"skladem": "1"}).text
-    assert "Samsung QLED OOS" not in html_s
+    assert "Samsung" in html and "Xiaomi" in html
+    html_b = c.get("/kategorie/telefony", params={"znacka": "Samsung"}).text
+    assert "Galaxy A55" in html_b
+    assert "Redmi" not in html_b
+    html_p = c.get("/kategorie/telefony", params={"do": "10000"}).text
+    assert "Redmi" in html_p
+    assert "Galaxy A55" not in html_p
+    html_s = c.get("/kategorie/telefony", params={"skladem": "1"}).text
+    assert "Galaxy A35" not in html_s
 
 
 def test_pro_obchody_affiliate_section():
@@ -150,8 +150,8 @@ def test_footer_no_h2_outline():
 def test_category_filter_empty_and_tabs():
     init_db()
     c = TestClient(app)
-    html = c.get("/kategorie/televize", params={"znacka": "NeexistujiciZnackaXYZ"}).text
+    html = c.get("/kategorie/telefony", params={"znacka": "NeexistujiciZnackaXYZ"}).text
     assert "Žádný produkt neodpovídá filtrům" in html
     # tabs keep filter query
-    assert 'href="/kategorie/televize?znacka=NeexistujiciZnackaXYZ"' in html or "znacka=NeexistujiciZnackaXYZ" in html
-    assert "/kategorie/televize/nejlevnejsi?" in html or 'nejlevnejsi?znacka=' in html
+    assert 'href="/kategorie/telefony?znacka=NeexistujiciZnackaXYZ"' in html or "znacka=NeexistujiciZnackaXYZ" in html
+    assert "/kategorie/telefony/nejlevnejsi?" in html or 'nejlevnejsi?znacka=' in html

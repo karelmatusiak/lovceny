@@ -4,7 +4,7 @@
 {% block body %}
 <section class="cmp-hero"><div class="wrap" id="cmp-page" data-ids="{{ ids }}" data-tokens="{{ tokens }}" data-pridat="{{ pridat }}">
   <div class="eyebrow"><span aria-hidden="true">{{ ico('scales') }}</span> Srovnání produktů</div>
-  <h1 class="page-h1 cmp-title">{% if items|length >= 2 %}{% for it in items %}<span class="cmp-h-item">{{ dname(it.p)|truncate(64, true, "…", 0) }}</span>{% if not loop.last %} <span class="cmp-vs">vs.</span> {% endif %}{% endfor %}{% else %}Srovnání produktů{% endif %}</h1>
+  <h1 class="page-h1 cmp-title">{% if items|length >= 2 %}{% for it in items %}<span class="cmp-h-item">{{ dname(it.p)|truncate(42, true, "…", 0) }}</span>{% if not loop.last %} <span class="cmp-vs">vs.</span> {% endif %}{% endfor %}{% else %}Srovnání produktů{% endif %}</h1>
   {% if items|length < 2 %}
   <picture class="empty-art"><source type="image/webp" srcset="{{ static('img/porovnani-720.webp') }}"><img src="{{ static('img/porovnani-720.jpg') }}" width="720" height="480" alt="Ilustrace: dva produkty vedle sebe na vahách, oba se zeleným zatržítkem" fetchpriority="high" decoding="async"></picture>
   <div class="notice warn cmp-empty">

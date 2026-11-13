@@ -44,6 +44,11 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .phone-card-img,.model-photo{color:var(--muted)}
 .phone-card-img{height:128px;display:grid;place-items:center;background:var(--bg);border-radius:12px;overflow:hidden;margin-bottom:8px}
 .phone-card-img .img-missing,.model-photo .img-missing{min-height:100%}
+.phone-card-img .img-missing svg,.model-photo .img-missing svg{display:none}
+.phone-card-img .img-missing::before,.model-photo .img-missing::before{
+  content:"";width:42px;height:72px;border:2px solid currentColor;border-radius:10px;
+  box-shadow:inset 0 8px 0 -6px currentColor, inset 0 -14px 0 -12px currentColor;
+}
 .phone-card-img img,.model-photo img{width:100%;height:100%;object-fit:contain}
 .phone-card-brand{margin:0;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .phone-card h3{margin:0 0 8px;font-size:16px;line-height:1.3;letter-spacing:-.02em}
@@ -55,6 +60,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .phone-filter-form{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:end;margin:var(--space-4) 0}
 .phone-filter-form label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
 .phone-filter-form select{min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;color:var(--ink);background:var(--soft)}
+.cmp-title{font-size:clamp(22px,2.2vw,30px);line-height:1.25;letter-spacing:-.02em}
 .model{padding:var(--space-5) 0 var(--space-7)}
 .model-hero{display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:var(--space-6);align-items:center}
 .model-photo{background:var(--soft);border:1px solid var(--line);border-radius:24px;aspect-ratio:1;display:grid;place-items:center;padding:var(--space-4)}

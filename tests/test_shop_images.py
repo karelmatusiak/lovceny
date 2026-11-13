@@ -54,7 +54,7 @@ def test_update_offer_stores_image_without_changing_identity(client_db, monkeypa
             return html
 
     monkeypatch.setattr(service, "client", lambda: Fake())
-    p = make([10000], name="AEG pračka LTR6A41460", shop="abcom", category="pracky")
+    p = make([10000], name="AEG pračka LTR6A41460", shop="abcom", category="telefony")
     p.slug = "aeg-pracka-ltr6a41460"
     p.image_url = None
     o = p.offers[0]
@@ -77,7 +77,7 @@ def test_update_offer_stores_image_without_changing_identity(client_db, monkeypa
 
 def test_product_page_missing_image_uses_framed_placeholder(client_db):
     client, _, make = client_db
-    p = make([500], name="Bez fotky detail", category="pracky")
+    p = make([500], name="Bez fotky detail", category="telefony")
     p.image_url = None
     html = client.get(f"/produkt/{p.id}-{p.slug}").text
     assert 'class="p-img p-hero"' in html and 'aria-label="Fotka produktu chybí"' in html
