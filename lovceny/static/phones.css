@@ -118,6 +118,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",
 .storage-chip.is-on span,.storage-chip[aria-current="true"] span{color:#E7E2D8}
 .offer-table{list-style:none;padding:0;margin:0;display:grid;gap:var(--space-2)}
 .offer-table li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:12px 14px;min-height:64px}
+.offer-table li[hidden],.model-photo [hidden],.phone-empty[hidden]{display:none !important}
 .offer-table .is-best{border-color:var(--brand);box-shadow:inset 3px 0 0 var(--brand)}
 .offer-shop{font-weight:700}
 .offer-color{display:block;font-weight:600;font-size:13px;color:var(--muted)}

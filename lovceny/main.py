@@ -473,38 +473,22 @@ def phones_page(request: Request, znacka: str = "", pasmo: str = "", db=Depends(
 
 @app.get("/telefon/{slug}", response_class=HTMLResponse)
 def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = "", db=Depends(get_db)):
-    from .phones import find_model, select_variant, storage_label
+    from .phones import anchor_product, color_photos, find_model, model_redirects, offer_variant_rows, phone_models, storage_deals
     model = find_model(db, slug)
     if model is None:
+        dest = model_redirects(phone_models(db)).get(slug)
+        if dest:
+            return RedirectResponse(f"/telefon/{dest}", status_code=301)
         raise HTTPException(404)
-    storage_query = pamet.strip()
-    if not storage_query:
-        def _label(offer) -> str:
-            for product in model.products:
-                if product.id == offer.product_id:
-                    return storage_label(product.name or "") or ""
-            return ""
-        confirmed = [
-            offer for offer in model.offers
-            if _label(offer) not in model.disputed and offer_is_buyable(offer)
-        ] or [
-            offer for offer in model.offers if _label(offer) not in model.disputed
-        ]
-        pool = confirmed or [offer for offer in model.offers if offer_is_buyable(offer)] or list(model.offers)
-        if pool:
-            cheapest = min(pool, key=lambda offer: float(offer.price))
-            storage_query = _label(cheapest)
-    products = select_variant(model, storage=storage_query, color=barva.strip())
-    product_ids = {product.id for product in products}
-    offers = [offer for offer in model.offers if offer.product_id in product_ids]
-    points = [point for offer in offers for point in offer.points]
-    offers.sort(key=lambda offer: (not offer_is_buyable(offer), float(offer.price)))
-    buyable = [offer for offer in offers if offer_is_buyable(offer)]
-    shown = buyable[0] if buyable else (offers[0] if offers else None)
-    current = float(shown.price) if shown is not None and shown.price is not None else None
+    # Všechny nabídky jsou v HTML. Statický web query string ignoruje a filtruje je skript.
+    offers = sorted(model.offers, key=lambda offer: (not offer_is_buyable(offer), float(offer.price)))
+    anchor = anchor_product(model)
+    chart_offers = [offer for offer in offers if anchor is not None and offer.product_id == anchor.id] or offers[:1]
+    points = [point for offer in chart_offers for point in offer.points]
+    shown = next((offer for offer in chart_offers if offer_is_buyable(offer)), chart_offers[0] if chart_offers else None)
+    current = model.lowest
     verdict = compute(points, current, getattr(shown, "original_price", None) if shown else None)
     ranges = build_chart(points, verdict=verdict, live_price=current)
-    from .phones import anchor_product, phone_models, shop_offer_rows, storage_deals
     deals = storage_deals(model)
     peers = []
     for item in phone_models(db):
@@ -523,13 +507,14 @@ def phone_model_page(request: Request, slug: str, pamet: str = "", barva: str = 
     compare_href = ""
     if len(compare_products) >= 2:
         compare_href = "/porovnat?p=" + ",".join(compare_token(product) for product in compare_products[:3])
-    active_storage = storage_query
     crumbs = [("Lovceny", "/"), ("Telefony", "/telefony"), (model.name, f"/telefon/{model.slug}")]
     return tpl.TemplateResponse(request, "phone_model.html", {
         "model": model, "offers": offers, "storage": pamet.strip(), "color": barva.strip(),
-        "active_storage": active_storage,
-        "shown_price": current, "buyable": bool(buyable), "verdict": verdict, "v": verdict,
-        "offer_rows": shop_offer_rows(model, offers),
+        "active_storage": pamet.strip(),
+        "shown_price": current, "buyable": bool(model.in_stock and current is not None),
+        "verdict": verdict, "v": verdict,
+        "offer_rows": offer_variant_rows(model, offers),
+        "color_photos": color_photos(model),
         "storage_deals": deals, "compare_href": compare_href,
         "chart_ranges": ranges, "chart_note": verdict_note(verdict, ranges), "crumbs": crumbs,
         "canonical_path": f"/telefon/{model.slug}", "get_shop": get_shop,

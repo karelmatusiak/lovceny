@@ -266,12 +266,116 @@
     });
   }
 
+  function shopLabel(count) {
+    if (count === 1) return "1 obchod";
+    if (count >= 2 && count <= 4) return count + " obchody";
+    return count + " obchodů";
+  }
+  function hookPhone() {
+    var root = document.querySelector("[data-phone-filter]");
+    if (!root) return;
+    var rows = [].slice.call(root.querySelectorAll("[data-barva]"));
+    var priceEl = root.querySelector("[data-phone-price]");
+    var noteEl = root.querySelector("[data-phone-note]");
+    var emptyEl = root.querySelector("[data-phone-empty]");
+    var chips = [].slice.call(root.querySelectorAll("[data-phone-chip]"));
+    var state = { barva: "", pamet: "" };
+
+    function chipHref(kind, value) {
+      var params = new URLSearchParams();
+      var color = kind === "barva" ? value : state.barva;
+      var storage = kind === "pamet" ? value : state.pamet;
+      if (color) params.set("barva", color);
+      if (storage) params.set("pamet", storage);
+      var query = params.toString();
+      return location.pathname + (query ? "?" + query : "");
+    }
+    function markChips() {
+      chips.forEach(function (chip) {
+        var kind = chip.getAttribute("data-phone-chip");
+        var value = chip.getAttribute("data-value") || "";
+        var on = (kind === "barva" ? state.barva : state.pamet) === value;
+        chip.classList.toggle("is-on", on);
+        if (on) chip.setAttribute("aria-current", "true");
+        else chip.removeAttribute("aria-current");
+        chip.setAttribute("href", chipHref(kind, value));
+      });
+    }
+    function showPhoto() {
+      var photos = root.querySelector("[data-phone-photos]");
+      if (!photos) return;
+      var wanted = state.barva;
+      var match = wanted && photos.querySelector('[data-photo="' + wanted.replace(/"/g, "") + '"]');
+      [].slice.call(photos.children).forEach(function (child) {
+        child.hidden = match ? child !== match : child.getAttribute("data-photo") !== "";
+      });
+    }
+    function apply(replace) {
+      var visible = [];
+      rows.forEach(function (row) {
+        var colorOk = !state.barva || row.getAttribute("data-barva") === state.barva;
+        var storageOk = !state.pamet || row.getAttribute("data-pamet") === state.pamet;
+        var show = colorOk && storageOk;
+        row.hidden = !show;
+        row.classList.remove("is-best");
+        if (show) visible.push(row);
+      });
+      var stocked = visible.filter(function (row) { return row.getAttribute("data-stock") === "1"; });
+      var best = stocked.slice().sort(function (a, b) {
+        return Number(a.getAttribute("data-price")) - Number(b.getAttribute("data-price"));
+      })[0];
+      if (best) best.classList.add("is-best");
+      var storageChip = chips.filter(function (chip) {
+        return chip.getAttribute("data-phone-chip") === "pamet" && chip.getAttribute("data-value") === state.pamet;
+      })[0];
+      var unconfirmed = !!(storageChip && storageChip.getAttribute("data-unconfirmed") === "1");
+      if (priceEl) {
+        if (unconfirmed) priceEl.textContent = "Cenu nepotvrzujeme";
+        else if (best) priceEl.textContent = czk(best.getAttribute("data-price"));
+        else priceEl.textContent = "Cenu zjišťujeme";
+      }
+      if (noteEl) {
+        var shops = {};
+        visible.forEach(function (row) { shops[row.getAttribute("data-shop") || ""] = 1; });
+        var count = Object.keys(shops).filter(Boolean).length;
+        var lead = unconfirmed
+          ? "Dva obchody se u téhle kapacity liší o víc než 35 %."
+          : (best ? "nejnižší cena skladem" : (visible.length ? "skladovou nabídku teď nemáme" : "nabídku teprve hledáme"));
+        noteEl.textContent = count ? lead + " · " + shopLabel(count) : lead;
+      }
+      if (emptyEl) emptyEl.hidden = visible.length !== 0;
+      markChips();
+      showPhoto();
+      if (replace) {
+        var params = new URLSearchParams();
+        if (state.barva) params.set("barva", state.barva);
+        if (state.pamet) params.set("pamet", state.pamet);
+        var query = params.toString();
+        history.replaceState(null, "", location.pathname + (query ? "?" + query : ""));
+      }
+    }
+    root.addEventListener("click", function (event) {
+      var chip = event.target.closest("[data-phone-chip]");
+      if (!chip || !root.contains(chip)) return;
+      event.preventDefault();
+      var kind = chip.getAttribute("data-phone-chip");
+      state[kind] = chip.getAttribute("data-value") || "";
+      apply(true);
+    });
+    var params = new URLSearchParams(location.search);
+    state.barva = params.get("barva") || "";
+    state.pamet = params.get("pamet") || "";
+    if (state.barva || state.pamet) apply(false);
+    else markChips();
+  }
+
   function boot() {
     hookSearch();
     hookCategory();
     hookBf();
     hookCompare();
     hookVerify();
+    hookPhone();
   }
   if (document.readyState !== "loading") boot();
   else document.addEventListener("DOMContentLoaded", boot);

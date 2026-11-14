@@ -6,6 +6,7 @@ cenu a počet obchodů z nabídek, verdikt z naměřené historie.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -242,12 +243,32 @@ _COLOR_CS = {
     "black": "černá", "white": "bílá", "blue": "modrá", "pink": "růžová",
     "green": "zelená", "yellow": "žlutá", "purple": "fialová", "silver": "stříbrná",
     "gold": "zlatá", "gray": "šedá", "orange": "oranžová", "red": "červená",
+    "teal": "tyrkysová", "turkusova": "tyrkysová", "tyrkysova": "tyrkysová",
+    "ultramarine": "ultramarínová", "ultramarin": "ultramarínová", "ultramarinova": "ultramarínová",
+    "berylove": "berylově zelená", "zelen": "zelená", "modro": "modrá",
+    "hvezdna": "hvězdná čerň", "titanova": "titanová", "titanove": "titanová",
+    "purpurova": "purpurová", "levandule": "levandulová", "zlato": "zlatá",
+    "charcoal": "šedá", "carbon": "černá", "oyster": "oyster", "arctic": "arctic",
+    "cosmic": "cosmic", "cocoa": "cocoa", "drevo": "dřevo", "desert": "pouštní",
 }
 
 
 def color_labels(name: str) -> set[str]:
     canon = canonicalize_name(name or "")
-    return {_COLOR_CS.get(token, token) for token in _colors(canon)}
+    found = {_COLOR_CS.get(token, token) for token in _colors(canon)}
+    tokens = canon.split()
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        nxt = tokens[index + 1] if index + 1 < len(tokens) else ""
+        if (token, nxt) in _COLOR_BIGRAMS and token in _COLOR_CS:
+            found.add(_COLOR_CS[token])
+            index += 2
+            continue
+        if token in _COLOR_CS and token not in {"zelen", "modro", "cern", "desert"}:
+            found.add(_COLOR_CS[token])
+        index += 1
+    return found
 
 
 def _color_prefixes() -> set[str]:
@@ -271,6 +292,21 @@ _EXTRA_COLOR = {
     "svetle", "svetly", "starlit", "ice", "denim", "velvet", "sprout", "meteor",
     "golden", "sporting", "bright", "blackened", "sage", "jet",
     "krem", "grafit", "hneda", "hnedou", "matova", "matovy",
+}
+# Až v hotovém názvu. Kdyby zmizely už ve smyčce, starý slug by nešel přesměrovat.
+_VARIANT_COLOR = {
+    "teal", "tyrkysova", "tyrkysovy", "turkusova", "turkusovy",
+    "ultramarine", "ultramarin", "berylove", "berylova", "berylovy", "zelen",
+    "hvezdna", "hvezdny", "cern", "titanova", "titanove", "titanovy", "modro",
+    "purpurova", "purpurovy", "levandule", "charcoal", "zlato", "carbon",
+    "oyster", "arctic", "cosmic", "cocoa", "drevo", "desert",
+}
+# Dvojice, které jsou jedna barva (lily pad), ne dvě slova modelu.
+_COLOR_BIGRAMS = {("lily", "pad"), ("hvezdna", "cern"), ("berylove", "zelen"), ("berylove", "zelena")}
+_TITLE_NOISE = {"krabicka", "krabice"}
+_TITLE_KEEP = {
+    "pro", "max", "plus", "mini", "air", "ultra", "se", "fe", "lite", "note",
+    "edge", "fold", "flip", "iphone", "galaxy", "pixel", "redmi", "poco",
 }
 
 
@@ -304,7 +340,49 @@ _FEED_CATEGORY = re.compile(
 _IOS_TOKEN = re.compile(r"ios\d+(?:[.,]\d+)?", re.I)
 
 
-def _model_name(names: list[str]) -> str:
+def _fold_token(word: str) -> str:
+    folded = unicodedata.normalize("NFKD", word or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "", folded)
+
+
+def _part_code_token(word: str) -> bool:
+    """A3081 je kód dílu. A55 a S25 jsou číslo modelu a zůstávají."""
+    return re.fullmatch(r"[A-Za-z]\d{4,}", word or "") is not None
+
+
+def _strip_variant_noise(text: str) -> str:
+    """Barva, krabička a kód dílu v hotovém názvu nejsou další model."""
+    words = text.split()
+    kept = []
+    index = 0
+    while index < len(words):
+        token = _fold_token(words[index])
+        nxt = _fold_token(words[index + 1]) if index + 1 < len(words) else ""
+        if token in _TITLE_KEEP:
+            kept.append(words[index])
+            index += 1
+            continue
+        if (token, nxt) in _COLOR_BIGRAMS:
+            index += 2
+            continue
+        if token in _EXTRA_COLOR or token in _VARIANT_COLOR or token in _TITLE_NOISE or _part_code_token(words[index]):
+            index += 1
+            continue
+        kept.append(words[index])
+        index += 1
+    return re.sub(r"\s+", " ", " ".join(kept)).strip()
+
+
+def _with_brand(title: str, sample: str) -> str:
+    brand = guess_brand(sample or title)
+    if brand is None and "iphone" in f"{sample} {title}".casefold():
+        brand = "Apple"
+    if brand and title and not title.casefold().startswith(brand.casefold()):
+        return f"{brand} {title}"
+    return title
+
+
+def _model_name(names: list[str], *, keep_variant: bool = False) -> str:
     """Název modelu bez úložiště, úhlopříčky, barvy a zbytků specifikace."""
     from .shops.feed import _COLOR_CANON, canonicalize_name
     colors = set(_COLOR_CANON) | set(_COLOR_CANON.values())
@@ -422,6 +500,8 @@ def _model_name(names: list[str]) -> str:
         text = _fix_casing(text)
         if codes and text.casefold() in {"samsung galaxy", "samsung", "galaxy"}:
             text = f"{text} {codes[0]}".strip()
+        if not keep_variant:
+            text = _strip_variant_noise(text)
         if text and (not best or (len(text), text.casefold()) < (len(best), best.casefold())):
             best = text
     return best or "Telefon"
@@ -517,7 +597,8 @@ def group_phones(products: list[Product]) -> list[PhoneModel]:
     title_order: list[str] = []
     for key in order:
         group = buckets[key]
-        title = _model_name([product.name or "" for product in group])
+        sample = " ".join(product.name or "" for product in group)
+        title = _with_brand(_model_name([product.name or "" for product in group]), sample)
         fold = title.casefold()
         if fold not in titled:
             titled[fold] = (title, [])
@@ -664,6 +745,53 @@ def brands_in(models: list[PhoneModel]) -> list[str]:
         if model.brand and model.brand not in found:
             found.append(model.brand)
     return sorted(found, key=str.casefold)
+
+
+def former_model_slug(name: str) -> str:
+    """Slug stránky, dokud v názvu zůstávala barva, krabička nebo kód dílu."""
+    raw = _model_name([name or ""], keep_variant=True)
+    return slugify(_with_brand(raw, name or ""))
+
+
+def model_redirects(models: list[PhoneModel]) -> dict[str, str]:
+    """Staré adresy modelu → jedna stránka. Cizí model (Plus, Pro) se nepřepisuje."""
+    live = {model.slug for model in models}
+    claimed: dict[str, str] = {}
+    blocked: set[str] = set()
+    for model in models:
+        for product in model.products:
+            old = former_model_slug(product.name or "")
+            if not old or old == model.slug or old in live:
+                continue
+            previous = claimed.get(old)
+            if previous is not None and previous != model.slug:
+                blocked.add(old)
+                continue
+            claimed[old] = model.slug
+    return {slug: dest for slug, dest in claimed.items() if slug not in blocked}
+
+
+def offer_variant_rows(model: PhoneModel, offers: list[Offer]) -> list[dict]:
+    """Každá nabídka, s barvou a úložištěm. Filtr na statické stránce z nich vybírá."""
+    storage_of = {product.id: storage_label(product.name or "") or "" for product in model.products}
+    rows = [{
+        "offer": offer,
+        "color": offer_color(model, offer),
+        "storage": storage_of.get(offer.product_id, ""),
+    } for offer in offers]
+    rows.sort(key=lambda row: (not offer_is_buyable(row["offer"]), float(row["offer"].price)))
+    return rows
+
+
+def color_photos(model: PhoneModel) -> dict[str, str]:
+    """Fotka konkrétní barvy, když ji produkt má."""
+    photos: dict[str, str] = {}
+    for product in model.products:
+        if not product.image_url:
+            continue
+        for label in sorted(color_labels(product.name or "")):
+            photos.setdefault(label, product.image_url)
+    return photos
 
 
 def offer_color(model: PhoneModel, offer: Offer) -> str:

@@ -156,6 +156,53 @@ def test_card_shop_count_matches_the_shown_price():
         db.close()
 
 
+def test_colour_code_and_box_are_one_model_and_the_old_slug_redirects():
+    init_db()
+    db = SessionLocal()
+    try:
+        from lovceny.main import tpl
+        from lovceny.matching import model_family
+        from lovceny.phones import _model_name
+        plain = "Apple iPhone 16 128GB černá"
+        boxed = "Apple iPhone 16 ULTRAMARINE 128GB A3081 Krabička"
+        teal = "Apple iPhone 16 Plus 128GB teal"
+        assert _model_name([boxed]) == "Apple iPhone 16"
+        assert _model_name(["Apple iPhone 16 berylove zelen 128GB"]) == "Apple iPhone 16"
+        assert _model_name([teal]) == "Apple iPhone 16 Plus"
+        assert model_family(plain, "telefony") == model_family(boxed, "telefony")
+        assert model_family(plain, "telefony") != model_family(teal, "telefony")
+        _phone(db, plain, 18000, shop="alza", slug="apple-iphone-16-128gb-cerna")
+        _phone(db, "Apple iPhone 16 256GB bílá", 21000, shop="datart", slug="apple-iphone-16-256gb-bila")
+        _phone(db, boxed, 19000, shop="xupe", slug="apple-iphone-16-ultramarine-128gb")
+        _phone(db, teal, 22000, shop="tera", slug="apple-iphone-16-plus-128gb-teal")
+        client = TestClient(app)
+        gone = client.get("/telefon/apple-iphone-16-ultramarine-a3081-krabicka", follow_redirects=False)
+        assert gone.status_code == 301
+        assert gone.headers["location"] == "/telefon/apple-iphone-16"
+        plus = client.get("/telefon/apple-iphone-16-plus-teal", follow_redirects=False)
+        assert plus.status_code == 301
+        assert plus.headers["location"] == "/telefon/apple-iphone-16-plus"
+        tpl.env.globals["STATIC_SITE"] = True
+        page = client.get("/telefon/apple-iphone-16")
+        html = page.text
+        assert page.status_code == 200
+        assert 'rel="canonical" href="' in html
+        assert "/telefon/apple-iphone-16\"" in html
+        assert "?barva=" not in html.split('rel="canonical"', 1)[1].split(">", 1)[0]
+        assert 'data-barva="ultramar' in html
+        assert 'data-barva="černá"' in html or "data-barva=\"&#269;ern&#225;\"" in html
+        assert 'data-pamet="128 GB"' in html
+        assert 'data-pamet="256 GB"' in html
+        assert 'data-phone-chip="barva"' in html
+        assert "Tuhle kombinaci barvy a úložiště teď nemáme." in html
+        assert "katalog.js" in html
+        assert 'rel="nofollow sponsored noopener"' in html
+        assert html.count("Do obchodu") == 3
+    finally:
+        tpl.env.globals["STATIC_SITE"] = False
+        db.close()
+
+
 def test_storage_variants_are_one_model():
     init_db()
     db = SessionLocal()

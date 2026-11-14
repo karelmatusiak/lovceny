@@ -435,8 +435,28 @@ def model_identity(name: str, category: str | None) -> tuple | None:
     return (category, brand, tokens, sig)
 
 
+# Barva, krabička a kód dílu (A3081) nejsou jiný model. Plus, Pro a Max ano.
+_FAMILY_NOISE = frozenset({
+    "krabicka", "krabice", "barva", "pamet", "barvy", "desert",
+    "teal", "tyrkysova", "tyrkysovy", "turkusova", "turkusovy",
+    "ultramarine", "ultramarin", "ultramarinova", "ultramarinovy",
+    "berylove", "berylova", "berylovy", "zelen",
+    "hvezdna", "hvezdny", "cern",
+    "titanova", "titanove", "titanovy",
+    "modro", "purpurova", "purpurovy", "levandule", "levandulova",
+    "charcoal", "zlato", "carbon", "oyster", "arctic", "cosmic", "cocoa",
+    "drevo", "lily", "pad",
+})
+
+
+def _ignored_family_token(token: str) -> bool:
+    if token in _FAMILY_NOISE:
+        return True
+    return re.fullmatch(r"[a-z]\d{4,}", token or "") is not None
+
+
 def model_family(name: str, category: str | None) -> tuple | None:
-    """Stejný model bez barvy, úložiště a operační paměti.
+    """Stejný model bez barvy, úložiště, krabičky a kódu dílu.
 
     iPhone 15 128GB černá a iPhone 15 256GB bílá jsou jedna rodina.
     iPhone 15 a iPhone 15 Pro ne. 55\" a 65\" televize ne. Příslušenství ne.
@@ -449,7 +469,7 @@ def model_family(name: str, category: str | None) -> tuple | None:
     colors = set(_COLOR_CANON.values())
     kept = []
     for token in tokens:
-        if token in colors or re.fullmatch(r"\d+(?:gb|tb)", token):
+        if token in colors or re.fullmatch(r"\d+(?:gb|tb)", token) or _ignored_family_token(token):
             continue
         kept.append(token)
     tokens = tuple(kept)
