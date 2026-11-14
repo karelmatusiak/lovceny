@@ -24,7 +24,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     outputs:
       ran: ${{ steps.download.outcome == 'success' }}
     steps:
@@ -144,31 +144,6 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: python -m lovceny.r2store publish --path db/lovceny.db --before db/counts-before.txt
-      - name: Vygenerovat web ze SQLite
-        if: steps.download.outcome == 'success' && github.event.inputs.dry_run != 'true' && github.event.client_payload.dry_run != 'true'
-        env:
-          DATABASE_URL: sqlite:///db/lovceny.db
-          PUBLIC_URL: https://lovceny.cz
-          LOVCENY_SKIP_DATA_FIXES: "1"
-          FEED_URLS: ${{ secrets.FEED_URLS }}
-        run: python build_static.py --out dist --report build-report.json
-      - name: Nasadit na Cloudflare Pages
-        if: github.ref == 'refs/heads/main' && steps.download.outcome == 'success' && github.event.inputs.dry_run != 'true' && github.event.client_payload.dry_run != 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "Chybí CLOUDFLARE_API_TOKEN nebo CLOUDFLARE_ACCOUNT_ID, nasazení přeskakuji."
-            exit 0
-          fi
-          cd dist
-          out=$(npx --yes wrangler@4 pages deploy . --project-name=lovceny --branch=main --commit-dirty)
-          printf '%s\n' "$out"
-          if [ -d functions ] && ! printf '%s\n' "$out" | grep -q 'Uploading Functions bundle'; then
-            echo "dist/functions existuje, ale Wrangler nenahrál Functions bundle." >&2
-            exit 1
-          fi
       - name: Hlídání obchodů (GitHub issue při blokaci / starých cenách)
         if: always()
         env:
@@ -178,3 +153,47 @@ jobs:
             exit 0
           fi
           python shop_health_issues.py health.json
+  site:
+    needs: fetch
+    if: needs.fetch.outputs.ran == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: pip install -r requirements.txt
+      - name: Stáhnout databázi z R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python -m lovceny.r2store download --out db/lovceny.db --counts db/counts.txt
+      - name: Vygenerovat web ze SQLite
+        timeout-minutes: 15
+        env:
+          DATABASE_URL: sqlite:///db/lovceny.db
+          PUBLIC_URL: https://lovceny.cz
+          LOVCENY_SKIP_DATA_FIXES: "1"
+          FEED_URLS: ${{ secrets.FEED_URLS }}
+        run: python build_static.py --out dist --report build-report.json
+      - name: Nasadit na Cloudflare Pages
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Chybí CLOUDFLARE_API_TOKEN nebo CLOUDFLARE_ACCOUNT_ID. Web se nenasadil." >&2
+            exit 1
+          fi
+          cd dist
+          out=$(npx --yes wrangler@4 pages deploy . --project-name=lovceny --branch=main --commit-dirty)
+          printf '%s\n' "$out"
+          if [ -d functions ] && ! printf '%s\n' "$out" | grep -q 'Uploading Functions bundle'; then
+            echo "dist/functions existuje, ale Wrangler nenahrál Functions bundle." >&2
+            exit 1
+          fi

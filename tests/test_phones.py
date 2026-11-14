@@ -4,7 +4,9 @@ from fastapi.testclient import TestClient
 from lovceny.db import SessionLocal, init_db
 from lovceny.main import app
 from lovceny.models import Offer, PricePoint, Product
-from lovceny.phones import group_phones, guide_models, storage_deals, GUIDE_BY_SLUG
+from sqlalchemy import event
+
+from lovceny.phones import find_model, group_phones, guide_models, phone_models, storage_deals, GUIDE_BY_SLUG
 from lovceny.service import apply_feed
 from lovceny.shops.feed import FeedItem
 from tests.test_feed_create import ean, item
@@ -256,5 +258,31 @@ def test_fetch_creates_only_phones():
         names = [row.name for row in db.query(Product).all()]
         assert any("Galaxy" in name or "Samsung" in name for name in names)
         assert not any("QE55" in name or "Pouzdro" in name for name in names)
+    finally:
+        db.close()
+
+
+def test_phone_catalog_is_loaded_once_per_session():
+    init_db()
+    db = SessionLocal()
+    try:
+        _phone(db, "Apple iPhone 16 128GB černá", 19000, slug="ip16")
+        _phone(db, "Samsung Galaxy A55 128GB", 8990, slug="a55")
+        selects = []
+
+        def capture(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT") and "products" in statement:
+                selects.append(statement)
+
+        event.listen(db.get_bind(), "before_cursor_execute", capture)
+        try:
+            first = phone_models(db)
+            again = phone_models(db)
+            found = find_model(db, first[0].slug)
+        finally:
+            event.remove(db.get_bind(), "before_cursor_execute", capture)
+        assert again is first
+        assert found is first[0]
+        assert len(selects) == 1
     finally:
         db.close()

@@ -21,6 +21,8 @@ def test_static_build_reads_r2_and_never_the_prod_database():
     assert "sqlite:///db/lovceny.db" in FETCH
     assert "lovceny.r2store publish" in FETCH
     assert "group: fetch-prices" in FETCH
+    assert "needs: fetch" in FETCH
+    assert "timeout-minutes: 15" in FETCH
     assert "sqlite:///snapshot/lovceny.sqlite" in STATIC
     assert "lovceny.r2store download" in STATIC
     assert "Neon se nevolá" in STATIC
