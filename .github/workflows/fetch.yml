@@ -10,7 +10,7 @@ on:
       create_cap:
         description: "Max nových produktů v jednom běhu"
         type: string
-        default: "100"
+        default: "1000"
   repository_dispatch:
     types: [fetch-prices]
 concurrency:
