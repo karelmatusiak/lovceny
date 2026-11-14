@@ -153,6 +153,24 @@ def test_migration_does_not_open_neon_without_r2(tmp_path, monkeypatch, capsys):
     assert called["n"] == 0
 
 
+def test_marker_upload_does_not_checkpoint_a_text_file(tmp_path, monkeypatch):
+    seen = {"checkpoint": []}
+
+    def remember(path):
+        seen["checkpoint"].append(path)
+
+    monkeypatch.setattr(r2store, "_checkpoint", remember)
+    monkeypatch.setattr(r2store, "_request", lambda *args, **kwargs: (200, b""))
+    marker = tmp_path / "lovceny.done"
+    marker.write_text("products 1\n", encoding="utf-8")
+    r2store.upload(marker, "migration-complete")
+    assert seen["checkpoint"] == []
+    db = tmp_path / "lovceny.db"
+    db.write_bytes(b"SQLite format 3\x00")
+    r2store.upload(db, "lovceny.db")
+    assert seen["checkpoint"] == [db]
+
+
 def test_workflows_keep_one_writer_and_the_neon_job_can_stop():
     root = Path(__file__).resolve().parents[1]
     fetch = (root / ".github/workflows/fetch.yml").read_text(encoding="utf-8")
