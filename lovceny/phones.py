@@ -642,7 +642,13 @@ def load_phone_products(db: Session) -> list[Product]:
 
 
 def phone_models(db: Session) -> list[PhoneModel]:
-    return group_phones(load_phone_products(db))
+    """Jednou za relaci. Stránka modelu i srovnání sousedů by jinak načítaly katalog znovu."""
+    cached = db.info.get("phone_models")
+    if cached is not None:
+        return cached
+    cached = group_phones(load_phone_products(db))
+    db.info["phone_models"] = cached
+    return cached
 
 
 def find_model(db: Session, slug: str) -> PhoneModel | None:
