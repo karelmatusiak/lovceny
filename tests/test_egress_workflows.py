@@ -6,6 +6,23 @@ FETCH = (ROOT / ".github/workflows/fetch.yml").read_text(encoding="utf-8")
 STATIC = (ROOT / ".github/workflows/static.yml").read_text(encoding="utf-8")
 
 
+def test_create_cap_is_shared_across_shops():
+    from fetch_prices import DEFAULT_CREATE_CAP, PER_SHOP_CREATE_CAP, shop_create_limit
+
+    assert f'default: "{DEFAULT_CREATE_CAP}"' in FETCH
+    assert 0 < PER_SHOP_CREATE_CAP < DEFAULT_CREATE_CAP
+    remaining = DEFAULT_CREATE_CAP
+    taken = []
+    for _ in range(3):
+        bite = shop_create_limit(remaining)
+        assert bite == min(remaining, PER_SHOP_CREATE_CAP)
+        taken.append(bite)
+        remaining -= bite
+    assert sum(taken) == DEFAULT_CREATE_CAP
+    assert taken[0] == PER_SHOP_CREATE_CAP
+    assert taken[1] > 0
+
+
 def test_fetch_has_one_clock_and_no_chained_static_build():
     assert "schedule:" not in FETCH
     assert "cron:" not in FETCH

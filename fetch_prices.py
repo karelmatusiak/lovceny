@@ -42,9 +42,12 @@ SCRAPE_BUDGET_S = 12 * 60
 SHOP_BUDGET_S = 90
 MIRONET_BUDGET_S = 180
 SHOP_FAIL_STREAK = 3
-# Nové produkty za jeden běh. 100 řádků je řádově desetiny MB v Neon (řádek + nabídka
-# + první cena, fotka je jen URL). Statický web přidá asi minutu na několik set nových stránek.
-DEFAULT_CREATE_CAP = 100
+# Nové produkty za jeden běh. Katalog je jeden SQLite soubor a statický web načte
+# telefony jednou, takže strop už nesvazujeme velikostí Neonu. 1000 pokryje telefony,
+# které pravidla už pustila (GTIN nebo jeden kód, jistá kategorie, ne příslušenství).
+# Jeden obchod smí založit nejvýš 400, ať první doručený feed nesežere celý běh.
+DEFAULT_CREATE_CAP = 1000
+PER_SHOP_CREATE_CAP = 400
 
 
 def create_cap_from(raw) -> int:
@@ -54,6 +57,19 @@ def create_cap_from(raw) -> int:
         return max(0, int(raw))
     except (TypeError, ValueError):
         return DEFAULT_CREATE_CAP
+
+
+def shop_create_limit(remaining: int, per_shop: int | None = None) -> int:
+    """Kolik nových produktů smí založit další obchod.
+
+    Globální strop se nedělí dopředu. Jeden obchod ale nesmí vybrat víc než
+    PER_SHOP_CREATE_CAP, ať feed, který doběhne první, nenechá ostatní na nule.
+    """
+    remaining = max(0, int(remaining))
+    limit = PER_SHOP_CREATE_CAP if per_shop is None else int(per_shop)
+    if limit <= 0:
+        return remaining
+    return min(remaining, limit)
 
 
 def log_create_plan(plan: list[dict], samples: list[dict], cap: int) -> None:
@@ -222,7 +238,8 @@ def main(argv=None):
         try:
             t0 = time.perf_counter()
             st = apply_feed(
-                db, slug, items, create_identified=True, max_create=remaining, commit=not a.dry_run,
+                db, slug, items, create_identified=True,
+                max_create=shop_create_limit(remaining), commit=not a.dry_run,
             )
             public = {k: v for k, v in st.items() if k != "samples"}
             log.info("feed %s: stažení %.0fs, zápis %.1fs, %s", slug, seconds, time.perf_counter() - t0, public)
