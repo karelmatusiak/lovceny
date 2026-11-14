@@ -428,8 +428,12 @@ def build(out: str | Path, *, redirect_static_limit: int = REDIRECT_STATIC_LIMIT
         call("/pruvodce", guides_page, request_for("/pruvodce"))
         for guide in GUIDES:
             call(f"/pruvodce/{guide.slug}", guide_page, request_for(f"/pruvodce/{guide.slug}"), guide.slug, db=db)
-        for model in phone_models(db):
+        models = phone_models(db)
+        for model in models:
             call(f"/telefon/{model.slug}", phone_model_page, request_for(f"/telefon/{model.slug}"), model.slug, db=db)
+        from .phones import model_redirects
+        for old, dest in model_redirects(models).items():
+            book.add(f"/telefon/{old}", f"/telefon/{dest}", 301)
         for cat in CATEGORIES:
             if cat.slug != "telefony":
                 book.add(f"/kategorie/{cat.slug}", "/telefony", 301)

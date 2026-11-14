@@ -2,18 +2,19 @@
 {% block title %}{{ model.name }} od {% if shown_price is not none %}{{ shown_price|czk }}{% else %}ceny, kterou zjišťujeme{% endif %} | Lovceny{% endblock %}
 {% block description %}{{ model.name }}: obchody seřazené podle ceny, historie a verdikt z naměřených cen. Úložiště a barva jsou varianty téhož modelu.{% endblock %}
 {% block body %}
-<article class="wrap model">
+<article class="wrap model" data-phone-filter>
   <div class="model-hero">
-    <div class="model-photo">{% if model.image %}{{ shop_img(model.image, 320, priority=true, alt=model.name, sizes="(min-width:800px) 280px, 70vw") }}{% else %}{{ img_missing() }}{% endif %}</div>
+    <div class="model-photo" data-phone-photos>
+      <div data-photo="">{% if model.image %}{{ shop_img(model.image, 320, priority=true, alt=model.name, sizes="(min-width:800px) 280px, 70vw") }}{% else %}{{ img_missing() }}{% endif %}</div>
+      {% for label, photo in color_photos.items() %}
+      <div data-photo="{{ label }}" hidden>{{ shop_img(photo, 320, alt=model.name ~ " " ~ label, sizes="(min-width:800px) 280px, 70vw") }}</div>
+      {% endfor %}
+    </div>
     <div class="model-buybox">
       {% if model.brand %}<p class="kicker">{{ model.brand }}</p>{% endif %}
       <h1>{{ model.name }}</h1>
-      <p class="model-price">{% if active_storage in model.disputed %}Cenu nepotvrzujeme{% elif shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
-      {% if active_storage in model.disputed %}
-      <p class="history-note">Dva obchody se u téhle kapacity liší o víc než 35 %. Nejnižší cenu uvedeme, až ji potvrdí třetí obchod nebo delší historie.</p>
-      {% else %}
-      <p class="model-price-note">{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if offers %} · {{ cz_count(offers|map(attribute='shop')|unique|list|length, "obchod", "obchody", "obchodů") }}{% endif %}</p>
-      {% endif %}
+      <p class="model-price" data-phone-price>{% if shown_price is not none %}{{ shown_price|czk }}{% else %}Cenu zjišťujeme{% endif %}</p>
+      <p class="model-price-note" data-phone-note>{% if buyable %}nejnižší cena skladem{% elif offers %}skladovou nabídku teď nemáme{% else %}nabídku teprve hledáme{% endif %}{% if offers %} · {{ cz_count(offers|map(attribute='shop')|unique|list|length, "obchod", "obchody", "obchodů") }}{% endif %}</p>
       {% if verdict and verdict.code == 'none' %}
       <p class="history-note">Historie ceny se právě tvoří. Doporučení Kupuj nebo Počkej ukážeme po 7 dnech měření.</p>
       {% elif verdict %}
@@ -22,7 +23,7 @@
       {% if storage_deals %}
       <div class="storage-row" aria-label="Úložiště">
         {% for deal in storage_deals %}
-        <a class="storage-chip{% if active_storage == deal.label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?pamet={{ deal.label|urlencode }}{% if color %}&barva={{ color|urlencode }}{% endif %}"{% if active_storage == deal.label %} aria-current="true"{% endif %}>
+        <a class="storage-chip{% if active_storage == deal.label %} is-on{% endif %}" data-phone-chip="pamet" data-value="{{ deal.label }}"{% if deal.unconfirmed %} data-unconfirmed="1"{% endif %} href="/telefon/{{ model.slug }}?pamet={{ deal.label|urlencode }}{% if color %}&barva={{ color|urlencode }}{% endif %}"{% if active_storage == deal.label %} aria-current="true"{% endif %}>
         <b>{{ deal.label }}</b>
         <span>{% if deal.unconfirmed %}nepotvrzeno{% else %}{{ deal.price|czk }}{% if not deal.in_stock %} · není skladem{% endif %}{% endif %}</span>
         </a>
@@ -30,11 +31,11 @@
       </div>
       {% endif %}
       {% if offer_rows %}
-      <ol class="offer-table offer-top">
-        {% for row in offer_rows[:3] %}
+      <ol class="offer-table offer-top" data-phone-offers>
+        {% for row in offer_rows %}
         {% set offer = row.offer %}
         {% set shop = get_shop(offer.shop) %}
-        <li class="{% if loop.first and offer.in_stock is not false and active_storage not in model.disputed %}is-best{% endif %}">
+        <li class="{% if loop.first and offer.in_stock is not false %}is-best{% endif %}" data-barva="{{ row.color }}" data-pamet="{{ row.storage }}" data-price="{{ offer.price }}" data-stock="{% if offer.in_stock is false %}0{% else %}1{% endif %}" data-shop="{{ offer.shop }}">
           <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
           <span class="offer-price">{{ offer.price|czk }}</span>
           {% if offer.in_stock is false %}
@@ -45,6 +46,7 @@
         </li>
         {% endfor %}
       </ol>
+      <p class="phone-empty" data-phone-empty hidden>Tuhle kombinaci barvy a úložiště teď nemáme.</p>
       {% else %}
       <p class="phone-empty">U téhle varianty teď žádnou nabídku nemáme.</p>
       {% endif %}
@@ -56,32 +58,11 @@
   <section class="model-block" aria-labelledby="color-h">
     <h2 id="color-h">Barva</h2>
     <div class="phone-scroll"><div class="color-row">
-      <a class="storage-chip{% if not color %} is-on{% endif %}" href="/telefon/{{ model.slug }}{% if storage %}?pamet={{ storage|urlencode }}{% endif %}"{% if not color %} aria-current="true"{% endif %}>Vše</a>
+      <a class="storage-chip{% if not color %} is-on{% endif %}" data-phone-chip="barva" data-value="" href="/telefon/{{ model.slug }}{% if storage %}?pamet={{ storage|urlencode }}{% endif %}"{% if not color %} aria-current="true"{% endif %}>Vše</a>
       {% for label in model.colors %}
-      <a class="storage-chip{% if color == label %} is-on{% endif %}" href="/telefon/{{ model.slug }}?barva={{ label|urlencode }}{% if storage %}&pamet={{ storage|urlencode }}{% endif %}"{% if color == label %} aria-current="true"{% endif %}>{{ label }}</a>
+      <a class="storage-chip{% if color == label %} is-on{% endif %}" data-phone-chip="barva" data-value="{{ label }}" href="/telefon/{{ model.slug }}?barva={{ label|urlencode }}{% if storage %}&pamet={{ storage|urlencode }}{% endif %}"{% if color == label %} aria-current="true"{% endif %}>{{ label }}</a>
       {% endfor %}
     </div></div>
-  </section>
-  {% endif %}
-
-  {% if offer_rows|length > 3 %}
-  <section class="model-block" aria-labelledby="offers-h">
-    <h2 id="offers-h">Další obchody</h2>
-    <ol class="offer-table">
-      {% for row in offer_rows[3:] %}
-      {% set offer = row.offer %}
-      {% set shop = get_shop(offer.shop) %}
-      <li>
-        <span class="offer-shop">{{ shop.name if shop else offer.shop }}{% if row.color %} <span class="offer-color">{{ row.color }}</span>{% endif %}</span>
-        <span class="offer-price">{{ offer.price|czk }}</span>
-        {% if offer.in_stock is false %}
-        <span class="offer-oos">Není skladem</span>
-        {% else %}
-        <a class="btn btn-primary btn-sm" href="{{ go_href(offer) }}" rel="nofollow sponsored noopener" target="_blank">Do obchodu</a>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ol>
   </section>
   {% endif %}
 
